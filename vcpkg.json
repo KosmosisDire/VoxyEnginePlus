@@ -1,0 +1,30 @@
+{
+  "name": "learndaxa",
+  "version": "1.0.0",
+  "builtin-baseline": "b346ee32f13f3bf2ef19ac02f982f6938f7a84ea",
+  "dependencies": [
+    {
+      "name": "daxa",
+      "features": [
+        "utils-imgui",
+        "utils-mem",
+        "utils-pipeline-manager-glslang",
+        "utils-pipeline-manager-slang",
+        "utils-task-graph"
+      ]
+    },
+    "glfw3",
+    {
+      "name": "imgui",
+      "features": [
+        "glfw-binding",
+        "docking-experimental"
+      ]
+    }
+  ],
+  "vcpkg-configuration": {
+    "overlay-ports": [
+      "lib/Daxa"
+    ]
+  }
+}
