@@ -2,16 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug learndaxa",
+            "name": "Debug VoxyEngine",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/Debug/learndaxa.exe",
+            "program": "${workspaceFolder}/build/Debug/Debug/VoxyEngine.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            "preLaunchTask": "Build learndaxa",
+            "preLaunchTask": "Build VoxyEngine",
             "internalConsoleOptions": "openOnSessionStart"
         }
     ]
