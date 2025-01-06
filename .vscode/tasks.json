@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build learndaxa",
+            "type": "shell",
+            "command": "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/Debug",
+                "--parallel",
+                "22",
+                "--target",
+                "learndaxa",
+                "--"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$msCompile"]
+        }
+    ]
+}

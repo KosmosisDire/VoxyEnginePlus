@@ -1,137 +1,131 @@
-#define DAXA_SHADERLANG DAXA_SHADERLANG_GLSL
-// #define DAXA_RAY_TRACING_FLAG
-#define APPNAME "Daxa Sample: HelloTriangle Compute"
-#include "base_app.hpp"
+#include "application.hpp"
+#include "stdio.h"
 
 using namespace daxa::types;
 #include "shaders/shared.inl"
 
-struct App : BaseApp<App>
+struct VoxyApp : public Application
 {
-    // clang-format off
-    std::shared_ptr<daxa::ComputePipeline> compute_pipeline = pipeline_manager.add_compute_pipeline({
-#if DAXA_SHADERLANG == DAXA_SHADERLANG_GLSL
-        .shader_info = {.source = daxa::ShaderFile{"compute.glsl"}},
-#elif DAXA_SHADERLANG == DAXA_SHADERLANG_SLANG
-        .shader_info = {.source = daxa::ShaderFile{"compute.slang"}},
-#endif
-        .push_constant_size = sizeof(ComputePush),
-        .name = "compute_pipeline",
-    }).value();
-    // clang-format on
+  public:
+    Settings settings = {
+        .backgroundColor = {0.0f, 0.0f, 0.0f, 1.0f},
+    };
 
-    daxa::ImageId render_image = device.create_image(daxa::ImageInfo{
-        .format = daxa::Format::R8G8B8A8_UNORM,
-        .size = {size_x, size_y, 1},
-        .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
-        .name = "render_image",
-    });
-    daxa::TaskImage task_render_image{{.initial_images = {.images = std::array{render_image}}, .name = "task_render_image"}};
+    VoxyApp()
+    {
+        // Initialize compute pipeline
+        compute_pipeline = pipeline_manager.add_compute_pipeline({
+                                                                     .shader_info = {.source = daxa::ShaderFile{"compute.slang"}},
+                                                                     .push_constant_size = sizeof(ComputePush),
+                                                                     .name = "compute_pipeline",
+                                                                 })
+                               .value();
 
-    daxa::TaskGraph loop_task_graph = record_loop_task_graph();
+        // Create render image
+        render_image = device.create_image({
+            .format = daxa::Format::R8G8B8A8_UNORM,
+            .size = {window->get_width(), window->get_height(), 1},
+            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
+            .name = "render_image",
+        });
 
-    ~App()
+        // Initialize task render image
+        task_render_image = daxa::TaskImage({.initial_images = {
+                                                 .images = std::array{render_image}},
+                                             .name = "task_render_image"});
+
+        Application::init();
+    }
+
+    ~VoxyApp()
     {
         device.wait_idle();
         device.collect_garbage();
         device.destroy_image(render_image);
     }
 
-    static void ui_update()
+  protected:
+    void on_update() override
     {
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-
-        ImGui::ShowDemoWindow();
-
-
-        ImGui::Render();
-    }
-
-    void on_update()
-    {
-        auto reloaded_result = pipeline_manager.reload_all();
-        if (auto reload_err = daxa::get_if<daxa::PipelineReloadError>(&reloaded_result))
-            std::cout << "Failed to reload " << reload_err->message << '\n';
-        if (daxa::get_if<daxa::PipelineReloadSuccess>(&reloaded_result))
-            std::cout << "Successfully reloaded!\n";
         ui_update();
-
-        auto swapchain_image = swapchain.acquire_next_image();
-        task_swapchain_image.set_images({.images = std::array{swapchain_image}});
-        if (swapchain_image.is_empty())
-        {
-            return;
-        }
-        loop_task_graph.execute({});
-        device.collect_garbage();
     }
 
-    void on_mouse_move(f32 /*unused*/, f32 /*unused*/) {}
-    void on_mouse_button(i32 /*unused*/, i32 /*unused*/) {}
-    void on_key(i32 /*unused*/, i32 /*unused*/) {}
-    void on_resize(u32 sx, u32 sy)
+    void on_resize(u32 sx, u32 sy) override
     {
-        minimized = (sx == 0 || sy == 0);
-        if (!minimized)
-        {
-            swapchain.resize();
-            size_x = swapchain.get_surface_extent().x;
-            size_y = swapchain.get_surface_extent().y;
-            device.destroy_image(render_image);
-            render_image = device.create_image({
-                .format = daxa::Format::R8G8B8A8_UNORM,
-                .size = {size_x, size_y, 1},
-                .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
-            });
-            task_render_image.set_images({.images = std::array{render_image}});
-            base_on_update();
-        }
+        device.destroy_image(render_image);
+        render_image = device.create_image({
+            .format = daxa::Format::R8G8B8A8_UNORM,
+            .size = {surface_width, surface_height, 1},
+            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
+        });
+        task_render_image.set_images({.images = std::array{render_image}});
     }
 
-    void record_tasks(daxa::TaskGraph & new_task_graph)
+    void record_tasks(daxa::TaskGraph &new_task_graph) override
     {
+        std::cout << "Recording tasks\n";
         new_task_graph.use_persistent_image(task_render_image);
 
         new_task_graph.add_task({
             .attachments = {daxa::inl_attachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_render_image)},
-            .task = [this](daxa::TaskInterface ti)
-            {
+            .task = [this](daxa::TaskInterface ti) {
                 ti.recorder.set_pipeline(*compute_pipeline);
                 ti.recorder.push_constant(ComputePush{
+                    .settings = settings,
                     .image = render_image.default_view(),
-                    .frame_dim = {size_x, size_y},
-                    .time = time
-                });
-                ti.recorder.dispatch({(size_x + 7) / 8, (size_y + 7) / 8});
+                    .frame_dim = {Application::surface_width, Application::surface_height},
+                    .time = time});
+                ti.recorder.dispatch({(Application::surface_width + 7) / 8, (Application::surface_height + 7) / 8});
             },
             .name = APPNAME_PREFIX("Draw (Compute)"),
         });
+
         new_task_graph.add_task({
             .attachments = {
                 {daxa::inl_attachment(daxa::TaskImageAccess::TRANSFER_READ, task_render_image)},
                 {daxa::inl_attachment(daxa::TaskImageAccess::TRANSFER_WRITE, task_swapchain_image)},
             },
-            .task = [this](daxa::TaskInterface ti)
-            {
+            .task = [this](daxa::TaskInterface ti) {
                 ti.recorder.blit_image_to_image({
                     .src_image = ti.get(task_render_image).ids[0],
                     .src_image_layout = daxa::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     .dst_image = ti.get(task_swapchain_image).ids[0],
                     .dst_image_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    .src_offsets = {{{0, 0, 0}, {static_cast<i32>(size_x), static_cast<i32>(size_y), 1}}},
-                    .dst_offsets = {{{0, 0, 0}, {static_cast<i32>(size_x), static_cast<i32>(size_y), 1}}},
+                    .src_offsets = {{{0, 0, 0},
+                                     {(i32)(Application::surface_width),
+                                      (i32)(Application::surface_height), 1}}},
+                    .dst_offsets = {{{0, 0, 0},
+                                     {(i32)(Application::surface_width),
+                                      (i32)(Application::surface_height), 1}}},
                 });
             },
             .name = APPNAME_PREFIX("Blit (render to swapchain)"),
         });
     }
+
+  private:
+    void ui_update()
+    {
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        float color[4] = {settings.backgroundColor.x, settings.backgroundColor.y, settings.backgroundColor.z, 1.0f};
+        ImGui::Begin("Settings");
+        ImGui::ColorEdit4("Background Color", color);
+        settings.backgroundColor = {color[0], color[1], color[2], 1.0f};
+        ImGui::End();
+
+        ImGui::Render();
+    }
+
+    std::shared_ptr<daxa::ComputePipeline> compute_pipeline;
+    daxa::ImageId render_image;
+    daxa::TaskImage task_render_image;
 };
 
 auto main() -> int
 {
-    App app = {};
+    VoxyApp app;
     while (true)
     {
         if (app.update())
@@ -139,4 +133,5 @@ auto main() -> int
             break;
         }
     }
+    return 0;
 }
