@@ -50,7 +50,7 @@ struct VoxyApp : public Application
 
         for (u64 i = 0; i < (64 * 64 * 64); i++)
         {
-            ptr->occupancy[i] = 0xAAAAAAAAAAAAAAAA;
+            ptr->occupancy[i] = 0xA0A1A2A3A4A5A6A7;
         }
 
         Application::init();
