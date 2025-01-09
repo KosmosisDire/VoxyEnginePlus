@@ -24,7 +24,7 @@ class Window
     using KeyCallback = std::function<void(i32, i32)>;
     using ResizeCallback = std::function<void(u32, u32)>;
 
-    explicit Window(char const *window_name, u32 sx = 800, u32 sy = 600);
+    explicit Window(char const *window_name, u32 sx = 1920, u32 sy = 1080);
     ~Window();
 
     // Prevent copying

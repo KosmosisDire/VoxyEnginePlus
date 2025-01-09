@@ -1,15 +1,18 @@
 #pragma once
 
-#include "window.hpp"
 #include <chrono>
 #include <cmath>
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <window.hpp>
 
 #include <daxa/utils/imgui.hpp>
 #include <daxa/utils/pipeline_manager.hpp>
+#include <fonts.hpp>
 #include <imgui_impl_glfw.h>
+#include <input.hpp>
+#include <stdio.h>
 
 using namespace std::chrono_literals;
 using Clock = std::chrono::high_resolution_clock;
@@ -30,6 +33,9 @@ struct Application
     bool update();
     virtual void on_update();
     virtual void record_tasks(daxa::TaskGraph &task_graph);
+
+    void capture_mouse(bool capture);
+    bool is_mouse_captured() { return mouseCaptured; }
 
   protected:
     std::unique_ptr<Window> window = std::make_unique<Window>(APPNAME);
@@ -57,6 +63,10 @@ struct Application
             },
         .name = "pipeline_manager",
     });
+
+    // this must be created before the imgui renderer or the imgui renderer will not respond to input
+    InputManager inputManager = InputManager(window->get_glfw_window());
+
     daxa::ImGuiRenderer imgui_renderer = create_imgui_renderer();
 
     u32 surface_width = 0;
@@ -70,14 +80,12 @@ struct Application
     std::vector<daxa::TaskAttachmentInfo> imgui_task_attachments{};
     daxa::TaskGraph loop_task_graph;
 
-    virtual void on_mouse_move(f32 x, f32 y);
-    virtual void on_mouse_button(i32 button, i32 action);
-    virtual void on_key(i32 key, i32 action);
     virtual void on_resize(u32 sx, u32 sy);
 
     void init();
 
   private:
+    bool mouseCaptured = false;
     void base_on_update();
     void base_on_resize(u32 sx, u32 sy);
     daxa::ImGuiRenderer create_imgui_renderer();
@@ -86,14 +94,6 @@ struct Application
 
 inline Application::Application()
 {
-    window->set_mouse_move_callback(
-        [this](f32 x, f32 y) { on_mouse_move(x, y); });
-    window->set_mouse_button_callback(
-        [this](i32 button, i32 action) { on_mouse_button(button, action); });
-    window->set_key_callback(
-        [this](i32 key, i32 action) { on_key(key, action); });
-    window->set_resize_callback(
-        [this](u32 sx, u32 sy) { base_on_resize(sx, sy); });
 }
 
 inline Application::~Application()
@@ -121,6 +121,7 @@ inline bool Application::update()
     if (!window->is_minimized())
     {
         base_on_update();
+        InputManager::Update();
     }
     else
     {
@@ -128,6 +129,15 @@ inline bool Application::update()
     }
 
     return false;
+}
+
+inline void Application::capture_mouse(bool capture)
+{
+    window->set_mouse_capture(capture);
+    mouseCaptured = capture;
+
+    InputManager::SetMousePosition(window->get_width() / 2, window->get_height() / 2);
+    InputManager::ResetMouseDelta();
 }
 
 inline void Application::base_on_update()
@@ -144,8 +154,6 @@ inline void Application::base_on_update()
     if (daxa::get_if<daxa::PipelineReloadSuccess>(&reloaded_result))
         std::cout << "Successfully reloaded!\n";
 
-    on_update();
-
     auto swapchain_image = swapchain.acquire_next_image();
     task_swapchain_image.set_images({.images = std::array{swapchain_image}});
     if (swapchain_image.is_empty())
@@ -155,6 +163,7 @@ inline void Application::base_on_update()
     }
 
     loop_task_graph.execute({});
+    on_update();
 
     device.collect_garbage();
 }
@@ -171,6 +180,8 @@ inline void Application::base_on_resize(u32 sx, u32 sy)
 
         on_resize(sx, sy);
 
+        std::cout << "Resized to " << sx << "x" << sy << '\n';
+
         base_on_update();
     }
 }
@@ -178,6 +189,9 @@ inline void Application::base_on_resize(u32 sx, u32 sy)
 inline daxa::ImGuiRenderer Application::create_imgui_renderer()
 {
     auto ctx = ImGui::CreateContext();
+
+    FontManager::LoadDefaults();
+
     ImGui_ImplGlfw_InitForVulkan(window->get_glfw_window(), true);
     return daxa::ImGuiRenderer(
         {.device = device, .format = swapchain.get_format(), .context = ctx});
@@ -225,9 +239,3 @@ inline void Application::on_update() {}
 inline void Application::on_resize(u32 sx, u32 sy) {}
 
 inline void Application::record_tasks(daxa::TaskGraph &task_graph) {}
-
-inline void Application::on_mouse_move(f32 x, f32 y) {}
-
-inline void Application::on_mouse_button(i32 button, i32 action) {}
-
-inline void Application::on_key(i32 key, i32 action) {}
