@@ -1,7 +1,6 @@
 #pragma once
 #include "input.hpp"
 #include "math.hpp"
-#include "shaders/shared.inl"
 #include <GLFW/glfw3.h>
 
 // Add this at the top of your file or in your build system:
