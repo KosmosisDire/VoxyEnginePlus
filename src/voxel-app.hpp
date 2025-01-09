@@ -86,6 +86,23 @@ struct VoxyApp : public Application
     }
 
   protected:
+    CameraData getCameraData(Camera cam)
+    {
+        CameraData data;
+        auto proj = cam.getProjectionMatrix();
+        auto view = cam.getViewMatrix();
+
+        // Combine view and projection
+        auto viewProj = proj * view;
+
+        data.viewProj = to_daxa(viewProj);
+        data.invViewProj = to_daxa(glm::inverse(viewProj));
+        data.position = to_daxa(cam.getPosition());
+        data.near = cam.getNearPlane();
+        data.far = cam.getFarPlane();
+        return data;
+    }
+
     void on_update() override
     {
         // rotate sun around y axis
@@ -94,7 +111,7 @@ struct VoxyApp : public Application
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
         {
-            stateData.sunDir = -camera.getForward();
+            stateData.sunDir = to_daxa(-camera.getForward());
         }
 
         // mouse capture
@@ -170,7 +187,7 @@ struct VoxyApp : public Application
                     daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_state_buffer),
                 },
             .task = [this](daxa::TaskInterface ti) {
-                stateData.camera = camera.getCameraData();
+                stateData.camera = getCameraData(camera);
                 this->allocate_fill_copy<StateData>(ti, stateData, ti.get(task_state_buffer), 0);
 
                 ti.recorder.set_pipeline(*compute_pipeline);

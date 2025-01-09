@@ -73,11 +73,24 @@ class Camera
         validateAndUpdatePlanes(nearPlane, farPlane);
     }
 
+    glm::mat4x4 getProjectionMatrix() const
+    {
+        auto proj = glm::perspective(glm::radians(fov), getAspectRatio(), near, far);
+        proj[1][1] *= -1; // Flip Y coordinate for Vulkan convention
+        return proj;
+    }
+
+    glm::mat4x4 getViewMatrix() const
+    {
+        return glm::lookAt(position, position + front, up);
+    }
+
     float getNearPlane() const { return near; }
     float getFarPlane() const { return far; }
-    daxa_f32vec3 getForward() const { return to_daxa(front); }
-    daxa_f32vec3 getRight() const { return to_daxa(right); }
-    daxa_f32vec3 getUp() const { return to_daxa(up); }
+    glm::vec3 getForward() const { return front; }
+    glm::vec3 getRight() const { return right; }
+    glm::vec3 getUp() const { return up; }
+    glm::vec3 getPosition() const { return position; }
 
     void processKeyboard(float deltaTime)
     {
@@ -114,34 +127,6 @@ class Camera
         }
 
         updateCameraVectors();
-    }
-
-    auto getCameraData() -> CameraData
-    {
-        CameraData data;
-
-        // Use perspective matrix with dynamic aspect ratio and configurable parameters
-        glm::mat4 proj = glm::perspective(
-            glm::radians(fov),
-            getAspectRatio(),
-            near,
-            far);
-
-        // Flip Y coordinate for Vulkan convention
-        proj[1][1] *= -1;
-
-        // Create view matrix using right-handed coordinate system
-        glm::mat4 view = glm::lookAt(position, position + front, up);
-
-        // Combine view and projection
-        auto viewProj = proj * view;
-
-        data.viewProj = to_daxa(viewProj);
-        data.invViewProj = to_daxa(glm::inverse(viewProj));
-        data.position = to_daxa(position);
-        data.near = near;
-        data.far = far;
-        return data;
     }
 
   private:
