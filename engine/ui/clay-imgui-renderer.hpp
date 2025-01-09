@@ -26,20 +26,9 @@ static inline Clay_Dimensions Imgui_MeasureText(Clay_String *text, Clay_TextElem
     IM_ASSERT(font != NULL);
     float scale = config->fontSize / font->FontSize;
 
-    for (int i = 0; i < text->length; i++)
-    {
-        if (text->chars[i] == '\n')
-        {
-            textSize.height += font->FontSize * scale;
-            textSize.width = 0;
-        }
-        else
-        {
-            textSize.width += font->GetCharAdvance(text->chars[i]) * scale;
-        }
-    }
-
-    textSize.height = std::max(textSize.height, font->FontSize * scale);
+    ImVec2 textSizeVec = font->CalcTextSizeA(config->fontSize, FLT_MAX, 0.0f, text->chars, text->chars + text->length);
+    textSize.width = textSizeVec.x * scale;
+    textSize.height = textSizeVec.y * scale;
 
     return textSize;
 }

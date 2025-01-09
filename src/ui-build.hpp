@@ -367,6 +367,7 @@ void build_ui(UIState& state, UIInputs input) {
             .floatingOffset(-10, 10)
             .floatingAttachPointParent(AttachPointType::RightTop, AttachPointType::RightTop)
             .floatingAttachPointSelf(AttachPointType::RightTop, AttachPointType::RightTop)
+            .centerContent()
             .OnClick([&state](Element& el, ComputedProps props, UIInputs input)
             {
                 state.menuOpen = false;
