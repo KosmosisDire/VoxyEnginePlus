@@ -22,18 +22,11 @@
         "glfw-binding",
         "docking-experimental"
       ]
-    },
-    {
-      "name": "fsr2",
-      "features": [
-        "vulkan"
-      ]
     }
   ],
   "vcpkg-configuration": {
     "overlay-ports": [
-      "lib/Daxa",
-      "lib/Daxa/cmake/vcpkg-overlay-ports/fsr2"
+      "lib/Daxa"
     ]
   }
 }

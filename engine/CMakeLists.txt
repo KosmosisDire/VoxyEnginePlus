@@ -28,7 +28,6 @@ find_package(daxa CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
-find_package(fsr2 CONFIG REQUIRED)
 
 target_link_libraries(voxy_engine 
     PUBLIC 
@@ -37,8 +36,6 @@ target_link_libraries(voxy_engine
         glm::glm
         fmt::fmt
         imgui::imgui
-        fsr2::ffx_fsr2_api 
-        fsr2::ffx_fsr2_api_vk
 )
 
 # Create resources directories if they don't exist
