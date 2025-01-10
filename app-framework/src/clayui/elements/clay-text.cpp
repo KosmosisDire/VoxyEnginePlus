@@ -1,5 +1,5 @@
 #include "clay-text.hpp"
-#include "clayui.hpp"
+#include "../wrapper/clay-ui.hpp"
 
 int Text::textId = 0;
 

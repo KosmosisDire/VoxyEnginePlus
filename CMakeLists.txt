@@ -10,7 +10,7 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 project(VoxyEngine VERSION 1.0)
 
 # Add engine library first
-add_subdirectory(engine)
+add_subdirectory(app-framework)
 
 # Add main application
 add_subdirectory(src)

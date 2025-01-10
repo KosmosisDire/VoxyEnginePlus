@@ -1,5 +1,5 @@
-#include "clayui.hpp"
-#include "clay-elements.hpp"
+#include "clay-ui.hpp"
+#include "../elements/element.hpp"
 #include "clay-imgui-renderer.hpp"
 #include "clay.h"
 #include <fonts.hpp>

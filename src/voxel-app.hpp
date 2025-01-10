@@ -1,6 +1,8 @@
 #pragma once
-#include "shaders/shared.inl"
-#include "ui-build.hpp"
+#include "vox/shaders/shared.inl"
+#include "core/ui-build.hpp"
+
+
 #include <application.hpp>
 #include <camera.hpp>
 #include <functional>

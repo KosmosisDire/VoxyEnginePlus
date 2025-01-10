@@ -118,15 +118,14 @@ inline bool Application::update()
         return true;
     }
 
-    if (!window->is_minimized())
+    if (window->is_minimized())
     {
-        base_on_update();
-        InputManager::Update();
+        std::this_thread::sleep_for(1ms); 
+        return false;
     }
-    else
-    {
-        std::this_thread::sleep_for(1ms);
-    }
+    
+    base_on_update();
+    InputManager::Update();
 
     return false;
 }

@@ -4,11 +4,11 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/include/**",
                 "${workspaceFolder}/src/**",
                 "${vcpkgRoot}/x64-windows/include",
                 "${workspaceFolder}/build/Debug/vcpkg_installed/x64-windows/include",
-                "${workspaceFolder}/engine/**",
+                "${workspaceFolder}/app-framework/src/**",
+                "${workspaceFolder}/app-framework/include/**"
             ],
             "defines": [
                 "_DEBUG",
