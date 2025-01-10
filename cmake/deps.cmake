@@ -9,7 +9,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/../lib/Daxa/CMakeLists.txt")
     execute_process(COMMAND ${GIT_EXECUTABLE} clone https://github.com/Ipotrick/Daxa
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib"
         COMMAND_ERROR_IS_FATAL ANY)
-    execute_process(COMMAND ${GIT_EXECUTABLE} checkout f28b786b2eba38f1bb622c970cf77302a4b60668
+    execute_process(COMMAND ${GIT_EXECUTABLE} checkout d91f215842ca0d49cc6882a234172fdeb5b383b7
         WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib/Daxa"
         COMMAND_ERROR_IS_FATAL ANY)
 endif()
