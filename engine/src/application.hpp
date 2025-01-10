@@ -57,7 +57,7 @@ struct Application
         .device = device,
         .shader_compile_options =
             {
-                .root_paths = {DAXA_SHADER_INCLUDE_DIR, "src/shaders/"},
+                .root_paths = {DAXA_SHADER_INCLUDE_DIR, "resources/shaders/"},
                 .language = daxa::ShaderLanguage::SLANG,
                 .enable_debug_info = true,
             },

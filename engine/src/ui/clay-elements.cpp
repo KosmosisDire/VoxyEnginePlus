@@ -1,7 +1,7 @@
 // clay-elements.cpp
 #include "clay-elements.hpp"
-#include "clay.h"
 #include "clayui.hpp"
+#include <clay.h>
 #include <stdexcept>
 
 Element::Element(std::string id)

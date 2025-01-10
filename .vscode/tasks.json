@@ -4,15 +4,16 @@
         {
             "label": "Build VoxyEngine",
             "type": "shell",
-            "command": "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+            "command": "C:\\Program Files\\CMake\\bin\\cmake.exe",
             "args": [
                 "--build",
                 "${workspaceFolder}/build/Debug",
+                "--config",
+                "Debug",
                 "--parallel",
                 "22",
                 "--target",
-                "VoxyEngine",
-                "--"
+                "VoxyEngine"
             ],
             "group": {
                 "kind": "build",
@@ -20,7 +21,15 @@
             },
             "problemMatcher": [
                 "$msCompile"
-            ]
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
         }
     ]
 }

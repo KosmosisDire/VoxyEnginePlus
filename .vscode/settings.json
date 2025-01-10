@@ -92,12 +92,12 @@
         "any": "cpp",
         "numeric": "cpp",
         "ranges": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "*.in": "cpp"
     },
     "files.exclude": {
         "cmake": true,
         "lib": true,
-        "build": true
     },
     "editor.formatOnSave": true,
 }

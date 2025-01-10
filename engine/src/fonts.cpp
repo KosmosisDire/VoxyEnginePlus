@@ -1,4 +1,6 @@
 #include "fonts.hpp"
+#include "engine_config.hpp.in"
+#include <crtdbg.h>
 #include <stdio.h>
 
 // Define the static member variable
@@ -31,11 +33,18 @@ ImFont *FontManager::GetFont(string fontName)
     return font;
 }
 
+#include <filesystem>
+#include <iostream>
+
 void FontManager::LoadDefaults()
 {
     ImFontConfig font_config;
     font_config.OversampleH = 2;
     font_config.OversampleV = 2;
 
-    FontManager::LoadFont("resources/Roboto-Regular.ttf", "Roboto", 16.0f, &font_config);
+    // Get and print current working directory
+    auto fontPath = get_resource_path("fonts/Roboto-Regular.ttf");
+    std::cout << "Current working directory: " << fontPath << std::endl;
+
+    FontManager::LoadFont(fontPath, "Roboto", 16.0f, &font_config);
 }
