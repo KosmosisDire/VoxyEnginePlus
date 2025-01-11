@@ -93,7 +93,9 @@
         "numeric": "cpp",
         "ranges": "cpp",
         "valarray": "cpp",
-        "*.in": "cpp"
+        "*.in": "cpp",
+        "codecvt": "cpp",
+        "stack": "cpp"
     },
     "files.exclude": {
         "cmake": true,

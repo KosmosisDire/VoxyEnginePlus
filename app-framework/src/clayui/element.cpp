@@ -1,21 +1,74 @@
-// clay-elements.cpp
-#include "clay-elements.hpp"
-#include "clay-ui.hpp"
-#include <clay.h>
+#include "element.hpp"
+#include "clay-state.hpp"
+
 #include <stdexcept>
+
+Element *Element::currentElement = nullptr;
+std::vector<Element *> Element::elementStack;
+
+void Element::PushStack(Element &element)
+{
+    element.props.computed.elementDepth = elementStack.size();
+    currentElement = &element;
+    elementStack.push_back(&element);
+}
+
+void Element::PopStack()
+{
+    elementStack.pop_back();
+}
+
+Element *Element::PeekStack()
+{
+    return elementStack.size() > 0 ? elementStack.back() : nullptr;
+}
+
+void Element::ClearStack()
+{
+    elementStack.clear();
+}
+
+int Element::GetElementDepth()
+{
+    return elementStack.size();
+}
+
+Element &Element::GetCurrentElement()
+{
+    return *Element::currentElement;
+}
+
+ComputedProps Element::GetComputedProperties()
+{
+    return ClayState::computedProperties[props.clay.clayId.id];
+}
 
 Element::Element(std::string id)
 {
-    parent = ClayUI::PeekStack();
+    parent = Element::PeekStack();
     if (parent != nullptr)
     {
         props.computed.parentId = parent->props.clay.clayId.id;
     }
 
     props.id = std::move(id);
-    props.clay.clayId = ClayUI::HashId(props.id);
+    props.clay.clayId = Element::HashId(props.id);
 
-    ClayUI::PushStack(*this);
+    Element::PushStack(*this);
+}
+
+uint32_t Element::GetCurrentOpenId()
+{
+    return Clay__GetOpenLayoutElement()->id;
+}
+
+Clay_ElementId Element::HashId(const std::string &id)
+{
+    return Clay__HashString(Clay_String{
+                                static_cast<int32_t>(id.length()),
+                                ClayState::AllocateString(id.c_str()),
+                            },
+                            0, 0);
 }
 
 Element &Element::size(SizingType type, float width, float height)
@@ -224,6 +277,20 @@ Element &Element::gapBorder(float width, const Color &color)
     return *this;
 }
 
+Element &Element::gapBorderWidth(float width)
+{
+    props.clay.border.betweenChildren.width = (uint32_t)width;
+    props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER;
+    return *this;
+}
+
+Element &Element::gapBorderColor(const Color &color)
+{
+    props.clay.border.betweenChildren.color = {color.r * 255, color.g * 255, color.b * 255, color.a * 255};
+    props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER;
+    return *this;
+}
+
 Element &Element::floatingOffset(float offsetX, float offsetY)
 {
     props.clay.floating.offset.x = offsetX;
@@ -342,20 +409,20 @@ Element &Element::floatingPointerMode(PointerEventMode captureMode)
 
 Element &Element::CaptureDrag()
 {
-    if (ClayUI::IsAnyCaptured())
+    if (Element::IsAnyCaptured())
     {
         return *this;
     }
 
-    ClayUI::capturedElement = props.clay.clayId.id;
+    ClayState::capturedElement = props.clay.clayId.id;
     return *this;
 }
 
 Element &Element::StopCaptureDrag()
 {
-    if (ClayUI::capturedElement == props.clay.clayId.id)
+    if (ClayState::capturedElement == props.clay.clayId.id)
     {
-        ClayUI::capturedElement = 0;
+        ClayState::capturedElement = 0;
     }
     return *this;
 }
@@ -373,13 +440,10 @@ Element &Element::fit()
 void Element::_Begin()
 {
     Clay__OpenElement();
-    ClayUI::IndentPrintf("Element opened: %s\n", props.id.c_str());
 
     Clay__AttachId(props.clay.clayId);
-    ClayUI::IndentPrintf("Element ID attached: %s\n", props.id.c_str());
 
     Clay__AttachLayoutConfig(Clay__StoreLayoutConfig(props.clay.layout));
-    ClayUI::IndentPrintf("Layout attached\n");
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_RECTANGLE)
     {
@@ -388,7 +452,6 @@ void Element::_Begin()
                 .rectangleElementConfig = Clay__StoreRectangleElementConfig(
                     (Clay__Clay_RectangleElementConfigWrapper{props.clay.rectangle}).wrapped)},
             CLAY__ELEMENT_CONFIG_TYPE_RECTANGLE);
-        ClayUI::IndentPrintf("Rectangle attached\n");
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER)
@@ -397,7 +460,6 @@ void Element::_Begin()
             Clay_ElementConfigUnion{
                 .borderElementConfig = Clay__StoreBorderElementConfig(props.clay.border)},
             CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER);
-        ClayUI::IndentPrintf("Border attached\n");
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_SCROLL_CONTAINER)
@@ -406,7 +468,6 @@ void Element::_Begin()
             Clay_ElementConfigUnion{
                 .scrollElementConfig = Clay__StoreScrollElementConfig(props.clay.scroll)},
             CLAY__ELEMENT_CONFIG_TYPE_SCROLL_CONTAINER);
-        ClayUI::IndentPrintf("Scroll attached\n");
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER)
@@ -415,67 +476,131 @@ void Element::_Begin()
             Clay_ElementConfigUnion{
                 .floatingElementConfig = Clay__StoreFloatingElementConfig(props.clay.floating)},
             CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER);
-        ClayUI::IndentPrintf("Floating attached\n");
     }
 
     Clay__ElementPostConfiguration();
-    ClayUI::IndentPrintf("Element post configuration\n");
 }
 
 void Element::_End()
 {
-    if (ClayUI::elementDepth == 0)
+    if (GetElementDepth() == 0)
     {
         throw std::runtime_error("Cannot close root element");
     }
 
     Clay__CloseElement();
-    ClayUI::IndentPrintf("Element closed\n");
+    Element::IndentPrintf("Element closed\n");
 
-    ClayUI::PopStack();
+    Element::PopStack();
 }
 
+/// @brief Checks if the current element is hovered by the mouse.
 bool IsHovered()
 {
-    return ClayUI::IsHovered();
+    if (Clay__booleanWarnings.maxElementsExceeded)
+    {
+        return false;
+    }
+
+    if (IsOtherCaptured())
+        return false;
+
+    uint32_t openElement = Element::GetCurrentElement()->props.clay.clayId.id;
+
+    for (int32_t i = 0; i < Clay__pointerOverIds.length; ++i)
+    {
+        auto element = Clay__ElementIdArray_Get(&Clay__pointerOverIds, i);
+        if (element->id == openElement)
+        {
+            ClayState::lastHoveredElement = element->id;
+            return true;
+        }
+    }
+
+    if (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == openElement)
+    {
+        ClayState::lastHoveredElement = 0;
+    }
+
+    return false;
 }
 
-bool HoveredThisFrame()
-{
-    return ClayUI::HoveredThisFrame();
-}
-
+/// @brief Checks if the current element is being pressed by the mouse.
 bool IsPressed()
 {
-    return ClayUI::IsPressed();
+    return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_PRESSED;
 }
 
+/// @brief Checks if the current element was clicked this frame.
 bool ClickedThisFrame()
 {
-    return ClayUI::ClickedThisFrame();
+    return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_RELEASED_THIS_FRAME;
 }
 
+/// @brief Checks if the current element started being hovered this frame.
+bool HoveredThisFrame()
+{
+    return IsHovered() && (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == ClayState::GetCurrentElement()->props.clay.clayId.id);
+}
+
+/// @brief Checks if the mouse moved while over the current element this frame.
 bool MouseMovedThisFrame()
 {
-    return ClayUI::MouseMovedThisFrame();
+    return IsHovered() && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0);
 }
 
+/// @brief Checks if the mouse was scrolled while over the current element this frame.
 bool MouseScrolledThisFrame()
 {
-    return ClayUI::MouseScrolledThisFrame();
+    return IsHovered() && ClayState::inputs.scrollDeltaX != 0 || ClayState::inputs.scrollDeltaY != 0;
 }
 
+/// @brief Checks if the current element is being captured by the mouse.
+bool Element::IsSelfCaptured()
+{
+    if (!Element::IsAnyCaptured() || Element::GetCurrentElement() == nullptr)
+    {
+        return false;
+    }
+
+    return ClayState::capturedElement == Element::GetCurrentElement()->props.clay.clayId.id;
+}
+
+/// @brief Checks if there is any element being captured by the mouse.
+bool Element::IsAnyCaptured()
+{
+    return ClayState::capturedElement != 0;
+}
+
+/// @brief Checks if an element other than the current one is being captured by the mouse.
+bool Element::IsOtherCaptured()
+{
+    return Element::IsAnyCaptured() && !Element::IsSelfCaptured();
+}
+
+/// @brief Checks if the mouse was dragged while over the current element this frame.
 bool MouseDraggedThisFrame()
 {
-    return ClayUI::MouseDraggedThisFrame();
+    bool selfCap = ClayState::IsSelfCaptured();
+    bool pressed = ClayState::IsPressed();
+    bool result = selfCap || (pressed && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0));
+
+    // Release capture if mouse is not pressed
+    if (selfCap && !ClayState::inputs.pointerDown)
+    {
+        ClayState::capturedElement = 0;
+        return false;
+    }
+
+    return result;
 }
 
 ComputedProps Computed()
 {
-    return ClayUI::GetComputedProperties(*ClayUI::GetCurrentElement());
+    return Element::GetCurrentElement().GetComputedProperties();
 }
 
 uint32_t ElementIdFromString(std::string id)
 {
-    return ClayUI::HashId(id).id;
+    return ClayState::HashId(id).id;
 }

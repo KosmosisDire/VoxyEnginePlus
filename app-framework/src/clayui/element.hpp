@@ -1,10 +1,13 @@
 #pragma once
 
-#include "../wrapper/clay-types.hpp"
-#include "../wrapper/module-wrapper.hpp"
+#include "clay-types.hpp"
+#include "clay.h"
 #include <concepts>
 #include <string>
 #include <type_traits>
+#include <vector>
+
+struct Element;
 
 using BasicCallback = void(Element &, ComputedProps, UIInputs);
 template <typename T>
@@ -28,9 +31,35 @@ concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs 
     ->std::same_as<void>;
 };
 
+#define UI(element)                                                   \
+    for (int CONCAT(latch_, __LINE__) = (_Element_Begin(element), 0); \
+         CONCAT(latch_, __LINE__) < 1;                                \
+         ++CONCAT(latch_, __LINE__), _Element_End())
+
+#define UITEXT(element) element._Begin();
+
 struct Element
 {
+  private:
+    static Element *currentElement;
+    static std::vector<Element *> elementStack;
+    static void PushStack(Element &element);
+    static void PopStack();
+    static Element *PeekStack();
+    static void ClearStack();
+    static int GetElementDepth();
+    static void IndentPrintf(const char *format, ...);
+    static bool IsSelfCaptured();
+    static bool IsAnyCaptured();
+    static bool IsOtherCaptured();
+
+    /// @return The presistent ID of the currently open element.
+    static uint32_t GetCurrentOpenId();
+    /// @brief Hashes a string to a Clay_ElementId.
+    static Clay_ElementId HashId(const std::string &id);
+
   public:
+    static Element &GetCurrentElement();
     explicit Element(std::string id);
     ElementProps props;
     Element *parent = nullptr;
@@ -82,6 +111,9 @@ struct Element
     Element &floatingAttachPointParentX(AttachPointType attachX);
     Element &floatingAttachPointParentY(AttachPointType attachY);
     Element &floatingPointerMode(PointerEventMode pointerMode);
+
+    // @brief Gets the computed properties of an element.
+    ComputedProps GetComputedProperties();
 
     // Event handlers
     Element &CaptureDrag();
@@ -140,16 +172,6 @@ struct Element
     static void _End();
 };
 
-inline void _Element_Begin(Element &elem)
-{
-    elem._Begin();
-}
-
-inline void _Element_End()
-{
-    Element::_End();
-}
-
 /// @brief Checks if the current element is hovered by the mouse.
 bool IsHovered();
 /// @brief Checks if the current element is being pressed by the mouse.
@@ -175,7 +197,7 @@ Element &Element::OnHovering(Callable &&callback)
 {
     if (IsHovered())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -186,7 +208,7 @@ Element &Element::OnHovering(TUserData &userData, Callable &&callback)
 {
     if (IsHovered())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -197,7 +219,7 @@ Element &Element::OnPressing(Callable &&callback)
 {
     if (IsPressed())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -208,7 +230,7 @@ Element &Element::OnPressing(TUserData &userData, Callable &&callback)
 {
     if (IsPressed())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -219,7 +241,7 @@ Element &Element::OnHover(Callable &&callback)
 {
     if (HoveredThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -230,7 +252,7 @@ Element &Element::OnHover(TUserData &userData, Callable &&callback)
 {
     if (HoveredThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -241,7 +263,7 @@ Element &Element::OnClick(Callable &&callback)
 {
     if (ClickedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -252,7 +274,7 @@ Element &Element::OnClick(TUserData &userData, Callable &&callback)
 {
     if (ClickedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -263,7 +285,7 @@ Element &Element::OnMouseMove(Callable &&callback)
 {
     if (MouseMovedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -274,7 +296,7 @@ Element &Element::OnMouseMove(TUserData &userData, Callable &&callback)
 {
     if (MouseMovedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -285,7 +307,7 @@ Element &Element::OnScroll(Callable &&callback)
 {
     if (MouseScrolledThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -296,7 +318,7 @@ Element &Element::OnScroll(TUserData &userData, Callable &&callback)
 {
     if (MouseScrolledThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }
@@ -307,7 +329,7 @@ Element &Element::OnDrag(Callable &&callback)
 {
     if (MouseDraggedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs);
+        callback(*this, Computed(), ClayState::inputs);
     }
     return *this;
 }
@@ -318,7 +340,7 @@ Element &Element::OnDrag(TUserData &userData, Callable &&callback)
 {
     if (MouseDraggedThisFrame())
     {
-        callback(*this, Computed(), ClayUI::inputs, userData);
+        callback(*this, Computed(), ClayState::inputs, userData);
     }
     return *this;
 }

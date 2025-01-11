@@ -1,7 +1,6 @@
 #pragma once
-#include "vox/shaders/shared.inl"
 #include "core/ui-build.hpp"
-
+#include "vox/shaders/shared.inl"
 
 #include <application.hpp>
 #include <camera.hpp>
@@ -84,7 +83,7 @@ struct VoxyApp : public Application
         device.destroy_buffer(chunk_occupancy_buffer);
         device.destroy_buffer(brick_occupancy_buffer);
         device.destroy_buffer(state_buffer);
-        ClayUI::FreeAllStrings();
+        ClayState::FreeAllStrings();
     }
 
   protected:
@@ -153,7 +152,7 @@ struct VoxyApp : public Application
             };
 
         bool menuOpenBefore = uiState.menuOpen;
-        ClayUI::Update<UIState>(uiState, input, build_ui);
+        ClayState::Update<UIState>(uiState, input, build_ui);
 
         if (menuOpenBefore && !uiState.menuOpen)
         {

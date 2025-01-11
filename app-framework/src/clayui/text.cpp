@@ -1,5 +1,4 @@
-#include "clay-text.hpp"
-#include "../wrapper/clay-ui.hpp"
+#include "text.hpp"
 
 int Text::textId = 0;
 
@@ -32,8 +31,7 @@ void Text::_Begin()
     Clay__OpenTextElement(
         Clay_String{
             (int)props.textContent.length(),
-            ClayUI::AllocateString(props.textContent)},
+            ClayState::AllocateString(props.textContent)},
         Clay__StoreTextElementConfig(
             (Clay__Clay_TextElementConfigWrapper{props.clay.text}).wrapped));
-    ClayUI::IndentPrintf("Text added: \"%s\"\n", props.textContent.c_str());
 }

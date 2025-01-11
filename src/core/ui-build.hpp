@@ -145,7 +145,7 @@ void ToggleControl(const char* label, bool& value) {
 }
 
 void DropdownControl(const char* label, int& value, const char** options, int optionCount, UIState& state, const std::string& id) {
-    const bool isActive = state.dropdownOpen && state.activeDropdownId == ClayUI::HashId(id).id;
+    const bool isActive = state.dropdownOpen && state.activeDropdownId == ClayState::HashId(id).id;
     
     UI(Element(id)
     .width(SizingType::Grow)
