@@ -1,12 +1,12 @@
 #pragma once
 
 // clang-format off
-
 #include <fmt/core.h>
 #include <string>
 #include <clayui/core.hpp>
 #include <daxa/daxa.hpp>
 #include <algorithm>
+
 using namespace daxa::types;
 using namespace std;
 

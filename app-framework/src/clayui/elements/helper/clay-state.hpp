@@ -1,9 +1,6 @@
 #pragma once
-#define CLAY_IMPLEMENTATION
-#include <clay.h>
+
 #include "clay-types.hpp"
-
-
 #include <chrono>
 #include <functional>
 #include <string>
@@ -30,14 +27,14 @@ class ClayState
     static uint32_t capturedElement;
     static std::unordered_map<std::string, string_alloc> currentStrings;
     static std::unordered_map<uint32_t, ComputedProps> computedProperties;
-    
+
     static UIInputs inputs;
     static float lastPointerX;
     static float lastPointerY;
 
     static float pointerDeltaX;
     static float pointerDeltaY;
-    
+
     // how long the frame took to layout and dispatch render calls
     static double uiFrameTime;
     static std::chrono::time_point<std::chrono::high_resolution_clock> frameStart;

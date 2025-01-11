@@ -1,5 +1,6 @@
 #pragma once
 
+#define CLAY_IMPLEMENTATION
 #include "element.hpp"
 #include <stdexcept>
 
@@ -16,7 +17,7 @@ void Element::PushStack(Element &element)
 void Element::PopStack()
 {
     elementStack.pop_back();
-    currentElement = elementStack.back();
+    currentElement = elementStack.size() > 0 ? elementStack.back() : nullptr;
 }
 
 Element *Element::PeekStack()

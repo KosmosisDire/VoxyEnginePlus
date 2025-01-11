@@ -7,7 +7,6 @@
 #include <type_traits>
 #include <vector>
 
-
 struct Element;
 
 using BasicCallback = void(Element &, ComputedProps, UIInputs);
@@ -15,24 +14,26 @@ template <typename T>
 using DataCallback = void(Element &, ComputedProps, UIInputs, T &);
 
 template <typename C>
-concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs) {
+concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs)
+{
     {
         c(el, props, inputs)
     }
-    -> std::same_as<void>;
+    ->std::same_as<void>;
 };
 
 template <typename C, typename T>
-concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data) {
+concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data)
+{
     {
         c(el, props, inputs, data)
     }
-    -> std::same_as<void>;
+    ->std::same_as<void>;
 };
 
-#define UI(element)                                                   \
+#define UI(element)                                            \
     for (int CONCAT(latch_, __LINE__) = (element._Begin(), 0); \
-         CONCAT(latch_, __LINE__) < 1;                                \
+         CONCAT(latch_, __LINE__) < 1;                         \
          ++CONCAT(latch_, __LINE__), Element::_End())
 
 #define UITEXT(element) element._Begin();

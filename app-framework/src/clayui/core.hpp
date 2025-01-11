@@ -1,10 +1,9 @@
 #pragma once
 
-#include "elements/element.hpp"
-#include "elements/text.hpp"
-#include "elements/helper/clay-imgui-renderer.hpp"
 #include "../fonts.hpp"
-
+#include "elements/element.hpp"
+#include "elements/helper/clay-imgui-renderer.hpp"
+#include "elements/text.hpp"
 
 class ClayUI
 {

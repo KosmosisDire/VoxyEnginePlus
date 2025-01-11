@@ -1,4 +1,5 @@
 #pragma once
+
 #include <clay.h>
 #include <cmath>
 #include <imgui_impl_glfw.h>
