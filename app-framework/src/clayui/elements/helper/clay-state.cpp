@@ -1,7 +1,9 @@
-#include "clay-ui.hpp"
-#include "../elements/element.hpp"
+#pragma once
+#include <clay.h>
+#include "clay-state.hpp"
+#include "clay-types.hpp"
 #include "clay-imgui-renderer.hpp"
-#include "clay.h"
+
 #include <fonts.hpp>
 #include <stdarg.h>
 #include <stdio.h>

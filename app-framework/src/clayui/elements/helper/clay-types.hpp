@@ -1,6 +1,6 @@
 #pragma once
-
 #include <clay.h>
+
 #include <imgui_impl_glfw.h>
 #include <memory>
 #include <string>

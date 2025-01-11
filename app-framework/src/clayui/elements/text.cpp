@@ -1,3 +1,4 @@
+#pragma once
 #include "text.hpp"
 
 int Text::textId = 0;

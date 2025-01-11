@@ -1,7 +1,6 @@
 #pragma once
-
-#include "clay-state.hpp"
-#include "clay-types.hpp"
+#include "helper/clay-types.hpp"        
+#include "helper/clay-state.hpp"  
 
 struct Text
 {

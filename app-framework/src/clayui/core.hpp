@@ -1,7 +1,7 @@
 #pragma once
 
-#include "clay-text.hpp"
-#include "element.hpp"
+#include "elements/clay-text.hpp"
+#include "elements/element.hpp"
 
 class ClayUI
 {

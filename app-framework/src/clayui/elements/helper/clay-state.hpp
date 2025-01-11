@@ -1,8 +1,9 @@
 #pragma once
+#include <clay.h>
+#include "clay-types.hpp"
 
 #define CLAY_IMPLEMENTATION
-#include "clay-types.hpp"
-#include "clay.h"
+
 #include <chrono>
 #include <functional>
 #include <string>

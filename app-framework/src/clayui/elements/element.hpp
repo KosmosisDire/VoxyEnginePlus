@@ -1,7 +1,7 @@
 #pragma once
-
-#include "clay-types.hpp"
-#include "clay.h"
+#include "helper/clay-types.hpp"        
+#include "helper/clay-state.hpp"    
+#include <clay.h>
 #include <concepts>
 #include <string>
 #include <type_traits>

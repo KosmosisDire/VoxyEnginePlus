@@ -1,6 +1,6 @@
+#pragma once
 #include "element.hpp"
-#include "clay-state.hpp"
-
+#include <clay.h>
 #include <stdexcept>
 
 Element *Element::currentElement = nullptr;
