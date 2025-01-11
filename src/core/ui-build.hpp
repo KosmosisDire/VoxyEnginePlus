@@ -6,6 +6,7 @@
 #include <string>
 #include <clayui/core.hpp>
 #include <daxa/daxa.hpp>
+#include <algorithm>
 using namespace daxa::types;
 using namespace std;
 
@@ -82,7 +83,7 @@ void SliderControl(const char* label, float& value, float min, float max)
         }))
         {
             const float normalizedValue = (value - min) / (max - min);
-            const float handleOffset = normalizedValue * (Computed().width);
+            const float handleOffset = normalizedValue * (Element::Computed().width);
             
             // Fill bar
             UI(Element("SliderFill" + string(label))
@@ -145,7 +146,7 @@ void ToggleControl(const char* label, bool& value) {
 }
 
 void DropdownControl(const char* label, int& value, const char** options, int optionCount, UIState& state, const std::string& id) {
-    const bool isActive = state.dropdownOpen && state.activeDropdownId == ClayState::HashId(id).id;
+    const bool isActive = state.dropdownOpen && state.activeDropdownId == Element::ElementIdFromString(id);
     
     UI(Element(id)
     .width(SizingType::Grow)
@@ -170,12 +171,12 @@ void DropdownControl(const char* label, int& value, const char** options, int op
         .cornerRadius(5)
         .OnClick([&state, id](Element& el, ComputedProps props, UIInputs input)
         {
-            if (state.dropdownOpen && state.activeDropdownId == ElementIdFromString(id)) {
+            if (state.dropdownOpen && state.activeDropdownId == Element::ElementIdFromString(id)) {
                 state.dropdownOpen = false;
                 state.activeDropdownId = -1;
             } else {
                 state.dropdownOpen = true;
-                state.activeDropdownId = ElementIdFromString(id);
+                state.activeDropdownId = Element::ElementIdFromString(id);
             }
         }))
         {
@@ -198,7 +199,7 @@ void DropdownControl(const char* label, int& value, const char** options, int op
                         .width(SizingType::Grow)
                         .height(30)
                         .padding(12, 5)
-                        .color(IsHovered() ? ThemeColor::ButtonActive : ((i == value) ? ThemeColor::ButtonHovered : ThemeColor::Button))
+                        .color(ThemeColor::Button, ThemeColor::ButtonHovered, ThemeColor::ButtonActive)
                         .OnClick([i, &value, &state](Element &el, ComputedProps props, UIInputs input)
                         {
                             value = i;

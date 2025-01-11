@@ -1,11 +1,12 @@
 #pragma once
-#include "helper/clay-types.hpp"        
-#include "helper/clay-state.hpp"    
+#include "helper/clay-state.hpp"
+#include "helper/clay-types.hpp"
 #include <clay.h>
 #include <concepts>
 #include <string>
 #include <type_traits>
 #include <vector>
+
 
 struct Element;
 
@@ -14,32 +15,32 @@ template <typename T>
 using DataCallback = void(Element &, ComputedProps, UIInputs, T &);
 
 template <typename C>
-concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs)
-{
+concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs) {
     {
         c(el, props, inputs)
     }
-    ->std::same_as<void>;
+    -> std::same_as<void>;
 };
 
 template <typename C, typename T>
-concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data)
-{
+concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data) {
     {
         c(el, props, inputs, data)
     }
-    ->std::same_as<void>;
+    -> std::same_as<void>;
 };
 
 #define UI(element)                                                   \
-    for (int CONCAT(latch_, __LINE__) = (_Element_Begin(element), 0); \
+    for (int CONCAT(latch_, __LINE__) = (element._Begin(), 0); \
          CONCAT(latch_, __LINE__) < 1;                                \
-         ++CONCAT(latch_, __LINE__), _Element_End())
+         ++CONCAT(latch_, __LINE__), Element::_End())
 
 #define UITEXT(element) element._Begin();
 
 struct Element
 {
+    friend class ClayUI;
+
   private:
     static Element *currentElement;
     static std::vector<Element *> elementStack;
@@ -48,7 +49,6 @@ struct Element
     static Element *PeekStack();
     static void ClearStack();
     static int GetElementDepth();
-    static void IndentPrintf(const char *format, ...);
     static bool IsSelfCaptured();
     static bool IsAnyCaptured();
     static bool IsOtherCaptured();
@@ -60,6 +60,8 @@ struct Element
 
   public:
     static Element &GetCurrentElement();
+    /// @brief Get the ID associated with the element id string.
+    static uint32_t ElementIdFromString(std::string id);
     explicit Element(std::string id);
     ElementProps props;
     Element *parent = nullptr;
@@ -168,28 +170,26 @@ struct Element
     template <BasicCallable Callable>
     Element &OnDrag(Callable &&callback);
 
+    /// @brief Checks if the current element is hovered by the mouse.
+    static bool IsHovered();
+    /// @brief Checks if the current element is being pressed by the mouse.
+    static bool HoveredThisFrame();
+    /// @brief Checks if the current element is being pressed by the mouse.
+    static bool IsPressed();
+    /// @brief Checks if the current element was clicked this frame.
+    static bool ClickedThisFrame();
+    /// @brief Checks if the current element started being hovered this frame.
+    static bool MouseMovedThisFrame();
+    /// @brief Checks if the mouse was scrolled while over the current element this frame.
+    static bool MouseScrolledThisFrame();
+    /// @brief Checks if the mouse was dragged while over the current element this frame.
+    static bool MouseDraggedThisFrame();
+    /// @brief Get the computed properties of the current element.
+    static ComputedProps Computed();
+
     void _Begin();
     static void _End();
 };
-
-/// @brief Checks if the current element is hovered by the mouse.
-bool IsHovered();
-/// @brief Checks if the current element is being pressed by the mouse.
-bool HoveredThisFrame();
-/// @brief Checks if the current element is being pressed by the mouse.
-bool IsPressed();
-/// @brief Checks if the current element was clicked this frame.
-bool ClickedThisFrame();
-/// @brief Checks if the current element started being hovered this frame.
-bool MouseMovedThisFrame();
-/// @brief Checks if the mouse was scrolled while over the current element this frame.
-bool MouseScrolledThisFrame();
-/// @brief Checks if the mouse was dragged while over the current element this frame.
-bool MouseDraggedThisFrame();
-/// @brief Get the computed properties of the current element.
-ComputedProps Computed();
-/// @brief Get the ID associated with the element id string.
-uint32_t ElementIdFromString(std::string id);
 
 /// @brief Sets a callback to run every frame the mouse is hovering over the element.
 template <BasicCallable Callable>

@@ -1,6 +1,6 @@
 #pragma once
+
 #include "element.hpp"
-#include <clay.h>
 #include <stdexcept>
 
 Element *Element::currentElement = nullptr;
@@ -16,6 +16,7 @@ void Element::PushStack(Element &element)
 void Element::PopStack()
 {
     elementStack.pop_back();
+    currentElement = elementStack.back();
 }
 
 Element *Element::PeekStack()
@@ -489,13 +490,12 @@ void Element::_End()
     }
 
     Clay__CloseElement();
-    Element::IndentPrintf("Element closed\n");
 
     Element::PopStack();
 }
 
 /// @brief Checks if the current element is hovered by the mouse.
-bool IsHovered()
+bool Element::IsHovered()
 {
     if (Clay__booleanWarnings.maxElementsExceeded)
     {
@@ -505,7 +505,7 @@ bool IsHovered()
     if (IsOtherCaptured())
         return false;
 
-    uint32_t openElement = Element::GetCurrentElement()->props.clay.clayId.id;
+    uint32_t openElement = Element::GetCurrentElement().props.clay.clayId.id;
 
     for (int32_t i = 0; i < Clay__pointerOverIds.length; ++i)
     {
@@ -526,31 +526,31 @@ bool IsHovered()
 }
 
 /// @brief Checks if the current element is being pressed by the mouse.
-bool IsPressed()
+bool Element::IsPressed()
 {
     return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_PRESSED;
 }
 
 /// @brief Checks if the current element was clicked this frame.
-bool ClickedThisFrame()
+bool Element::ClickedThisFrame()
 {
     return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_RELEASED_THIS_FRAME;
 }
 
 /// @brief Checks if the current element started being hovered this frame.
-bool HoveredThisFrame()
+bool Element::HoveredThisFrame()
 {
-    return IsHovered() && (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == ClayState::GetCurrentElement()->props.clay.clayId.id);
+    return IsHovered() && (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == GetCurrentElement().props.clay.clayId.id);
 }
 
 /// @brief Checks if the mouse moved while over the current element this frame.
-bool MouseMovedThisFrame()
+bool Element::MouseMovedThisFrame()
 {
     return IsHovered() && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0);
 }
 
 /// @brief Checks if the mouse was scrolled while over the current element this frame.
-bool MouseScrolledThisFrame()
+bool Element::MouseScrolledThisFrame()
 {
     return IsHovered() && ClayState::inputs.scrollDeltaX != 0 || ClayState::inputs.scrollDeltaY != 0;
 }
@@ -558,12 +558,12 @@ bool MouseScrolledThisFrame()
 /// @brief Checks if the current element is being captured by the mouse.
 bool Element::IsSelfCaptured()
 {
-    if (!Element::IsAnyCaptured() || Element::GetCurrentElement() == nullptr)
+    if (!Element::IsAnyCaptured())
     {
         return false;
     }
 
-    return ClayState::capturedElement == Element::GetCurrentElement()->props.clay.clayId.id;
+    return ClayState::capturedElement == GetCurrentElement().props.clay.clayId.id;
 }
 
 /// @brief Checks if there is any element being captured by the mouse.
@@ -579,10 +579,10 @@ bool Element::IsOtherCaptured()
 }
 
 /// @brief Checks if the mouse was dragged while over the current element this frame.
-bool MouseDraggedThisFrame()
+bool Element::MouseDraggedThisFrame()
 {
-    bool selfCap = ClayState::IsSelfCaptured();
-    bool pressed = ClayState::IsPressed();
+    bool selfCap = IsSelfCaptured();
+    bool pressed = IsPressed();
     bool result = selfCap || (pressed && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0));
 
     // Release capture if mouse is not pressed
@@ -595,12 +595,12 @@ bool MouseDraggedThisFrame()
     return result;
 }
 
-ComputedProps Computed()
+ComputedProps Element::Computed()
 {
     return Element::GetCurrentElement().GetComputedProperties();
 }
 
-uint32_t ElementIdFromString(std::string id)
+uint32_t Element::ElementIdFromString(std::string id)
 {
-    return ClayState::HashId(id).id;
+    return HashId(id).id;
 }

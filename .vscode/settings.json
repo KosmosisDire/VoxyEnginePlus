@@ -95,7 +95,9 @@
         "valarray": "cpp",
         "*.in": "cpp",
         "codecvt": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "xstddef": "cpp",
+        "queue": "cpp"
     },
     "files.exclude": {
         "cmake": true,

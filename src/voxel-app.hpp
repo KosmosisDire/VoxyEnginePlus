@@ -152,7 +152,7 @@ struct VoxyApp : public Application
             };
 
         bool menuOpenBefore = uiState.menuOpen;
-        ClayState::Update<UIState>(uiState, input, build_ui);
+        ClayUI::Update<UIState>(uiState, input, build_ui);
 
         if (menuOpenBefore && !uiState.menuOpen)
         {

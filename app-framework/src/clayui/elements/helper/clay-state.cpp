@@ -1,8 +1,6 @@
 #pragma once
-#include <clay.h>
 #include "clay-state.hpp"
 #include "clay-types.hpp"
-#include "clay-imgui-renderer.hpp"
 
 #include <fonts.hpp>
 #include <stdarg.h>
@@ -11,10 +9,10 @@
 // Static member definitions
 uint32_t ClayState::lastHoveredElement = 0;
 uint32_t ClayState::capturedElement = 0;
-bool ClayState::initialized = false;
-UIInputs ClayState::inputs = {};
 std::unordered_map<std::string, string_alloc> ClayState::currentStrings;
 std::unordered_map<uint32_t, ComputedProps> ClayState::computedProperties;
+
+UIInputs ClayState::inputs = {};
 
 float ClayState::lastPointerX = 0;
 float ClayState::lastPointerY = 0;
@@ -23,44 +21,6 @@ float ClayState::pointerDeltaY = 0;
 
 double ClayState::uiFrameTime;
 std::chrono::time_point<std::chrono::high_resolution_clock> ClayState::frameStart;
-
-void ClayState::HandleClayErrors(Clay_ErrorData errorData)
-{
-    printf("%s", errorData.errorText.chars);
-}
-
-void ClayState::Initialize(UIInputs input)
-{
-    uint64_t totalMemorySize = Clay_MinMemorySize();
-    Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, (char *)malloc(totalMemorySize));
-    Clay_Initialize(clayMemory,
-                    Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight},
-                    Clay_ErrorHandler{HandleClayErrors});
-    Clay_SetMeasureTextFunction(Imgui_MeasureText);
-    Clay_SetDebugModeEnabled(true);
-
-    Clay_SetFont(FontManager::GetFont("Roboto"));
-
-    lastPointerX = input.pointerX;
-    lastPointerY = input.pointerY;
-
-    SetInputs(input);
-
-    initialized = true;
-}
-
-void ClayState::SetInputs(UIInputs input)
-{
-    inputs = input;
-    pointerDeltaX = input.pointerX - lastPointerX;
-    pointerDeltaY = input.pointerY - lastPointerY;
-    lastPointerX = input.pointerX;
-    lastPointerY = input.pointerY;
-
-    Clay_SetLayoutDimensions(Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight});
-    Clay_SetPointerState(Clay_Vector2{input.pointerX, input.pointerY}, input.pointerDown);
-    Clay_UpdateScrollContainers(true, Clay_Vector2{input.scrollDeltaX, input.scrollDeltaY * 10}, input.deltaTime);
-}
 
 void ClayState::SetComputedProps(ComputedProps *props, Clay_RenderCommand *command)
 {

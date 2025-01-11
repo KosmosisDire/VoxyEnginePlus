@@ -1,8 +1,8 @@
 #pragma once
+#define CLAY_IMPLEMENTATION
 #include <clay.h>
 #include "clay-types.hpp"
 
-#define CLAY_IMPLEMENTATION
 
 #include <chrono>
 #include <functional>
@@ -30,13 +30,14 @@ class ClayState
     static uint32_t capturedElement;
     static std::unordered_map<std::string, string_alloc> currentStrings;
     static std::unordered_map<uint32_t, ComputedProps> computedProperties;
+    
+    static UIInputs inputs;
     static float lastPointerX;
     static float lastPointerY;
 
     static float pointerDeltaX;
     static float pointerDeltaY;
-    static bool initialized;
-    static UIInputs inputs;
+    
     // how long the frame took to layout and dispatch render calls
     static double uiFrameTime;
     static std::chrono::time_point<std::chrono::high_resolution_clock> frameStart;
@@ -46,9 +47,6 @@ class ClayState
     ClayState(const ClayState &) = delete;
     ClayState &operator=(const ClayState &) = delete;
 
-    static void HandleClayErrors(Clay_ErrorData errorData);
-    static void Initialize(UIInputs input);
-    static void SetInputs(UIInputs input);
     static void SetComputedProps(ComputedProps *props, Clay_RenderCommand *command);
     static void FillComputedProperties(Clay_RenderCommandArray commands);
     static char *AllocateString(const std::string &str);
@@ -61,4 +59,5 @@ class ClayState
 
     friend struct Text;
     friend struct Element;
+    friend class ClayUI;
 };
