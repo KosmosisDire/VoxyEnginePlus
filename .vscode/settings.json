@@ -97,7 +97,8 @@
         "codecvt": "cpp",
         "stack": "cpp",
         "xstddef": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "*.slang": "cpp"
     },
     "files.exclude": {
         "cmake": true,

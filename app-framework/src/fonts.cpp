@@ -44,7 +44,5 @@ void FontManager::LoadDefaults()
 
     // Get and print current working directory
     auto fontPath = get_resource_path("fonts/Roboto-Regular.ttf");
-    std::cout << "Current working directory: " << fontPath << std::endl;
-
     FontManager::LoadFont(fontPath, "Roboto", 16.0f, &font_config);
 }

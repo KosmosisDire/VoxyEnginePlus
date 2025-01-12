@@ -2,13 +2,10 @@
 #include "core/ui-build.hpp"
 #include "vox/shaders/shared.inl"
 
+#include "vox/vox-camera.hpp"
 #include <application.hpp>
-#include <camera.hpp>
-#include <functional>
 #include <input.hpp>
 #include <stdio.h>
-
-using namespace daxa::types;
 
 struct VoxyApp : public Application
 {
@@ -20,7 +17,7 @@ struct VoxyApp : public Application
             .camera = {},
         };
 
-    Camera camera;
+    VoxCamera camera;
 
     UIState uiState{
         .time = 0.0f,
@@ -29,36 +26,19 @@ struct VoxyApp : public Application
     };
 
     VoxyApp()
+        : Application("Voxy", {"resources/shaders"})
     {
         // Initialize compute pipeline
-        compute_pipeline = pipeline_manager.add_compute_pipeline(
-                                               {
-                                                   .shader_info = {.source = daxa::ShaderFile{"compute.slang"}},
-                                                   .push_constant_size = sizeof(ComputePush),
-                                                   .name = "compute_pipeline",
-                                               })
-                               .value();
-
-        // Create render image
-        render_image = device.create_image({
-            .format = daxa::Format::R8G8B8A8_UNORM,
-            .size = {window->get_width(), window->get_height(), 1},
-            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
-            .name = "render_image",
-        });
-
-        // Initialize task render image
-        task_render_image = daxa::TaskImage({.initial_images = {
-                                                 .images = std::array{render_image}},
-                                             .name = "task_render_image"});
+        compute_pipeline = renderer.AddComputePipeline<ComputePush>("voxel_raymarch", "compute.slang");
+        render_image = renderer.CreateRenderImage("game_render_image", task_render_image);
 
         // Initialize occupancy buffer
-        create_buffer(device, TREE_SIZE_CUBE / BITS_PER_BYTE, chunk_occupancy_buffer, task_chunk_occupancy_buffer, "chunk occupancy buffer");
-        create_buffer(device, (TREE_SIZE_CUBE * TREE_SIZE_CUBE) / BITS_PER_BYTE, brick_occupancy_buffer, task_brick_occupancy_buffer, "brick occupancy buffer");
-        create_buffer<StateData>(device, state_buffer, task_state_buffer, "state buffer");
+        renderer.CreateBuffer("chunk_occupancy", TREE_SIZE_CUBE / BITS_PER_BYTE, chunk_occupancy_buffer, task_chunk_occupancy_buffer);
+        renderer.CreateBuffer("brick_occupancy", (TREE_SIZE_CUBE * TREE_SIZE_CUBE) / BITS_PER_BYTE, brick_occupancy_buffer, task_brick_occupancy_buffer);
+        renderer.CreateBuffer<StateData>("state buffer", state_buffer, task_state_buffer);
 
-        auto chunk_ptr = device.get_host_address_as<Occupancy>(chunk_occupancy_buffer).value();
-        auto brick_ptr = device.get_host_address_as<Occupancy>(brick_occupancy_buffer).value();
+        auto chunk_ptr = renderer.MapBufferAs<Occupancy>(chunk_occupancy_buffer);
+        auto brick_ptr = renderer.MapBufferAs<Occupancy>(brick_occupancy_buffer);
 
         // Initialize chunk occupancy buffer
         for (usize i = 0; i < TREE_SIZE_CUBE / BITS_PER_BYTE / sizeof(u64); i++)
@@ -71,43 +51,28 @@ struct VoxyApp : public Application
         {
             brick_ptr->occupancy[i] = (long long)rand() * rand();
         }
-
-        Application::init();
     }
 
     ~VoxyApp()
     {
-        device.wait_idle();
-        device.collect_garbage();
-        device.destroy_image(render_image);
-        device.destroy_buffer(chunk_occupancy_buffer);
-        device.destroy_buffer(brick_occupancy_buffer);
-        device.destroy_buffer(state_buffer);
+        renderer.DestroyImage(render_image);
+        renderer.DestroyBuffer(chunk_occupancy_buffer);
+        renderer.DestroyBuffer(brick_occupancy_buffer);
+        renderer.DestroyBuffer(state_buffer);
         ClayState::FreeAllStrings();
     }
 
   protected:
-    CameraData getCameraData(Camera cam)
+    void OnStart() override
     {
-        CameraData data;
-        auto proj = cam.getProjectionMatrix();
-        auto view = cam.getViewMatrix();
-
-        // Combine view and projection
-        auto viewProj = proj * view;
-
-        data.viewProj = to_daxa(viewProj);
-        data.invViewProj = to_daxa(glm::inverse(viewProj));
-        data.position = to_daxa(cam.getPosition());
-        data.near = cam.getNearPlane();
-        data.far = cam.getFarPlane();
-        return data;
+        InitializeTasks(renderer.render_loop_graph);
+        renderer.Complete();
     }
 
-    void on_update() override
+    void OnUpdate(float dt) override
     {
         // rotate sun around y axis
-        stateData.sunDir = daxa_transform_normal(stateData.sunDir, daxa_mat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f * delta_time));
+        stateData.sunDir = daxa_transform_normal(stateData.sunDir, daxa_mat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f * dt));
 
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
@@ -118,37 +83,36 @@ struct VoxyApp : public Application
         // mouse capture
         if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.menuOpen)
         {
-            capture_mouse(true);
+            InputManager::CaptureMouseResetDelta(true);
         }
 
         if (InputManager::WasKeyPressed(Key::Escape))
         {
-            capture_mouse(false);
+            InputManager::CaptureMouseResetDelta(false);
             uiState.menuOpen = !uiState.menuOpen;
         }
 
         // if mouse is captured, update camera
-        if (is_mouse_captured())
+        if (InputManager::IsMouseCaptured())
         {
-            float dx, dy;
-            InputManager::GetMouseDelta(dx, dy);
-            camera.processMouseMovement(dx, dy, true);
-            camera.processKeyboard(delta_time);
+            auto delta = InputManager::GetMouseDelta();
+            camera.processMouseMovement(delta, true);
+            camera.processKeyboard(dt);
         }
 
-        uiState.time = time;
+        uiState.time = GetTime();
         uiState.backgroundColor = stateData.backgroundColor;
 
         UIInputs input =
             {
-                .screenWidth = (int)window->get_width(),
-                .screenHeight = (int)window->get_height(),
-                .pointerX = InputManager::GetMousePositionX(),
-                .pointerY = InputManager::GetMousePositionY(),
+                .screenWidth = (int)window.GetWidth(),
+                .screenHeight = (int)window.GetHeight(),
+                .pointerX = InputManager::GetMousePosition().x,
+                .pointerY = InputManager::GetMousePosition().y,
                 .pointerDown = InputManager::IsMouseButtonPressed(MouseButton::Left),
-                .scrollDeltaX = InputManager::GetMouseScrollDeltaX(),
-                .scrollDeltaY = InputManager::GetMouseScrollDeltaY(),
-                .deltaTime = delta_time,
+                .scrollDeltaX = InputManager::GetMouseScrollDelta().x,
+                .scrollDeltaY = InputManager::GetMouseScrollDelta().y,
+                .deltaTime = dt,
             };
 
         bool menuOpenBefore = uiState.menuOpen;
@@ -156,76 +120,50 @@ struct VoxyApp : public Application
 
         if (menuOpenBefore && !uiState.menuOpen)
         {
-            capture_mouse(true);
+            InputManager::CaptureMouseResetDelta(true);
         }
     }
 
-    void on_resize(u32 sx, u32 sy) override
+    void OnResize(u32 sx, u32 sy) override
     {
-        device.destroy_image(render_image);
-        render_image = device.create_image({
-            .format = daxa::Format::R8G8B8A8_UNORM,
-            .size = {surface_width, surface_height, 1},
-            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
-        });
+        printf("Resizing to %d, %d\n", sx, sy);
+        renderer.DestroyImage(render_image);
+        render_image = renderer.CreateRenderImage("game_render_image");
         task_render_image.set_images({.images = std::array{render_image}});
         camera.setViewportSize(sx, sy);
     }
 
-    void record_tasks(daxa::TaskGraph &task_graph) override
+    void InitializeTasks(daxa::TaskGraph &task_graph)
     {
         task_graph.use_persistent_image(task_render_image);
         task_graph.use_persistent_buffer(task_chunk_occupancy_buffer);
         task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
         task_graph.use_persistent_buffer(task_state_buffer);
 
-        task_graph.add_task({
-            .attachments =
-                {
-                    daxa::inl_attachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_render_image),
-                    daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_chunk_occupancy_buffer),
-                    daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_brick_occupancy_buffer),
-                    daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_state_buffer),
-                },
-            .task = [this](daxa::TaskInterface ti) {
-                stateData.camera = getCameraData(camera);
-                this->allocate_fill_copy<StateData>(ti, stateData, ti.get(task_state_buffer), 0);
+        renderer.AddTask(
+            InlineTask("voxel_render")
+                .add_attachment(daxa::inl_attachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_render_image))
+                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_chunk_occupancy_buffer))
+                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_brick_occupancy_buffer))
+                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_state_buffer))
+                .set_task([this](daxa::TaskInterface ti)
+                          {
+            stateData.camera = camera.getCameraData();
+            renderer.CopyToBuffer<StateData>(ti, stateData, ti.get(task_state_buffer), 0);
 
-                ti.recorder.set_pipeline(*compute_pipeline);
-                ti.recorder.push_constant(ComputePush{
-                    .image = render_image.default_view(),
-                    .chunk_occupancy_ptr = get_device_address(ti, task_chunk_occupancy_buffer, 0),
-                    .brick_occupancy_ptr = get_device_address(ti, task_brick_occupancy_buffer, 0),
-                    .state_ptr = get_device_address(ti, task_state_buffer, 0),
-                    .frame_dim = {Application::surface_width, Application::surface_height},
-                    .time = time,
-                });
-                ti.recorder.dispatch({(Application::surface_width + 7) / 8, (Application::surface_height + 7) / 8});
-            },
-            .name = APPNAME_PREFIX("Draw (Compute)"),
-        });
+            ti.recorder.set_pipeline(*compute_pipeline);
+            ti.recorder.push_constant(ComputePush{
+                .image = render_image.default_view(),
+                .chunk_occupancy_ptr = renderer.GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
+                .brick_occupancy_ptr = renderer.GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
+                .state_ptr = renderer.GetDeviceAddress(ti, task_state_buffer, 0),
+                .frame_dim = {renderer.surface_width, renderer.surface_height},
+                .time = GetTime(),
+            });
+            ti.recorder.dispatch({(renderer.surface_width + 7) / 8, (renderer.surface_height + 7) / 8}); })
+        );
 
-        task_graph.add_task({
-            .attachments = {
-                {daxa::inl_attachment(daxa::TaskImageAccess::TRANSFER_READ, task_render_image)},
-                {daxa::inl_attachment(daxa::TaskImageAccess::TRANSFER_WRITE, task_swapchain_image)},
-            },
-            .task = [this](daxa::TaskInterface task) {
-                task.recorder.blit_image_to_image({
-                    .src_image = task.get(task_render_image).ids[0],
-                    .src_image_layout = daxa::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                    .dst_image = task.get(task_swapchain_image).ids[0],
-                    .dst_image_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    .src_offsets = {{{0, 0, 0},
-                                     {(i32)(Application::surface_width),
-                                      (i32)(Application::surface_height), 1}}},
-                    .dst_offsets = {{{0, 0, 0},
-                                     {(i32)(Application::surface_width),
-                                      (i32)(Application::surface_height), 1}}},
-                });
-            },
-            .name = APPNAME_PREFIX("Blit (render to swapchain)"),
-        });
+        renderer.AddTask(renderer.CreateSwapchainBlitTask(task_render_image));
     }
 
   private:
@@ -241,39 +179,4 @@ struct VoxyApp : public Application
     daxa::TaskBuffer task_state_buffer;
 
     // helpers
-    template <typename T>
-    inline void allocate_fill_copy(daxa::TaskInterface ti, T value, daxa::TaskBufferAttachmentInfo dst, u32 dst_offset = 0)
-    {
-        auto alloc = ti.allocator->allocate_fill(value).value();
-        ti.recorder.copy_buffer_to_buffer({
-            .src_buffer = ti.allocator->buffer(),
-            .dst_buffer = dst.ids[0],
-            .src_offset = alloc.buffer_offset,
-            .dst_offset = dst_offset,
-            .size = sizeof(T),
-        });
-    }
-
-    inline DeviceAddress get_device_address(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex)
-    {
-        return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
-    }
-
-    inline void create_buffer(daxa::Device device, usize bytes, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer, std::string name)
-    {
-        out_buffer = device.create_buffer({
-            .size = bytes,
-            .allocate_info = daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE,
-        });
-
-        out_task_buffer = daxa::TaskBuffer({.initial_buffers = {
-                                                .buffers = std::array{out_buffer}},
-                                            .name = name});
-    }
-
-    template <typename T>
-    inline void create_buffer(daxa::Device device, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer, std::string name)
-    {
-        create_buffer(device, sizeof(T), out_buffer, out_task_buffer, name);
-    }
 };

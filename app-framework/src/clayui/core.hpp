@@ -19,9 +19,7 @@ class ClayUI
     {
         uint64_t totalMemorySize = Clay_MinMemorySize();
         Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, (char *)malloc(totalMemorySize));
-        Clay_Initialize(clayMemory,
-                        Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight},
-                        Clay_ErrorHandler{HandleClayErrors});
+        Clay_Initialize(clayMemory, Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight}, Clay_ErrorHandler{HandleClayErrors});
         Clay_SetMeasureTextFunction(Imgui_MeasureText);
         Clay_SetDebugModeEnabled(true);
 
@@ -78,7 +76,6 @@ class ClayUI
         build_ui(state, input);
         EndFrame();
         // uiFrameTime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - frameStart).count();
-        // printf("UI frame time: %f\n", uiFrameTime);
     }
 };
 

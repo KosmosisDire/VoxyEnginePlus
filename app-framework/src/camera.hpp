@@ -3,6 +3,8 @@
 #include "math.hpp"
 #include <GLFW/glfw3.h>
 
+using namespace glm;
+
 // Add this at the top of your file or in your build system:
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
@@ -12,8 +14,8 @@ class Camera
 {
   public:
     Camera(
-        glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f),
+        vec3 position = vec3(0.0f, 0.0f, 0.0f),
+        vec3 up = vec3(0.0f, 1.0f, 0.0f),
         float yaw = -90.0f,
         float pitch = 0.0f,
         uint32_t initialWidth = 800,
@@ -72,24 +74,24 @@ class Camera
         validateAndUpdatePlanes(nearPlane, farPlane);
     }
 
-    glm::mat4x4 getProjectionMatrix() const
+    mat4x4 getProjectionMatrix() const
     {
-        auto proj = glm::perspective(glm::radians(fov), getAspectRatio(), near, far);
+        auto proj = perspective(radians(fov), getAspectRatio(), near, far);
         proj[1][1] *= -1; // Flip Y coordinate for Vulkan convention
         return proj;
     }
 
-    glm::mat4x4 getViewMatrix() const
+    mat4x4 getViewMatrix() const
     {
-        return glm::lookAt(position, position + front, up);
+        return lookAt(position, position + front, up);
     }
 
     float getNearPlane() const { return near; }
     float getFarPlane() const { return far; }
-    glm::vec3 getForward() const { return front; }
-    glm::vec3 getRight() const { return right; }
-    glm::vec3 getUp() const { return up; }
-    glm::vec3 getPosition() const { return position; }
+    vec3 getForward() const { return front; }
+    vec3 getRight() const { return right; }
+    vec3 getUp() const { return up; }
+    vec3 getPosition() const { return position; }
 
     void processKeyboard(float deltaTime)
     {
@@ -109,8 +111,10 @@ class Camera
             position -= up * velocity;
     }
 
-    void processMouseMovement(float xoffset, float yoffset, bool constrainPitch = true)
+    void processMouseMovement(vec2 mouseDelta, bool constrainPitch = true)
     {
+        float xoffset = mouseDelta.x;
+        float yoffset = mouseDelta.y;
         xoffset *= sensitivity;
         yoffset *= sensitivity;
 
@@ -129,11 +133,11 @@ class Camera
     }
 
   private:
-    glm::vec3 position;
-    glm::vec3 front;
-    glm::vec3 up;
-    glm::vec3 right;
-    glm::vec3 worldUp;
+    vec3 position;
+    vec3 front;
+    vec3 up;
+    vec3 right;
+    vec3 worldUp;
 
     float yaw;
     float pitch;
@@ -169,14 +173,14 @@ class Camera
 
     void updateCameraVectors()
     {
-        glm::vec3 newFront;
+        vec3 newFront;
         // Adjust the calculations for Vulkan's coordinate system
-        newFront.x = -cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        newFront.y = -sin(glm::radians(pitch)); // Flip Y since Vulkan Y points down
-        newFront.z = -sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front = glm::normalize(newFront);
+        newFront.x = -cos(radians(yaw)) * cos(radians(pitch));
+        newFront.y = -sin(radians(pitch)); // Flip Y since Vulkan Y points down
+        newFront.z = -sin(radians(yaw)) * cos(radians(pitch));
+        front = normalize(newFront);
         // Keep right-handed coordinate system
-        right = glm::normalize(glm::cross(front, worldUp));
-        up = glm::normalize(glm::cross(right, front));
+        right = normalize(cross(front, worldUp));
+        up = normalize(cross(right, front));
     }
 };

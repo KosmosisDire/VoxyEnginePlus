@@ -5,7 +5,7 @@ auto main() -> int
     VoxyApp app;
     while (true)
     {
-        if (app.update())
+        if (app.Update())
         {
             break;
         }
