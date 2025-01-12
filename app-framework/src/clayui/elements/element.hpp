@@ -14,21 +14,19 @@ template <typename T>
 using DataCallback = void(Element &, ComputedProps, UIInputs, T &);
 
 template <typename C>
-concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs)
-{
+concept BasicCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs) {
     {
         c(el, props, inputs)
     }
-    ->std::same_as<void>;
+    -> std::same_as<void>;
 };
 
 template <typename C, typename T>
-concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data)
-{
+concept DataCallable = requires(C c, Element &el, ComputedProps props, UIInputs inputs, T &data) {
     {
         c(el, props, inputs, data)
     }
-    ->std::same_as<void>;
+    -> std::same_as<void>;
 };
 
 #define UI(element)                                            \
@@ -122,52 +120,325 @@ struct Element
     Element &CaptureDrag();
     Element &StopCaptureDrag();
 
-    /// @brief Sets a callback to run every frame the mouse is hovering over the element. Takes a generic user data parameter.
+    /// Sets a hover callback that runs every frame while the mouse is over the element. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnHovering(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle hover state
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleHovering(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle hover state
+    ///     }
+    ///
+    ///     Element("Example").OnHovering(userData, HandleHovering);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnHovering(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run every frame the mouse is hovering over the element.
+
+    /// Sets a hover callback that runs every frame while the mouse is over the element.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnHovering(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle hover state
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleHovering(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle hover state
+    ///     }
+    ///
+    ///     Element("Example").OnHovering(HandleHovering);
+    ///```
     template <BasicCallable Callable>
     Element &OnHovering(Callable &&callback);
 
-    /// @brief Sets a callback to run every frame the mouse is pressing the element.
+    /// Sets a callback that runs every frame while the mouse button is held down over the element. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnPressing(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle press state
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandlePressing(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle press state
+    ///     }
+    ///
+    ///     Element("Example").OnPressing(userData, HandlePressing);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnPressing(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run every frame the mouse is pressing the element.
+
+    /// Sets a callback that runs every frame while the mouse button is held down over the element.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnPressing(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle press state
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandlePressing(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle press state
+    ///     }
+    ///
+    ///     Element("Example").OnPressing(HandlePressing);
+    ///```
     template <BasicCallable Callable>
     Element &OnPressing(Callable &&callback);
 
-    /// @brief Sets a callback to run once on the frame the mouse enters the element's bounds. Takes a generic user data parameter.
+    /// Sets a callback that runs once when the mouse first enters the element's bounds. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnHover(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle hover enter
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleHover(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle hover enter
+    ///     }
+    ///
+    ///     Element("Example").OnHover(userData, HandleHover);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnHover(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run once on the frame the mouse enters the element's bounds.
+
+    /// Sets a callback that runs once when the mouse first enters the element's bounds.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnHover(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle hover enter
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleHover(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle hover enter
+    ///     }
+    ///
+    ///     Element("Example").OnHover(HandleHover);
+    ///```
     template <BasicCallable Callable>
     Element &OnHover(Callable &&callback);
 
-    /// @brief Sets a callback to run once on the frame the mouse clicks the element. Takes a generic user data parameter.
+    /// Sets a callback that runs once when the mouse clicks the element. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnClick(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle click
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleClick(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle click
+    ///     }
+    ///
+    ///     Element("Example").OnClick(userData, HandleClick);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnClick(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run once on the frame the mouse clicks the element.
+
+    /// Sets a callback that runs once when the mouse clicks the element.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnClick(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle click
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleClick(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle click
+    ///     }
+    ///
+    ///     Element("Example").OnClick(HandleClick);
+    ///```
     template <BasicCallable Callable>
     Element &OnClick(Callable &&callback);
 
-    /// @brief Sets a callback to run each frame the mouse moves while over the element.
+    /// Sets a callback that runs each frame when the mouse moves while over the element. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnMouseMove(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle mouse movement
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleMouseMove(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle mouse movement
+    ///     }
+    ///
+    ///     Element("Example").OnMouseMove(userData, HandleMouseMove);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnMouseMove(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run each frame the mouse moves while over the element.
+
+    /// Sets a callback that runs each frame when the mouse moves while over the element.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnMouseMove(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle mouse movement
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleMouseMove(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle mouse movement
+    ///     }
+    ///
+    ///     Element("Example").OnMouseMove(HandleMouseMove);
+    ///```
     template <BasicCallable Callable>
     Element &OnMouseMove(Callable &&callback);
 
-    /// @brief Sets a callback to run each frame the mouse scrolls while over the element.
+    /// Sets a callback that runs each frame when the mouse scrolls while over the element. Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnScroll(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle scroll
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleScroll(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle scroll
+    ///     }
+    ///
+    ///     Element("Example").OnScroll(userData, HandleScroll);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnScroll(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run each frame the mouse scrolls while over the element.
+
+    /// Sets a callback that runs each frame when the mouse scrolls while over the element.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnScroll(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle scroll
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleScroll(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle scroll
+    ///     }
+    ///
+    ///     Element("Example").OnScroll(HandleScroll);
+    ///```
     template <BasicCallable Callable>
     Element &OnScroll(Callable &&callback);
 
-    /// @brief Sets a callback to run each frame the element is clicked and dragged.
+    /// Sets a callback that runs each frame when the element is being dragged (clicked and moved). Takes a generic user data parameter of any type.
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnDrag(userData,
+    ///         [](Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///         {
+    ///             // Handle drag
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleDrag(Element& el, ComputedProps props, UIInputs inputs, UserDataType &userData)
+    ///     {
+    ///         // Handle drag
+    ///     }
+    ///
+    ///     Element("Example").OnDrag(userData, HandleDrag);
+    ///```
     template <typename TUserData, DataCallable<TUserData> Callable>
     Element &OnDrag(TUserData &userData, Callable &&callback);
-    /// @brief Sets a callback to run each frame the element is clicked and dragged.
+
+    /// Sets a callback that runs each frame when the element is being dragged (clicked and moved).
+    ///
+    /// Usage with lambda:
+    ///```cpp
+    ///     Element("Example").OnDrag(
+    ///         [](Element& el, ComputedProps props, UIInputs inputs)
+    ///         {
+    ///             // Handle drag
+    ///         });
+    ///```
+    ///
+    /// Usage with external function:
+    ///```cpp
+    ///     void HandleDrag(Element& el, ComputedProps props, UIInputs inputs)
+    ///     {
+    ///         // Handle drag
+    ///     }
+    ///
+    ///     Element("Example").OnDrag(HandleDrag);
+    ///```
     template <BasicCallable Callable>
     Element &OnDrag(Callable &&callback);
 
