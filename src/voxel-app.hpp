@@ -1,5 +1,5 @@
 #pragma once
-#include "core/ui-build.hpp"
+#include "user-interface\root.hpp"
 #include "vox/shaders/shared.inl"
 
 #include "vox/vox-camera.hpp"
@@ -19,10 +19,9 @@ struct VoxyApp : public Application
 
     VoxCamera camera;
 
-    UIState uiState{
+    UIData uiState{
         .time = 0.0f,
-        .backgroundColor = stateData.backgroundColor,
-        .menuOpen = true,
+        .backgroundColor = stateData.backgroundColor
     };
 
     VoxyApp()
@@ -81,7 +80,7 @@ struct VoxyApp : public Application
         }
 
         // mouse capture
-        if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.menuOpen)
+        if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.mouseIsActive)
         {
             InputManager::CaptureMouseResetDelta(true);
         }
@@ -89,7 +88,7 @@ struct VoxyApp : public Application
         if (InputManager::WasKeyPressed(Key::Escape))
         {
             InputManager::CaptureMouseResetDelta(false);
-            uiState.menuOpen = !uiState.menuOpen;
+            
         }
 
         // if mouse is captured, update camera
@@ -115,11 +114,12 @@ struct VoxyApp : public Application
                 .deltaTime = dt,
             };
 
-        bool menuOpenBefore = uiState.menuOpen;
-        ClayUI::Update<UIState>(uiState, input, build_ui);
+        bool menuOpenBefore = uiState.mouseIsActive;
+        ClayUI::Update<UIData>(uiState, input, init_root_ui);
 
-        if (menuOpenBefore && !uiState.menuOpen)
+        if (menuOpenBefore && !uiState.mouseIsActive) 
         {
+            // inputs will be captured for graphics
             InputManager::CaptureMouseResetDelta(true);
         }
     }

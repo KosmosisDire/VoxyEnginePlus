@@ -98,7 +98,9 @@
         "stack": "cpp",
         "xstddef": "cpp",
         "queue": "cpp",
-        "*.slang": "cpp"
+        "*.slang": "cpp",
+        "asd": "cpp",
+        "*.idl": "cpp"
     },
     "files.exclude": {
         "cmake": true,
