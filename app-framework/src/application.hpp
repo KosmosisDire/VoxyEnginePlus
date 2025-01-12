@@ -40,7 +40,8 @@ struct Application
             OnStart();
         }
 
-        glfwPollEvents();
+        InputManager::Update();
+        window.Update();
 
         if (window.ShouldClose())
             return true;
@@ -53,9 +54,8 @@ struct Application
 
         CalcDeltatime();
 
-        InputManager::Update();
         OnUpdate(delta_time);
-        glfwSwapBuffers(window.GetGlfwWindow());
+
         renderer.Render();
 
         renderer.device.collect_garbage();
@@ -85,11 +85,8 @@ struct Application
         if (window.IsMinimized())
             return;
 
-        renderer.device.wait_idle();
         renderer.Resize(sx, sy);
         OnResize(sx, sy);
-        glfwSwapBuffers(window.GetGlfwWindow());
-
         Update();
     }
 

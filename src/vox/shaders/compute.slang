@@ -137,44 +137,39 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
 
-    // // Ray setup
-    // float3 rayOrigin, rayDir;
-    // getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
+    // Ray setup
+    float3 rayOrigin, rayDir;
+    getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
 
-    // TraceResult trace = traceVoxelRay(rayOrigin, rayDir);
+    TraceResult trace = traceVoxelRay(rayOrigin, rayDir);
 
-    // // lighting
-    // if (trace.hit)
-    // {
-    //     TraceResult shadowTrace = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, p.state_ptr.sunDir);
-    //     float shadow = 1.0;
-    //     if (shadowTrace.hit)
-    //     {
-    //         shadow = 0.0;
-    //     }
+    // lighting
+    if (trace.hit)
+    {
+        TraceResult shadowTrace = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, p.state_ptr.sunDir);
+        float shadow = 1.0;
+        if (shadowTrace.hit)
+        {
+            shadow = 0.0;
+        }
 
-    //     float3 normal = normalize(trace.normal);
-    //     float3 color = float3(0.0);
+        float3 normal = normalize(trace.normal);
+        float3 color = float3(0.0);
 
-    //     // simple lambertian shading
-    //     float3 sunDir = normalize(p.state_ptr.sunDir);
-    //     float lDot = dot(normal, sunDir);
-    //     float lightIntensity = max(lDot * shadow, 0.1);
+        // simple lambertian shading
+        float3 sunDir = normalize(p.state_ptr.sunDir);
+        float lDot = dot(normal, sunDir);
+        float lightIntensity = max(lDot * shadow, 0.1);
 
-    //     color = getSunColor(sunDir) * lightIntensity;
+        color = getSunColor(sunDir) * lightIntensity;
 
-    //     // apply shading
-    //     setPixel(color, pixel, render_image);
-    // }
-    // else
-    // {
-    //     // set background color
-    //     float3 sky = getAtmosphereColor(rayDir, p.state_ptr.sunDir, p.state_ptr.time);
-    //     setPixel(sky, pixel, render_image);
-    // }
-
-    // instead set simple gradient color over time
-    float3 color = float3(0.0);
-    color = lerp(float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 1.0), p.state_ptr.time % 1.0);
-    setPixel(color, pixel, render_image);
+        // apply shading
+        setPixel(color, pixel, render_image);
+    }
+    else
+    {
+        // set background color
+        float3 sky = getAtmosphereColor(rayDir, p.state_ptr.sunDir, p.state_ptr.time);
+        setPixel(sky, pixel, render_image);
+    }
 }

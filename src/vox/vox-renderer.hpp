@@ -78,7 +78,6 @@ class VoxelRenderer
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {
-                        printf("Width: %d, Height: %d\n", renderer->surface_width, renderer->surface_height);
                         renderer->CopyToBuffer<StateData>(ti, stateData, ti.get(task_state_buffer), 0);
                         auto push = ComputePush{
                             .image = render_image->default_view(),

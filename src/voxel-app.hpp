@@ -1,5 +1,7 @@
 #pragma once
-#include "core/ui-build.hpp"
+#include "user-interface\root.hpp"
+#include "vox/shaders/shared.inl"
+
 #include "vox/vox-camera.hpp"
 #include "vox/vox-renderer.hpp"
 #include <application.hpp>
@@ -10,14 +12,8 @@ struct VoxyApp : public Application
 {
   public:
     VoxelRenderer voxelRenderer;
-
     VoxCamera camera;
-
-    UIState uiState{
-        .time = 0.0f,
-        .menuOpen = true,
-    };
-
+    UIData uiState;
     daxa::ImageId render_image;
     daxa::TaskImage task_render_image;
 
@@ -53,7 +49,6 @@ struct VoxyApp : public Application
         // ui state
         uiState.time = GetTime();
 
-        printf("width: %d, height: %d\n", (int)window.GetWidth(), (int)window.GetHeight());
         fflush(stdout);
 
         UIInputs input =
@@ -68,14 +63,6 @@ struct VoxyApp : public Application
                 .deltaTime = dt,
             };
 
-        bool menuOpenBefore = uiState.menuOpen;
-        ClayUI::Update<UIState>(uiState, input, build_ui);
-
-        if (menuOpenBefore && !uiState.menuOpen)
-        {
-            InputManager::CaptureMouseResetDelta(true);
-        }
-
         if (InputManager::WasKeyPressed(Key::F4))
         {
             ClayUI::DebugMode(!ClayUI::GetDebugMode());
@@ -88,15 +75,14 @@ struct VoxyApp : public Application
         }
 
         // mouse capture
-        if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.menuOpen)
+        if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.mouseIsActive)
         {
             InputManager::CaptureMouseResetDelta(true);
         }
 
         if (InputManager::WasKeyPressed(Key::Escape))
         {
-            InputManager::CaptureMouseResetDelta(false);
-            uiState.menuOpen = !uiState.menuOpen;
+            InputManager::CaptureMouseResetDelta(!InputManager::IsMouseCaptured()); // use escape to toggle mouse capture
         }
 
         // if mouse is captured, update camera
@@ -105,6 +91,15 @@ struct VoxyApp : public Application
             auto delta = InputManager::GetMouseDelta();
             camera.processMouseMovement(delta, true);
             camera.processKeyboard(dt);
+        }
+
+        uiState.mouseIsActive = !InputManager::IsMouseCaptured(); // assuming that the mouse is active when it is not captured (so it is visible and can interact with UI)
+        bool menuOpenBefore = uiState.mouseIsActive;
+        ClayUI::Update<UIData>(uiState, input, init_root_ui);
+
+        if (menuOpenBefore && !uiState.mouseIsActive)
+        {
+            InputManager::CaptureMouseResetDelta(true);
         }
 
         voxelRenderer.Update(stateData);

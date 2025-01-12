@@ -93,6 +93,11 @@ class Window
     bool IsMinimized() const { return minimized; }
     void SetResizeCallback(ResizeCallback callback) { resize_callback = callback; }
     bool ShouldClose() { return glfwWindowShouldClose(glfwWindowPointer); }
+    void Update()
+    {
+        glfwPollEvents();
+        glfwSwapBuffers(glfwWindowPointer);
+    }
 
   private:
     GLFWwindow *glfwWindowPointer;
