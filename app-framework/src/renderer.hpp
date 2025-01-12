@@ -24,13 +24,25 @@ struct InlineTask
     }
 
     // make builder interface
-    InlineTask &add_attachment(daxa::TaskAttachmentInfo attachment)
+    InlineTask &AddAttachment(daxa::TaskAttachmentInfo attachment)
     {
         attachments.push_back(attachment);
         return *this;
     }
 
-    InlineTask &set_task(std::function<void(daxa::TaskInterface)> task)
+    InlineTask &AddAttachment(daxa::TaskImageAccess access, daxa::TaskImageView view)
+    {
+        attachments.push_back(daxa::inl_attachment(access, view));
+        return *this;
+    }
+
+    InlineTask &AddAttachment(daxa::TaskBufferAccess access, daxa::TaskBuffer buffer)
+    {
+        attachments.push_back(daxa::inl_attachment(access, buffer));
+        return *this;
+    }
+
+    InlineTask &SetTask(std::function<void(daxa::TaskInterface)> task)
     {
         this->task = task;
         return *this;
@@ -72,7 +84,6 @@ class Renderer
         imgui_renderer = CreateImguiRenderer();
 
         Resize(window->GetWidth(), window->GetHeight());
-        NewFrame();
         InitializeGraph();
     }
 
@@ -83,7 +94,7 @@ class Renderer
         ImGui_ImplGlfw_Shutdown();
     }
 
-    void Update()
+    void Render()
     {
         if (!task_graph_complete)
         {
@@ -91,11 +102,21 @@ class Renderer
             Complete();
         }
 
-        NewFrame();
+        auto reloaded_result = pipeline_manager.reload_all();
+        if (auto reload_err = daxa::get_if<daxa::PipelineReloadError>(&reloaded_result))
+            std::cout << "Failed to reload " << reload_err->message << '\n';
+        if (daxa::get_if<daxa::PipelineReloadSuccess>(&reloaded_result))
+            std::cout << "Successfully reloaded!\n";
+
+        auto swapchain_image = swapchain.acquire_next_image();
+        task_swap_image.set_images({.images = std::array{swapchain_image}});
+        if (swapchain_image.is_empty())
+        {
+            std::cout << "Failed to acquire next image\n";
+            return;
+        }
 
         render_loop_graph.execute({});
-
-        device.collect_garbage();
     }
 
     void Resize(u32 width, u32 height)
@@ -130,19 +151,12 @@ class Renderer
     /// @param defer_completion If true, the task graph will not be rebuilt (but will be reinitialized). This only matters if the graph was already completed before this task was added.
     inline void AddTask(InlineTask task, bool defer_completion = false)
     {
-        if (task_graph_complete)
-        {
-            InitializeGraph();
-        }
-
-        render_loop_graph.add_task(task.build());
-
-        if (!defer_completion && task_graph_complete)
-        {
-            Complete();
-        }
+        AddTask(task.build(), defer_completion);
     }
 
+    /// @brief Add a task to the render loop
+    /// @param task The task to add as an InlineTaskInfo.
+    /// @param defer_completion If true, the task graph will not be rebuilt (but will be reinitialized). This only matters if the graph was already completed before this task was added.
     inline void AddTask(daxa::InlineTaskInfo task, bool defer_completion = false)
     {
         if (task_graph_complete)
@@ -160,13 +174,11 @@ class Renderer
 
     inline void DestroyImage(daxa::ImageId image)
     {
-        device.wait_idle();
         device.destroy_image(image);
     }
 
     inline void DestroyBuffer(daxa::BufferId buffer)
     {
-        device.wait_idle();
         device.destroy_buffer(buffer);
     }
 
@@ -262,24 +274,6 @@ class Renderer
   private:
     Window *window;
 
-    void NewFrame()
-    {
-        auto reloaded_result = pipeline_manager.reload_all();
-        if (auto reload_err =
-                daxa::get_if<daxa::PipelineReloadError>(&reloaded_result))
-            std::cout << "Failed to reload " << reload_err->message << '\n';
-        if (daxa::get_if<daxa::PipelineReloadSuccess>(&reloaded_result))
-            std::cout << "Successfully reloaded!\n";
-
-        auto swapchain_image = swapchain.acquire_next_image();
-        task_swap_image.set_images({.images = std::array{swapchain_image}});
-        if (swapchain_image.is_empty())
-        {
-            std::cout << "Failed to acquire next image\n";
-            return;
-        }
-    }
-
     void InitializeGraph()
     {
         task_graph_complete = false;
@@ -304,8 +298,7 @@ class Renderer
         return daxa::ImGuiRenderer(
             {.device = device,
              .format = swapchain.get_format(),
-             .context = ctx}
-        );
+             .context = ctx});
     }
 
   public:
@@ -329,7 +322,7 @@ class Renderer
 
     static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, Window *window, std::string name)
     {
-        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::MAILBOX, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
+        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::FIFO, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
     }
 
     static inline daxa::TaskImage CreateSwapchainImage(daxa::Swapchain &swapchain, std::string name)

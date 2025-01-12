@@ -1,8 +1,7 @@
 #pragma once
 #include "core/ui-build.hpp"
-#include "vox/shaders/shared.inl"
-
 #include "vox/vox-camera.hpp"
+#include "vox/vox-renderer.hpp"
 #include <application.hpp>
 #include <input.hpp>
 #include <stdio.h>
@@ -10,69 +9,77 @@
 struct VoxyApp : public Application
 {
   public:
-    StateData stateData =
-        {
-            .backgroundColor = {1.0f, 1.0f, 1.0f},
-            .sunDir = {1.0f, 0.2f, 0.0f},
-            .camera = {},
-        };
+    VoxelRenderer voxelRenderer;
 
     VoxCamera camera;
 
     UIState uiState{
         .time = 0.0f,
-        .backgroundColor = stateData.backgroundColor,
         .menuOpen = true,
     };
 
+    daxa::ImageId render_image;
+    daxa::TaskImage task_render_image;
+
     VoxyApp()
-        : Application("Voxy", {"resources/shaders"})
+        : Application("Voxy", {"resources/shaders"}),
+          voxelRenderer(&renderer)
     {
-        // Initialize compute pipeline
-        compute_pipeline = renderer.AddComputePipeline<ComputePush>("voxel_raymarch", "compute.slang");
         render_image = renderer.CreateRenderImage("game_render_image", task_render_image);
-
-        // Initialize occupancy buffer
-        renderer.CreateBuffer("chunk_occupancy", TREE_SIZE_CUBE / BITS_PER_BYTE, chunk_occupancy_buffer, task_chunk_occupancy_buffer);
-        renderer.CreateBuffer("brick_occupancy", (TREE_SIZE_CUBE * TREE_SIZE_CUBE) / BITS_PER_BYTE, brick_occupancy_buffer, task_brick_occupancy_buffer);
-        renderer.CreateBuffer<StateData>("state buffer", state_buffer, task_state_buffer);
-
-        auto chunk_ptr = renderer.MapBufferAs<Occupancy>(chunk_occupancy_buffer);
-        auto brick_ptr = renderer.MapBufferAs<Occupancy>(brick_occupancy_buffer);
-
-        // Initialize chunk occupancy buffer
-        for (usize i = 0; i < TREE_SIZE_CUBE / BITS_PER_BYTE / sizeof(u64); i++)
-        {
-            chunk_ptr->occupancy[i] = (long long)rand() * rand();
-        }
-
-        // Initialize brick occupancy buffer
-        for (usize i = 0; i < (TREE_SIZE_CUBE * TREE_SIZE_CUBE) / BITS_PER_BYTE / sizeof(u64); i++)
-        {
-            brick_ptr->occupancy[i] = (long long)rand() * rand();
-        }
     }
 
     ~VoxyApp()
     {
         renderer.DestroyImage(render_image);
-        renderer.DestroyBuffer(chunk_occupancy_buffer);
-        renderer.DestroyBuffer(brick_occupancy_buffer);
-        renderer.DestroyBuffer(state_buffer);
+
         ClayState::FreeAllStrings();
     }
 
   protected:
     void OnStart() override
     {
-        InitializeTasks(renderer.render_loop_graph);
+        voxelRenderer.InitializeTasks(renderer.render_loop_graph, &task_render_image, &render_image);
         renderer.Complete();
     }
 
     void OnUpdate(float dt) override
     {
-        // rotate sun around y axis
-        stateData.sunDir = daxa_transform_normal(stateData.sunDir, daxa_mat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f * dt));
+        // renderer state
+        auto stateData = voxelRenderer.stateData;
+        stateData.camera = camera.getCameraData();
+        stateData.dt = dt;
+        stateData.time = GetTime();
+
+        // ui state
+        uiState.time = GetTime();
+
+        printf("width: %d, height: %d\n", (int)window.GetWidth(), (int)window.GetHeight());
+        fflush(stdout);
+
+        UIInputs input =
+            {
+                .screenWidth = (int)window.GetWidth(),
+                .screenHeight = (int)window.GetHeight(),
+                .pointerX = InputManager::GetMousePosition().x,
+                .pointerY = InputManager::GetMousePosition().y,
+                .pointerDown = InputManager::IsMouseButtonPressed(MouseButton::Left),
+                .scrollDeltaX = InputManager::GetMouseScrollDelta().x,
+                .scrollDeltaY = InputManager::GetMouseScrollDelta().y,
+                .deltaTime = dt,
+            };
+
+        bool menuOpenBefore = uiState.menuOpen;
+        ClayUI::Update<UIState>(uiState, input, build_ui);
+
+        if (menuOpenBefore && !uiState.menuOpen)
+        {
+            InputManager::CaptureMouseResetDelta(true);
+        }
+
+        if (InputManager::WasKeyPressed(Key::F4))
+        {
+            ClayUI::DebugMode(!ClayUI::GetDebugMode());
+        }
 
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
@@ -100,83 +107,14 @@ struct VoxyApp : public Application
             camera.processKeyboard(dt);
         }
 
-        uiState.time = GetTime();
-        uiState.backgroundColor = stateData.backgroundColor;
-
-        UIInputs input =
-            {
-                .screenWidth = (int)window.GetWidth(),
-                .screenHeight = (int)window.GetHeight(),
-                .pointerX = InputManager::GetMousePosition().x,
-                .pointerY = InputManager::GetMousePosition().y,
-                .pointerDown = InputManager::IsMouseButtonPressed(MouseButton::Left),
-                .scrollDeltaX = InputManager::GetMouseScrollDelta().x,
-                .scrollDeltaY = InputManager::GetMouseScrollDelta().y,
-                .deltaTime = dt,
-            };
-
-        bool menuOpenBefore = uiState.menuOpen;
-        ClayUI::Update<UIState>(uiState, input, build_ui);
-
-        if (menuOpenBefore && !uiState.menuOpen)
-        {
-            InputManager::CaptureMouseResetDelta(true);
-        }
+        voxelRenderer.Update(stateData);
     }
 
     void OnResize(u32 sx, u32 sy) override
     {
-        printf("Resizing to %d, %d\n", sx, sy);
         renderer.DestroyImage(render_image);
         render_image = renderer.CreateRenderImage("game_render_image");
         task_render_image.set_images({.images = std::array{render_image}});
         camera.setViewportSize(sx, sy);
     }
-
-    void InitializeTasks(daxa::TaskGraph &task_graph)
-    {
-        task_graph.use_persistent_image(task_render_image);
-        task_graph.use_persistent_buffer(task_chunk_occupancy_buffer);
-        task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
-        task_graph.use_persistent_buffer(task_state_buffer);
-
-        renderer.AddTask(
-            InlineTask("voxel_render")
-                .add_attachment(daxa::inl_attachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_render_image))
-                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_chunk_occupancy_buffer))
-                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_brick_occupancy_buffer))
-                .add_attachment(daxa::inl_attachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_state_buffer))
-                .set_task([this](daxa::TaskInterface ti)
-                          {
-            stateData.camera = camera.getCameraData();
-            renderer.CopyToBuffer<StateData>(ti, stateData, ti.get(task_state_buffer), 0);
-
-            ti.recorder.set_pipeline(*compute_pipeline);
-            ti.recorder.push_constant(ComputePush{
-                .image = render_image.default_view(),
-                .chunk_occupancy_ptr = renderer.GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
-                .brick_occupancy_ptr = renderer.GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
-                .state_ptr = renderer.GetDeviceAddress(ti, task_state_buffer, 0),
-                .frame_dim = {renderer.surface_width, renderer.surface_height},
-                .time = GetTime(),
-            });
-            ti.recorder.dispatch({(renderer.surface_width + 7) / 8, (renderer.surface_height + 7) / 8}); })
-        );
-
-        renderer.AddTask(renderer.CreateSwapchainBlitTask(task_render_image));
-    }
-
-  private:
-    std::shared_ptr<daxa::ComputePipeline> compute_pipeline;
-    daxa::ImageId render_image;
-    daxa::TaskImage task_render_image;
-
-    daxa::BufferId chunk_occupancy_buffer;
-    daxa::BufferId brick_occupancy_buffer;
-    daxa::BufferId state_buffer;
-    daxa::TaskBuffer task_chunk_occupancy_buffer;
-    daxa::TaskBuffer task_brick_occupancy_buffer;
-    daxa::TaskBuffer task_state_buffer;
-
-    // helpers
 };

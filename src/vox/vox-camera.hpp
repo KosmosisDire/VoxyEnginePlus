@@ -1,5 +1,6 @@
 #pragma once
 
+#include "shaders/shared.inl"
 #include <camera.hpp>
 
 class VoxCamera : public Camera

@@ -3,8 +3,8 @@
 #include "daxa/daxa.inl"
 
 static const daxa_u32 GRID_SIZE = 25;
-static const daxa_u32 TREE_SIZE = 16;
-static const daxa_u32 CHUNK_SIZE = TREE_SIZE * TREE_SIZE;
+static const daxa_u32 TREE_SIZE = 4;
+static const daxa_u32 TREE_SIZE_SQUARE = TREE_SIZE * TREE_SIZE;
 static const daxa_u32 TREE_SIZE_CUBE = TREE_SIZE * TREE_SIZE * TREE_SIZE;
 static const daxa_u32 BITS_PER_BYTE = 8;
 
@@ -19,9 +19,10 @@ struct CameraData
 
 struct StateData
 {
-    daxa_f32vec3 backgroundColor;
     daxa_f32vec3 sunDir;
     CameraData camera;
+    float dt;
+    daxa_f32 time;
 };
 
 struct Occupancy
@@ -37,5 +38,4 @@ struct ComputePush
     daxa_BufferPtr(Occupancy) brick_occupancy_ptr;
     daxa_BufferPtr(StateData) state_ptr;
     daxa_u32vec2 frame_dim;
-    daxa_f32 time;
 };

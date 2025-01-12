@@ -33,14 +33,15 @@ class Window
 
         glfwSetWindowUserPointer(glfwWindowPointer, this);
 
-        glfwSetFramebufferSizeCallback(glfwWindowPointer, [](GLFWwindow *window, i32 sx, i32 sy) {
+        glfwSetFramebufferSizeCallback(glfwWindowPointer, [](GLFWwindow *window, i32 sx, i32 sy)
+                                       {
             auto self = reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
             self->size_x = static_cast<u32>(sx);
             self->size_y = static_cast<u32>(sy);
-            if (self->resize_callback)
-                self->resize_callback(self->size_x, self->size_y);
             self->minimized = sx == 0 || sy == 0;
-        });
+            
+            if (self->resize_callback)
+                self->resize_callback(self->size_x, self->size_y); });
     }
 
     ~Window()
@@ -92,11 +93,6 @@ class Window
     bool IsMinimized() const { return minimized; }
     void SetResizeCallback(ResizeCallback callback) { resize_callback = callback; }
     bool ShouldClose() { return glfwWindowShouldClose(glfwWindowPointer); }
-    void Update()
-    {
-        glfwPollEvents();
-        glfwSwapBuffers(glfwWindowPointer);
-    }
 
   private:
     GLFWwindow *glfwWindowPointer;

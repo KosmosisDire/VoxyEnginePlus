@@ -18,9 +18,7 @@ struct Application
 {
   public:
     Application(std::string name, std::vector<std::filesystem::path> shaderDirectories)
-        : window(name, 1920, 1080)
-        , inputManager(&window)
-        , renderer(&window, shaderDirectories)
+        : window(name, 1920, 1080), inputManager(&window), renderer(&window, shaderDirectories)
     {
         start = Clock::now();
         window.SetResizeCallback([this](u32 sx, u32 sy)
@@ -36,10 +34,13 @@ struct Application
     {
         if (!initialized)
         {
-            OnResizeBase(window.GetWidth(), window.GetHeight());
-            OnStart();
             initialized = true;
+            renderer.Resize(window.GetWidth(), window.GetHeight());
+            OnResize(window.GetWidth(), window.GetHeight());
+            OnStart();
         }
+
+        glfwPollEvents();
 
         if (window.ShouldClose())
             return true;
@@ -53,10 +54,11 @@ struct Application
         CalcDeltatime();
 
         InputManager::Update();
-        window.Update();
-
         OnUpdate(delta_time);
-        renderer.Update();
+        glfwSwapBuffers(window.GetGlfwWindow());
+        renderer.Render();
+
+        renderer.device.collect_garbage();
 
         return false;
     }
@@ -83,9 +85,12 @@ struct Application
         if (window.IsMinimized())
             return;
 
+        renderer.device.wait_idle();
         renderer.Resize(sx, sy);
         OnResize(sx, sy);
-        OnUpdate(delta_time);
+        glfwSwapBuffers(window.GetGlfwWindow());
+
+        Update();
     }
 
     void CalcDeltatime()

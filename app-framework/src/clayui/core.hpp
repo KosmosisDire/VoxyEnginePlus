@@ -9,6 +9,7 @@ class ClayUI
 {
   private:
     static bool initialized;
+    static bool debugMode;
 
     static void HandleClayErrors(Clay_ErrorData errorData)
     {
@@ -21,7 +22,6 @@ class ClayUI
         Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, (char *)malloc(totalMemorySize));
         Clay_Initialize(clayMemory, Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight}, Clay_ErrorHandler{HandleClayErrors});
         Clay_SetMeasureTextFunction(Imgui_MeasureText);
-        Clay_SetDebugModeEnabled(true);
 
         Clay_SetFont(FontManager::GetFont("Roboto"));
 
@@ -77,6 +77,18 @@ class ClayUI
         EndFrame();
         // uiFrameTime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - frameStart).count();
     }
+
+    static void DebugMode(bool enabled)
+    {
+        debugMode = enabled;
+        Clay_SetDebugModeEnabled(enabled);
+    }
+
+    static bool GetDebugMode()
+    {
+        return debugMode;
+    }
 };
 
 bool ClayUI::initialized = false;
+bool ClayUI::debugMode = false;

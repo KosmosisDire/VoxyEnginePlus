@@ -13,14 +13,14 @@ float hash(float3 p)
     return frac(p.x * p.y * p.z);
 }
 
-// Improved Henyey-Greenstein phase function
+// Henyey-Greenstein phase function
 float getMiePhase(float cosTheta, float g)
 {
     float g2 = g * g;
     return (1.0f - g2) / pow(1.0f + g2 - 2.0f * g * cosTheta, 1.5f) / (4.0f * 3.14159f);
 }
 
-// Improved Rayleigh phase function
+// Rayleigh phase function
 float getRayleighPhase(float cosTheta)
 {
     return 3.0f * (1.0f + cosTheta * cosTheta) / (16.0f * 3.14159f);
@@ -37,7 +37,7 @@ float3 getSunColor(float3 sunDir)
     float sunHeight = sunDir.y;
     float3 baseSunColor = float3(1.0f, 1.0f, 1.0f);
 
-    // Improved atmospheric extinction
+    // atmospheric extinction
     float atmosphereThickness = 1.0f / (max(sunHeight, 0.0f) + 0.15f);
     float3 rayleighSun = betaR * atmosphereThickness;
     float3 mieSun = betaM * atmosphereThickness;
@@ -50,7 +50,7 @@ float3 getSunColor(float3 sunDir)
     float3 finalSunColor = lerp(sunsetColor, dayColor, sunsetFactor);
     finalSunColor *= extinction;
 
-    // Improved day/night transition
+    // day/night transition
     float daylight = smoothstep(-0.1f, 0.15f, sunHeight);
     return finalSunColor * daylight;
 }
@@ -78,7 +78,7 @@ float3 getBaseSkyColor(float3 dir, float3 sunDir)
     // Calculate sun contribution
     float3 currentSunColor = getSunColor(nSunDir);
 
-    // Improved scattering calculation
+    // scattering calculation
     float3 rayleighScattering = betaR * opticalDepthR * rayleighPhase;
     float3 mieScattering = betaM * opticalDepthM * miePhase;
     float3 totalScattering = rayleighScattering + mieScattering;
@@ -89,7 +89,7 @@ float3 getBaseSkyColor(float3 dir, float3 sunDir)
     float sunsetFactor = smoothstep(-0.1f, 0.4f, sunHeight);
     float3 skyColor = lerp(sunsetColor, dayColor, sunsetFactor);
 
-    // Improved multiple scattering approximation
+    // multiple scattering approximation
     float multiScatterFactor = 0.5f * (1.0f - exp(-opticalDepthR - opticalDepthM));
     float3 multiScatter = skyColor * multiScatterFactor;
 
@@ -101,7 +101,7 @@ float3 getBaseSkyColor(float3 dir, float3 sunDir)
     float minNightLevel = 0.001f; // Ensure we never hit pure black
     sky = lerp(sky * max(0.02f, minNightLevel), sky, dayFactor);
 
-    // Improved horizon effects with smoother transition
+    // horizon effects with smoother transition
     float horizonBlend = smoothstep(-0.15f, 0.25f, height);
     float groundAlbedo = 0.1f;      // Approximate ground reflection
     float minGroundLevel = 0.0015f; // Slightly higher minimum for ground
@@ -129,7 +129,7 @@ float3 getSunEffect(float3 dir, float3 sunDir)
 
     float3 currentSunColor = getSunColor(nSunDir);
 
-    // Improved sun disk and corona
+    // sun disk and corona
     float sunDisk = smoothstep(0.9995f, 0.9999f, cosTheta);
     float sunCorona = pow(max(0.0f, cosTheta), 32.0f) * 0.25f;
     float sunGlow = pow(max(0.0f, cosTheta), 4.0f) * 0.2f;
