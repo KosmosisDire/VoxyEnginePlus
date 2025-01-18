@@ -197,14 +197,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float3 normalSkyLight = getBaseSkyColor(initAtmosphere(normal, p.state_ptr.sunDir));
         float3 sunColor = getSunColor(initAtmosphere(rayDir, p.state_ptr.sunDir));
 
-        // Modify lighting calculation to include AO
         // Check if this brick is in the visible set
         uint global_brick_idx = trace.chunkIndex * CHUNK_SIZE_CUBE + trace.brickIndex;
         bool is_visible = false;
-        
-        for(uint i = 0; i < p.compact_visible_ptr.count; i++) {
+
+        for (uint i = 0; i < p.compact_visible_ptr.count; i++)
+        {
             VisibleBrick brick = p.compact_visible_ptr.bricks[i];
-            if(brick.chunk_index == trace.chunkIndex && brick.brick_index == trace.brickIndex) {
+            if (brick.chunk_index == trace.chunkIndex && brick.brick_index == trace.brickIndex)
+            {
                 is_visible = true;
                 break;
             }
@@ -213,9 +214,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * 1.0;
         float3 ambientLight = normalSkyLight * 0.5;
         color = directLight + ambientLight * p.state_ptr.settings.skyLight;
-        
+
         // Highlight visible bricks
-        if(is_visible) {
+        if (is_visible)
+        {
             color += float3(0.3, 0.0, 0.0);
         }
 

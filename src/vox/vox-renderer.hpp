@@ -26,6 +26,7 @@ class VoxelRenderer
     daxa::TaskBuffer task_state_buffer;
     daxa::TaskBuffer task_visible_bricks_buffer;
     daxa::TaskBuffer task_compact_visible_buffer;
+    daxa::TaskBuffer task_brick_data_buffer;
 
   public:
     RenderData stateData = {
@@ -56,18 +57,15 @@ class VoxelRenderer
 
         // Calculate size for visible bricks bitmap ((total possible bricks + 31) / 32 for uint32 alignment)
         size_t visible_bits_size = ((GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 31) / 32) * sizeof(uint32_t);
-        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) * 4 + visible_bits_size, 
-                             visible_bricks_buffer, task_visible_bricks_buffer);
+        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) * 4 + visible_bits_size, visible_bricks_buffer, task_visible_bricks_buffer);
                              
         // Buffer for compacted visible bricks - assume worst case all bricks visible
         size_t max_visible = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, 
-                             compact_visible_buffer, task_compact_visible_buffer);
+        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, compact_visible_buffer, task_compact_visible_buffer);
         
         // Create brick data buffer - one uint32 per possible brick
         size_t total_bricks = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("brick_data", sizeof(uint32_t) * total_bricks,
-                             brick_data_buffer, task_brick_data_buffer);
+        renderer->CreateBuffer("brick_data", sizeof(BrickData) * total_bricks, brick_data_buffer, task_brick_data_buffer);
 
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
@@ -89,6 +87,7 @@ class VoxelRenderer
         task_graph.use_persistent_buffer(task_state_buffer);
         task_graph.use_persistent_buffer(task_visible_bricks_buffer);
         task_graph.use_persistent_buffer(task_compact_visible_buffer);
+        task_graph.use_persistent_buffer(task_brick_data_buffer);
 
         // create task to run main compute shader
         renderer->AddTask(
@@ -139,7 +138,9 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_data_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_visible_bricks_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_compact_visible_buffer)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {

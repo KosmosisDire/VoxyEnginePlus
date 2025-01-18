@@ -315,6 +315,17 @@ class Renderer
         });
     }
 
+    static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBufferAttachmentInfo buffer, u32 value = 0)
+    {
+        ti.recorder.clear_buffer(
+            {
+                .buffer = buffer.ids[0],
+                .offset = 0,
+                .size = ti.device.buffer_info(buffer.ids[0]).value().size,
+                .clear_value = value
+            });
+    }
+
     static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex)
     {
         return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
