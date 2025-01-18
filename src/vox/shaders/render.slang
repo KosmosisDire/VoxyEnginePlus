@@ -95,11 +95,22 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
                         result.chunkIndex = chunkIdx;
                         result.brickIndex = brickIdx;
 
-                        // Mark brick as visible
+                        // Check if brick is already visible this frame
                         uint global_idx = chunkIdx * CHUNK_SIZE_CUBE + brickIdx;
                         uint bit_idx = global_idx % 32;
                         uint array_idx = global_idx / 32;
-                        InterlockedOr(p.visible_bricks_ptr.bits[array_idx], 1u << bit_idx);
+                        
+                        uint original;
+                        InterlockedOr(p.visible_bricks_ptr.bits[array_idx], 1u << bit_idx, original);
+                        
+                        // If bit wasn't set before (brick newly visible this frame)
+                        if ((original & (1u << bit_idx)) == 0)
+                        {
+                            // Add global index to visible list
+                            uint write_idx;
+                            InterlockedAdd(p.visible_bricks_ptr.count, 1, write_idx);
+                            p.compact_visible_ptr.indices[write_idx] = global_idx;
+                        }
 
                         return result;
                     }
@@ -203,8 +214,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         for (uint i = 0; i < p.compact_visible_ptr.count; i++)
         {
-            VisibleBrick brick = p.compact_visible_ptr.bricks[i];
-            if (brick.chunk_index == trace.chunkIndex && brick.brick_index == trace.brickIndex)
+            if (p.compact_visible_ptr.indices[i] == global_brick_idx)
             {
                 is_visible = true;
                 break;

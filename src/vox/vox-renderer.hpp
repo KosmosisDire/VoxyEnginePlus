@@ -14,7 +14,6 @@ class VoxelRenderer
 
     std::shared_ptr<daxa::ComputePipeline> render_compute;
     std::shared_ptr<daxa::ComputePipeline> terrain_compute;
-    std::shared_ptr<daxa::ComputePipeline> compact_compute;
     daxa::BufferId chunk_occupancy_buffer;
     daxa::BufferId brick_occupancy_buffer;
     daxa::BufferId state_buffer;
@@ -43,7 +42,6 @@ class VoxelRenderer
     {
         render_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render.slang");
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
-        compact_compute = renderer->AddComputePipeline<CompactPush>("compact_visible", "compact-visible.slang");
 
         int chunkLength = GRID_SIZE_CUBE;
         int brickLength = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
@@ -55,13 +53,19 @@ class VoxelRenderer
         renderer->CreateBuffer("brick_occupancy", brickBytes, brick_occupancy_buffer, task_brick_occupancy_buffer);
         renderer->CreateBuffer<RenderData>("state buffer", state_buffer, task_state_buffer);
 
-        // Calculate size for visible bricks bitmap ((total possible bricks + 31) / 32 for uint32 alignment)
-        size_t visible_bits_size = ((GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 31) / 32) * sizeof(uint32_t);
-        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) * 4 + visible_bits_size, visible_bricks_buffer, task_visible_bricks_buffer);
-                             
-        // Buffer for compacted visible bricks - assume worst case all bricks visible
+        // Calculate size for visible bricks bitmap
         size_t max_visible = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, compact_visible_buffer, task_compact_visible_buffer);
+        size_t bitmap_size = ((max_visible + 31) / 32) * sizeof(uint32_t);
+        renderer->CreateBuffer("visible_bricks", 
+            sizeof(uint32_t) * 4 + // Header with count
+            bitmap_size,           // Bitmap for duplicate checking
+            visible_bricks_buffer, task_visible_bricks_buffer);
+
+        // Buffer for compacted indices - assume worst case all bricks visible
+        renderer->CreateBuffer("compact_visible", 
+            sizeof(uint32_t) * 4 + // Header with count
+            sizeof(uint32_t) * max_visible, // Global brick indices
+            compact_visible_buffer, task_compact_visible_buffer);
         
         // Create brick data buffer - one uint32 per possible brick
         size_t total_bricks = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
@@ -159,20 +163,6 @@ class VoxelRenderer
                         ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
                     }));
 
-        // Compact visible bricks after render
-        renderer->AddTask(
-            InlineTask("compact_visible_bricks")
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_visible_bricks_buffer)
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_compact_visible_buffer)
-                .SetTask([this](daxa::TaskInterface ti) {
-                    auto push = CompactPush{};
-                    push.visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0);
-                    push.compact_bricks_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0);
-
-                    ti.recorder.set_pipeline(*compact_compute);
-                    ti.recorder.push_constant(push);
-                    ti.recorder.dispatch({1, 1, 1});
-                }));
 
         // create task to blit render image to swapchain
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));

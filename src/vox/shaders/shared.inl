@@ -68,21 +68,16 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
-struct VisibleBrick {
-    daxa_u32 chunk_index;
-    daxa_u32 brick_index;
-};
-
 struct VisibleBricksBuffer {
     daxa_u32 count;
     daxa_u32 padding[3];  // For alignment
-    daxa_u32 bits[];      // Bitmap of visible bricks
+    daxa_u32 bits[];      // Bitmap for duplicate checking
 };
 
 struct CompactVisibleBricks {
     daxa_u32 count;
     daxa_u32 padding[3];  // For alignment
-    VisibleBrick bricks[];
+    daxa_u32 indices[];   // Global brick indices
 };
 
 struct BrickData {
