@@ -19,10 +19,12 @@ class VoxelRenderer
     daxa::BufferId brick_occupancy_buffer;
     daxa::BufferId state_buffer;
     daxa::BufferId visible_bricks_buffer;
+    daxa::BufferId compact_visible_buffer;
     daxa::TaskBuffer task_chunk_occupancy_buffer;
     daxa::TaskBuffer task_brick_occupancy_buffer;
     daxa::TaskBuffer task_state_buffer;
     daxa::TaskBuffer task_visible_bricks_buffer;
+    daxa::TaskBuffer task_compact_visible_buffer;
 
   public:
     RenderData stateData = {
