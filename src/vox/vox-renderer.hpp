@@ -41,6 +41,7 @@ class VoxelRenderer
     {
         render_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render.slang");
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
+        compact_compute = renderer->AddComputePipeline<CompactPush>("compact_visible", "compact-visible.slang");
 
         int chunkLength = GRID_SIZE_CUBE;
         int brickLength = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
@@ -59,10 +60,8 @@ class VoxelRenderer
                              
         // Buffer for compacted visible bricks - assume worst case all bricks visible
         size_t max_visible = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible,
-                             compact_visible_buffer, task_compact_visible_buffer);
+        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, compact_visible_buffer, task_compact_visible_buffer);
                              
-        compact_compute = renderer->AddComputePipeline<CompactPush>("compact_visible", "compact-visible.slang");
 
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
