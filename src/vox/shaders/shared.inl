@@ -31,9 +31,9 @@ struct CameraData
 struct GraphicsSettings
 {
     daxa_u32 skyLight = 1;
-    daxa_u32 showNormals = 1;
-    daxa_u32 showSteps = 1;
-    daxa_u32 showUvs = 1;
+    daxa_u32 showNormals = 0;
+    daxa_u32 showSteps = 0;
+    daxa_u32 showUvs = 0;
 };
 
 struct RenderData
