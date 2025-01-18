@@ -92,26 +92,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 finalBrightness = totalBrightness / SAMPLES_PER_PIXEL;
 
-    // Temporal blend
-    // float3 currentBrightness = getBrickBrightness(storageBrickIndex);
-    // float3 blendFactor = 0.1;
-    // float3 newBrightness = lerp(currentBrightness, finalBrightness, blendFactor);
-
-    GroupMemoryBarrierWithGroupSync();
-
-    // add atomically to old value and count
+    // Use atomic operations to accumulate light values and sample count
+    DeviceMemoryBarrier();
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].x, finalBrightness.x);
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].y, finalBrightness.y);
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].z, finalBrightness.z);
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].w, 1);
-
-    GroupMemoryBarrierWithGroupSync();
-
-    // only one thread should divide by count
-    float original;
-    InterlockedExchange(p.brick_data_ptr.light[storageBrickIndex].w, 1, original);
-    if (original > 1)
-    {
-        p.brick_data_ptr.light[storageBrickIndex].xyz /= original;
-    }
 }
