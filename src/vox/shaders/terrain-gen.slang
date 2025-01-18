@@ -88,27 +88,36 @@ void main(uint3 brickCoord: SV_DispatchThreadID)
     brickOccupancy.compressed_data_ptr = 0;
 
     bool hasVoxel = false;
-    for (uint i = 0; i < BRICK_SIZE_CUBE; i++)
+    
+    // Iterate through each voxel in the brick using 3D nested loops
+    for (uint z = 0; z < BRICK_SIZE; z++)
     {
-        int3 localVoxelPos = int3(i % BRICK_SIZE, (i / BRICK_SIZE) % BRICK_SIZE, i / BRICK_SIZE_SQUARE);
-        int3 absVoxel = brickCoord * BRICK_SIZE + localVoxelPos;
-        // Debug: Print coordinates being used
-        float3 noiseCoord = absVoxel * 0.002f + float3(p.state_ptr.time * 0.01f);
-        float noiseValue = gradientNoise(noiseCoord);
-        bool isSolid = noiseValue > -0.3f;
-
-        int voxelIndex = voxelLocalIndex(localVoxelPos);
-
-        if (isSolid)
+        for (uint y = 0; y < BRICK_SIZE; y++)
         {
-            setBit(p.brick_occupancy_ptr, brickIndex, voxelIndex);
-            setBit(brickOccupancy, voxelIndex);
-            hasVoxel = true;
-        }
-        else
-        {
-            clearBit(p.brick_occupancy_ptr, brickIndex, voxelIndex);
-            clearBit(brickOccupancy, voxelIndex);
+            for (uint x = 0; x < BRICK_SIZE; x++)
+            {
+                int3 localVoxelPos = int3(x, y, z);
+                int3 absVoxel = brickCoord * BRICK_SIZE + localVoxelPos;
+                
+                // Debug: Print coordinates being used
+                float3 noiseCoord = absVoxel * 0.002f + float3(p.state_ptr.time * 0.01f);
+                float noiseValue = gradientNoise(noiseCoord);
+                bool isSolid = noiseValue > -0.3f;
+
+                int voxelIndex = voxelLocalIndex(localVoxelPos);
+
+                if (isSolid)
+                {
+                    setBit(p.brick_occupancy_ptr, brickIndex, voxelIndex);
+                    setBit(brickOccupancy, voxelIndex);
+                    hasVoxel = true;
+                }
+                else
+                {
+                    clearBit(p.brick_occupancy_ptr, brickIndex, voxelIndex);
+                    clearBit(brickOccupancy, voxelIndex);
+                }
+            }
         }
     }
 
