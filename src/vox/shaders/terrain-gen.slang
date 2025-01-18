@@ -30,7 +30,6 @@ void main(uint3 brickCoord: SV_DispatchThreadID)
         int3 localVoxelPos = int3(i % BRICK_SIZE, (i / BRICK_SIZE) % BRICK_SIZE, i / BRICK_SIZE_SQUARE);
         int3 absVoxel = brickCoord * BRICK_SIZE + localVoxelPos;
         bool isSolid = snoise(absVoxel * 0.002f) > 0.5f;
-        isSolid = absVoxel.z < 10;
 
         int voxelIndex = voxelLocalIndex(localVoxelPos);
 
