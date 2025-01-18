@@ -73,7 +73,7 @@ class Renderer
     /// @brief The renderer sets up a simple render loop which can be extended by adding tasks to the pipeline.
     /// @param window
     /// @param shaderDirectories Directories containing shaders. Those shaders can then be referenced via a relative path from the shader directory.
-    Renderer(Window *window, std::vector<std::filesystem::path> shaderDirectories)
+    Renderer(std::shared_ptr<Window> window, std::vector<std::filesystem::path> shaderDirectories)
         : window(window)
     {
         daxa_instance = daxa::create_instance({});
@@ -272,7 +272,7 @@ class Renderer
     }
 
   private:
-    Window *window;
+    std::shared_ptr<Window> window;
 
     void InitializeGraph()
     {
@@ -320,7 +320,7 @@ class Renderer
         return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
     }
 
-    static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, Window *window, std::string name)
+    static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, std::shared_ptr<Window> window, std::string name)
     {
         return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::FIFO, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
     }

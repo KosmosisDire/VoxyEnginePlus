@@ -13,6 +13,9 @@ using namespace daxa::types;
 class Camera
 {
   public:
+    float speed = 100.0f;
+    float sensitivity = 0.1f;
+
     Camera(
         vec3 position = vec3(0.0f, 0.0f, 0.0f),
         vec3 up = vec3(0.0f, 1.0f, 0.0f),
@@ -141,8 +144,6 @@ class Camera
 
     float yaw;
     float pitch;
-    float speed = 100.0f;
-    float sensitivity = 0.1f;
 
     uint32_t viewportWidth;
     uint32_t viewportHeight;

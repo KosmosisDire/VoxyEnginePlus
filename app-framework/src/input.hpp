@@ -7,7 +7,6 @@
 #include <unordered_map>
 #include <vector>
 
-
 using namespace glm;
 
 enum class Key
@@ -123,7 +122,7 @@ using MouseScrollCallbackFn = std::function<void(float xoffset, float yoffset)>;
 class InputManager
 {
   public:
-    InputManager(Window *window);
+    InputManager(std::shared_ptr<Window> window);
     ~InputManager();
 
     // Key state queries
@@ -163,7 +162,7 @@ class InputManager
     static void MouseMoveCallback(GLFWwindow *glfwWindow, float xpos, float ypos);
     static void ScrollCallback(GLFWwindow *glfwWindow, float xoffset, float yoffset);
     static GLFWwindow *GetGlfwWindow() { return instance->glfwWindow; }
-    static Window *GetWindow() { return instance->window; }
+    static std::shared_ptr<Window> GetWindow() { return instance->window; }
 
     // Static state storage
     static InputManager *instance;
@@ -178,7 +177,7 @@ class InputManager
 
     // Instance members
     GLFWwindow *glfwWindow;
-    Window *window;
+    std::shared_ptr<Window> window;
     std::vector<KeyCallbackFn> keyCallbacks;
     std::vector<MouseButtonCallbackFn> mouseButtonCallbacks;
     std::vector<MouseMoveCallbackFn> mouseMoveCallbacks;
@@ -199,9 +198,8 @@ float InputManager::scrollDeltaX = 0.0;
 float InputManager::scrollDeltaY = 0.0;
 bool InputManager::mouseCaptured = false;
 
-InputManager::InputManager(Window *window)
-    : glfwWindow(window->GetGlfwWindow())
-    , window(window)
+InputManager::InputManager(std::shared_ptr<Window> window)
+    : glfwWindow(window->GetGlfwWindow()), window(window)
 {
     if (instance != nullptr)
     {
@@ -272,7 +270,7 @@ bool InputManager::WasKeyPressed(Key key)
     auto curr = currentKeyStates.find(key);
     auto prev = previousKeyStates.find(key);
     return curr != currentKeyStates.end() && curr->second &&
-        (prev == previousKeyStates.end() || !prev->second);
+           (prev == previousKeyStates.end() || !prev->second);
 }
 
 bool InputManager::WasKeyReleased(Key key)
@@ -280,7 +278,7 @@ bool InputManager::WasKeyReleased(Key key)
     auto curr = currentKeyStates.find(key);
     auto prev = previousKeyStates.find(key);
     return (curr == currentKeyStates.end() || !curr->second) &&
-        prev != previousKeyStates.end() && prev->second;
+           prev != previousKeyStates.end() && prev->second;
 }
 
 bool InputManager::IsMouseButtonPressed(MouseButton button)
@@ -294,7 +292,7 @@ bool InputManager::WasMouseButtonPressed(MouseButton button)
     auto curr = currentMouseButtonStates.find(static_cast<int>(button));
     auto prev = previousMouseButtonStates.find(static_cast<int>(button));
     return curr != currentMouseButtonStates.end() && curr->second &&
-        (prev == previousMouseButtonStates.end() || !prev->second);
+           (prev == previousMouseButtonStates.end() || !prev->second);
 }
 
 bool InputManager::WasMouseButtonReleased(MouseButton button)
@@ -302,7 +300,7 @@ bool InputManager::WasMouseButtonReleased(MouseButton button)
     auto curr = currentMouseButtonStates.find(static_cast<int>(button));
     auto prev = previousMouseButtonStates.find(static_cast<int>(button));
     return (curr == currentMouseButtonStates.end() || !curr->second) &&
-        prev != previousMouseButtonStates.end() && prev->second;
+           prev != previousMouseButtonStates.end() && prev->second;
 }
 
 vec2 InputManager::GetMousePosition()

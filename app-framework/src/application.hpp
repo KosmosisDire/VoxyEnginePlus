@@ -18,11 +18,11 @@ struct Application
 {
   public:
     Application(std::string name, std::vector<std::filesystem::path> shaderDirectories)
-        : window(name, 1920, 1080), inputManager(&window), renderer(&window, shaderDirectories)
+        : window(std::make_shared<Window>(name, 1920, 1080)), inputManager(window), renderer(std::make_shared<Renderer>(window, shaderDirectories))
     {
         start = Clock::now();
-        window.SetResizeCallback([this](u32 sx, u32 sy)
-                                 { OnResizeBase(sx, sy); });
+        window->SetResizeCallback([this](u32 sx, u32 sy)
+                                  { OnResizeBase(sx, sy); });
     }
     virtual ~Application() {};
 
@@ -35,18 +35,18 @@ struct Application
         if (!initialized)
         {
             initialized = true;
-            renderer.Resize(window.GetWidth(), window.GetHeight());
-            OnResize(window.GetWidth(), window.GetHeight());
+            renderer->Resize(window->GetWidth(), window->GetHeight());
+            OnResize(window->GetWidth(), window->GetHeight());
             OnStart();
         }
 
         InputManager::Update();
-        window.Update();
+        window->Update();
 
-        if (window.ShouldClose())
+        if (window->ShouldClose())
             return true;
 
-        if (window.IsMinimized())
+        if (window->IsMinimized())
         {
             std::this_thread::sleep_for(1ms);
             return false;
@@ -56,9 +56,9 @@ struct Application
 
         OnUpdate(delta_time);
 
-        renderer.Render();
+        renderer->Render();
 
-        renderer.device.collect_garbage();
+        renderer->device.collect_garbage();
 
         return false;
     }
@@ -66,15 +66,15 @@ struct Application
     float GetTime() const { return time; }
 
   protected:
-    Window window;
-    InputManager inputManager;
-    Renderer renderer;
+    std::shared_ptr<Window> window;
+    std::shared_ptr<Renderer> renderer;
 
     virtual void OnResize(u32 sx, u32 sy) {};
     virtual void OnUpdate(float dt) {};
     virtual void OnStart() {};
 
   private:
+    InputManager inputManager;
     Clock::time_point start, prev_time = Clock::now();
     f32 time = 0.0f;
     f32 delta_time = 1.0f;
@@ -82,10 +82,10 @@ struct Application
 
     void OnResizeBase(u32 sx, u32 sy)
     {
-        if (window.IsMinimized())
+        if (window->IsMinimized())
             return;
 
-        renderer.Resize(sx, sy);
+        renderer->Resize(sx, sy);
         OnResize(sx, sy);
         Update();
     }

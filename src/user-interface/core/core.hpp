@@ -7,6 +7,7 @@
 #include <daxa/daxa.hpp>
 #include <algorithm>
 #include <vector>
+#include <vox/shaders/shared.inl>
 
 using namespace daxa::types;
 using namespace std;
@@ -29,5 +30,6 @@ struct UIData {
     int selectedPage = 0;
     bool mouseIsActive = true; // Does this mean that the mouse is captured or not captured? Is this meant to be used to hide or show the UI?
     std::vector<Page> pages;
+    RenderData *renderData;
 };
 

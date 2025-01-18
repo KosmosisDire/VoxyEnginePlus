@@ -3,7 +3,7 @@
 [[vk::push_constant]]
 const ComputePush p;
 
-static const float EPSILON = 0.001;
+static const float EPSILON = 0.0001;
 static const int MAX_STEPS = 512;
 
 // DDA state structure for raymarching
@@ -109,15 +109,36 @@ bool intersectBoxNormal(float3 origin, float3 invDir, float3 boxMin, float3 boxM
     return false;
 }
 
-// Convert 3D position to linear index
-inline int treeLocalIndex(int3 pos)
+// Get chunk index from world position
+int chunkIndex(int3 pos)
 {
-    return pos.x + pos.y * TREE_SIZE + pos.z * TREE_SIZE * TREE_SIZE;
+    return pos.x + pos.y * GRID_SIZE + pos.z * GRID_SIZE * GRID_SIZE;
 }
 
-inline int treeGlobalIndex(int parentIndex, int localIndex)
+// Convert 3D position to linear index
+inline int voxelLocalIndex(int3 localVoxelPos)
 {
-    return parentIndex * TREE_SIZE_CUBE + localIndex;
+    return localVoxelPos.x + localVoxelPos.y * BRICK_SIZE + localVoxelPos.z * BRICK_SIZE_SQUARE;
+}
+
+inline int voxelGlobalIndex(int globalBrickIndex, int localVoxelIndex)
+{
+    return globalBrickIndex * BRICK_SIZE_CUBE + localVoxelIndex;
+}
+
+inline int brickLocalIndex(int3 localBrickPos)
+{
+    return localBrickPos.x + localBrickPos.y * CHUNK_SIZE + localBrickPos.z * CHUNK_SIZE_SQUARE;
+}
+
+inline int brickGlobalIndex(int chunkIndex, int localBrickIndex)
+{
+    return chunkIndex * CHUNK_SIZE_CUBE + localBrickIndex;
+}
+
+bool brickBitmaskEmpty(BrickBitmask mask)
+{
+    return all(mask.part1 == 0) && all(mask.part2 == 0);
 }
 
 // Get intersection point UVs within current cell
@@ -142,7 +163,78 @@ float3 inverseDirection(float3 dir)
     return (1.0 / max(abs(dir), float3(EPSILON))) * sign(dir);
 }
 
+void setBit(Ptr<BrickOccupancy> occupancy, int brickIndex, int voxelIndex)
+{
+    if (voxelIndex < 128)
+    {
+        InterlockedOr(occupancy.occupancy[brickIndex].part1[voxelIndex / 32], (1 << (voxelIndex % 32)));
+    }
+    else
+    {
+        InterlockedOr(occupancy.occupancy[brickIndex].part2[(voxelIndex - 128) / 32], (1 << ((voxelIndex - 128) % 32)));
+    }
+}
+
+void clearBit(Ptr<BrickOccupancy> occupancy, int brickIndex, int voxelIndex)
+{
+    if (voxelIndex < 128)
+    {
+        InterlockedAnd(occupancy.occupancy[brickIndex].part1[voxelIndex / 32], ~(1 << (voxelIndex % 32)));
+    }
+    else
+    {
+        InterlockedAnd(occupancy.occupancy[brickIndex].part2[(voxelIndex - 128) / 32], ~(1 << ((voxelIndex - 128) % 32)));
+    }
+}
+
+void setBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+{
+    InterlockedOr(occupancy.occupancy[chunkIndex], (uint64_t(1) << brickIndex));
+}
+
+void clearBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+{
+    InterlockedAnd(occupancy.occupancy[chunkIndex], ~(uint64_t(1) << brickIndex));
+}
+
+void setBit(inout BrickBitmask mask, int index)
+{
+
+    if (index < 128)
+    {
+        mask.part1[index / 32] |= (1 << (index % 32));
+    }
+    else
+    {
+        mask.part2[(index - 128) / 32] |= (1 << ((index - 128) % 32));
+    }
+}
+
+void clearBit(inout BrickBitmask mask, int index)
+{
+    if (index < 128)
+    {
+        mask.part1[index / 32] &= ~(1 << (index % 32));
+    }
+    else
+    {
+        mask.part2[(index - 128) / 32] &= ~(1 << ((index - 128) % 32));
+    }
+}
+
 bool getBit(uint64_t value, int index)
 {
-    return (value & (1 << index)) != 0;
+    return (value & (uint64_t(1) << index)) != 0;
+}
+
+bool getBit(BrickBitmask mask, int index)
+{
+    if (index < 128)
+    {
+        return (mask.part1[index / 32] & (1 << (index % 32))) != 0;
+    }
+    else
+    {
+        return (mask.part2[(index - 128) / 32] & (1 << ((index - 128) % 32))) != 0;
+    }
 }

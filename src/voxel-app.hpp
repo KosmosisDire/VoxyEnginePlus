@@ -18,15 +18,17 @@ struct VoxyApp : public Application
     daxa::TaskImage task_render_image;
 
     VoxyApp()
-        : Application("Voxy", {"resources/shaders"}),
-          voxelRenderer(&renderer)
+        : Application("Voxy", {"../../../../src/vox/shaders"}), // use this path instead for dist: "resources/shaders"
+          voxelRenderer(renderer),
+          uiState({.renderData = &voxelRenderer.stateData})
     {
-        render_image = renderer.CreateRenderImage("game_render_image", task_render_image);
+        render_image = renderer->CreateRenderImage("game_render_image", task_render_image);
+        camera.speed = 16.0f;
     }
 
     ~VoxyApp()
     {
-        renderer.DestroyImage(render_image);
+        renderer->DestroyImage(render_image);
 
         ClayState::FreeAllStrings();
     }
@@ -34,17 +36,18 @@ struct VoxyApp : public Application
   protected:
     void OnStart() override
     {
-        voxelRenderer.InitializeTasks(renderer.render_loop_graph, &task_render_image, &render_image);
-        renderer.Complete();
+        voxelRenderer.InitializeTasks(renderer->render_loop_graph, &task_render_image, &render_image);
+        renderer->Complete();
     }
 
     void OnUpdate(float dt) override
     {
         // renderer state
-        auto stateData = voxelRenderer.stateData;
-        stateData.camera = camera.getCameraData();
-        stateData.dt = dt;
-        stateData.time = GetTime();
+        RenderData &renderData = voxelRenderer.stateData;
+        renderData.camera = camera.getCameraData();
+        renderData.dt = dt;
+        renderData.time = GetTime();
+        renderData.frame++;
 
         // ui state
         uiState.time = GetTime();
@@ -53,8 +56,8 @@ struct VoxyApp : public Application
 
         UIInputs input =
             {
-                .screenWidth = (int)window.GetWidth(),
-                .screenHeight = (int)window.GetHeight(),
+                .screenWidth = (int)window->GetWidth(),
+                .screenHeight = (int)window->GetHeight(),
                 .pointerX = InputManager::GetMousePosition().x,
                 .pointerY = InputManager::GetMousePosition().y,
                 .pointerDown = InputManager::IsMouseButtonPressed(MouseButton::Left),
@@ -71,7 +74,7 @@ struct VoxyApp : public Application
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
         {
-            stateData.sunDir = to_daxa(-camera.getForward());
+            renderData.sunDir = to_daxa(-camera.getForward());
         }
 
         // mouse capture
@@ -102,13 +105,13 @@ struct VoxyApp : public Application
             InputManager::CaptureMouseResetDelta(true);
         }
 
-        voxelRenderer.Update(stateData);
+        voxelRenderer.Update();
     }
 
     void OnResize(u32 sx, u32 sy) override
     {
-        renderer.DestroyImage(render_image);
-        render_image = renderer.CreateRenderImage("game_render_image");
+        renderer->DestroyImage(render_image);
+        render_image = renderer->CreateRenderImage("game_render_image");
         task_render_image.set_images({.images = std::array{render_image}});
         camera.setViewportSize(sx, sy);
     }

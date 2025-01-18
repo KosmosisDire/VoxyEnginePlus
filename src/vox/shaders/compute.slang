@@ -8,14 +8,15 @@ struct TraceResult
     float3 normal;
     float distance;
     float3 uvs;
+    int steps;
 };
 
 #define continueDDA(state)   \
     normal = stepDDA(state); \
-    steps++;                 \
+    result.steps++;          \
     continue;
 
-TraceResult traceVoxelRay(float3 origin, float3 direction)
+TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_STEPS)
 {
     float3 trueStart = origin;
     float3 invDir = inverseDirection(direction);
@@ -25,69 +26,99 @@ TraceResult traceVoxelRay(float3 origin, float3 direction)
     result.hitPos = float3(0.0);
     result.normal = float3(0.0);
     result.distance = 0.0;
+    result.uvs = float3(0.0);
+    result.steps = 0;
 
     // intersect with bounding box
     float tMin, tMax;
     float3 normal;
-    bool boxHit = intersectBoxNormal(origin, invDir, float3(0.0), float3(TREE_SIZE), tMin, tMax, normal);
+    bool boxHit = intersectBoxNormal(origin, invDir, float3(0.0), float3(GRID_SIZE), tMin, tMax, normal);
     if (!boxHit)
     {
         return result;
     }
 
     // adjust origin to be inside the box
-    if (tMin > 0.0)
+    if (tMin > EPSILON)
     {
         origin += direction * (tMin + EPSILON);
     }
 
-    int steps = 0;
-
-    uint64_t chunkMask = p.chunk_occupancy_ptr.occupancy[0];
-
-    // Initialize DDA state
-    DDAState brickDDA = initDDA(origin, direction, invDir);
-    while (steps < MAX_STEPS && isInBounds(brickDDA.cell, int3(TREE_SIZE)))
+    DDAState chunkDDA = initDDA(origin, direction, invDir);
+    while (result.steps < maxSteps && isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
     {
-        int blockIdx = treeLocalIndex(brickDDA.cell);
-        if (getBit(chunkMask, blockIdx))
+        int chunkIdx = chunkIndex(chunkDDA.cell);
+        daxa_u64 chunkMask = p.chunk_occupancy_ptr.occupancy[chunkIdx];
+
+        if (chunkMask == 0)
         {
-            int blockIdxGlobal = treeGlobalIndex(0, blockIdx);
-            uint64_t brickMask = p.brick_occupancy_ptr.occupancy[blockIdxGlobal];
-
-            if (brickMask == 0)
-            {
-                continueDDA(brickDDA);
-            }
-
-            float3 brickUv = getDdaUvs(brickDDA, origin, direction);
-            float3 voxelOrigin = clamp(brickUv * TREE_SIZE, float3(EPSILON), float3(TREE_SIZE - EPSILON));
-
-            DDAState voxelDDA = initDDA(voxelOrigin, direction, invDir);
-            while (steps < MAX_STEPS && isInBounds(voxelDDA.cell, int3(TREE_SIZE)))
-            {
-                int voxelIdx = treeLocalIndex(voxelDDA.cell);
-
-                if (getBit(brickMask, voxelIdx))
-                {
-                    float3 voxelUv = getDdaUvs(voxelDDA, voxelOrigin, direction);
-                    int3 absoluteCell = brickDDA.cell * TREE_SIZE + voxelDDA.cell;
-                    float3 hitPos = (float3(absoluteCell) + voxelUv) / float(TREE_SIZE);
-
-                    result.hit = true;
-                    result.hitPos = hitPos;
-                    result.normal = normal;
-                    result.distance = length(hitPos - trueStart);
-                    result.uvs = voxelUv;
-
-                    return result;
-                }
-
-                continueDDA(voxelDDA);
-            }
+            continueDDA(chunkDDA);
         }
 
-        continueDDA(brickDDA);
+        float3 chunkUv = getDdaUvs(chunkDDA, origin, direction);
+
+        // result.hit = true;
+        // result.normal = normal;
+        // result.hitPos = chunkDDA.cell + chunkUv;
+        // result.distance = length(result.hitPos - trueStart);
+        // result.uvs = chunkUv;
+
+        // return result;
+
+        float3 brickOrigin = clamp(chunkUv * CHUNK_SIZE, float3(EPSILON), float3(CHUNK_SIZE - EPSILON));
+        DDAState brickDDA = initDDA(brickOrigin, direction, invDir);
+        while (result.steps < maxSteps && isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
+        {
+            int brickIdx = brickLocalIndex(brickDDA.cell);
+            if (getBit(chunkMask, brickIdx))
+            {
+                int brickIdxGlobal = brickGlobalIndex(chunkIdx, brickIdx);
+                BrickBitmask brickMask = p.brick_occupancy_ptr.occupancy[brickIdxGlobal];
+
+                if (brickBitmaskEmpty(brickMask))
+                {
+                    continueDDA(brickDDA);
+                }
+
+                float3 brickUv = getDdaUvs(brickDDA, brickOrigin, direction);
+
+                // result.hit = true;
+                // result.hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + brickUv / float(CHUNK_SIZE);
+                // result.normal = normal;
+                // result.distance = brickIdxGlobal;
+                // result.uvs = brickUv;
+
+                // return result;
+
+                float3 voxelOrigin = clamp(brickUv * BRICK_SIZE, float3(EPSILON), float3(BRICK_SIZE - EPSILON));
+                DDAState voxelDDA = initDDA(voxelOrigin, direction, invDir);
+                while (result.steps < maxSteps && isInBounds(voxelDDA.cell, int3(BRICK_SIZE)))
+                {
+                    int voxelIdx = voxelLocalIndex(voxelDDA.cell);
+
+                    if (getBit(brickMask, voxelIdx))
+                    {
+                        float3 voxelUv = getDdaUvs(voxelDDA, voxelOrigin, direction);
+                        int3 absoluteCell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
+                        float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + voxelDDA.cell / float(BRICK_SIZE) + voxelUv / float(BRICK_SIZE);
+
+                        result.hit = true;
+                        result.hitPos = hitPos;
+                        result.normal = normal;
+                        result.distance = length(hitPos - trueStart);
+                        result.uvs = voxelUv;
+
+                        return result;
+                    }
+
+                    continueDDA(voxelDDA);
+                }
+            }
+
+            continueDDA(brickDDA);
+        }
+
+        continueDDA(chunkDDA);
     }
 
     return result;
@@ -129,6 +160,16 @@ void setPixel(float3 color, uint2 pixel, RWTexture2D<float4> render_image)
     render_image[pixel] = float4(color, 1.0);
 }
 
+float3 ACESFilm(float3 x)
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
@@ -142,6 +183,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
 
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir);
+    float3 color = float3(0.0);
 
     // lighting
     if (trace.hit)
@@ -150,26 +192,45 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float shadow = 1.0;
         if (shadowTrace.hit)
         {
-            shadow = 0.0;
+            shadow = 0.2;
         }
 
         float3 normal = normalize(trace.normal);
-        float3 color = float3(0.0);
 
-        // simple lambertian shading
+        // simple lambertian shading with AO
         float3 sunDir = normalize(p.state_ptr.sunDir);
         float lDot = dot(normal, sunDir);
-        float lightIntensity = max(lDot * shadow, 0.1);
 
-        color = getSunColor(sunDir) * lightIntensity;
+        float3 normalSkyLight = getBaseSkyColor(initAtmosphere(normal, p.state_ptr.sunDir));
+        float3 sunColor = getSunColor(initAtmosphere(rayDir, p.state_ptr.sunDir));
 
-        // apply shading
-        setPixel(color, pixel, render_image);
+        // Modify lighting calculation to include AO
+        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * 1.0;
+        float3 ambientLight = normalSkyLight * 0.5;
+        color = directLight + ambientLight * p.state_ptr.settings.skyLight;
+
+        // darken sides of the voxel
+        float up = dot(normal, float3(0, 1, 0));
+        if (up < 0.1)
+        {
+            color *= 0.8;
+        }
+
+        // apply tone mapping
+        color = ACESFilm(color);
     }
     else
     {
         // set background color
-        float3 sky = getAtmosphereColor(rayDir, p.state_ptr.sunDir, p.state_ptr.time);
-        setPixel(sky, pixel, render_image);
+        color = getAtmosphereColor(rayDir, p.state_ptr.sunDir, p.state_ptr.time);
     }
+
+    if ((bool)p.state_ptr.settings.showSteps)
+        color = float3(trace.steps / 200.0);
+    if ((bool)p.state_ptr.settings.showNormals)
+        color = trace.normal;
+    if ((bool)p.state_ptr.settings.showUvs)
+        color = trace.hitPos / float(GRID_SIZE);
+
+    setPixel(color, pixel, render_image);
 }
