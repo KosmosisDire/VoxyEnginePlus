@@ -16,6 +16,7 @@ class VoxelRenderer
     std::shared_ptr<daxa::ComputePipeline> terrain_compute;
     std::shared_ptr<daxa::ComputePipeline> depth_prepass_compute;
     std::shared_ptr<daxa::ComputePipeline> global_illumination_compute;
+    std::shared_ptr<daxa::ComputePipeline> gi_average_compute;
     daxa::BufferId chunk_occupancy_buffer;
     daxa::BufferId brick_occupancy_buffer;
     daxa::BufferId state_buffer;
@@ -51,6 +52,7 @@ class VoxelRenderer
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
         depth_prepass_compute = renderer->AddComputePipeline<ComputePush>("depth_prepass", "depth-prepass.slang");
         global_illumination_compute = renderer->AddComputePipeline<ComputePush>("brick_global_illumination", "global-illumination.slang");
+        gi_average_compute = renderer->AddComputePipeline<ComputePush>("gi_average", "gi-average.slang");
 
         int chunkLength = GRID_SIZE_CUBE;
         int brickLength = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
@@ -195,7 +197,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_data_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_brick_data_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_compact_visible_buffer)
                 .SetTask(
                     [this](daxa::TaskInterface ti)
@@ -212,6 +214,23 @@ class VoxelRenderer
                         ti.recorder.set_pipeline(*global_illumination_compute);
                         ti.recorder.push_constant(push);
                         ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
+                    }));
+
+        // GI averaging pass
+        renderer->AddTask(
+            InlineTask("gi_average")
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_brick_data_buffer)
+                .SetTask(
+                    [this](daxa::TaskInterface ti)
+                    {
+                        auto push = ComputePush{
+                            .brick_data_ptr = renderer->GetDeviceAddress(ti, task_brick_data_buffer, 0),
+                            .frame_dim = {renderer->surface_width, renderer->surface_height}
+                        };
+
+                        ti.recorder.set_pipeline(*gi_average_compute);
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({(GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 255) / 256, 1, 1});
                     }));
 
         renderer->AddTask(
