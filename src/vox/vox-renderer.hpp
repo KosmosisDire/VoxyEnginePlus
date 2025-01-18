@@ -15,6 +15,7 @@ class VoxelRenderer
     std::shared_ptr<daxa::ComputePipeline> render_compute;
     std::shared_ptr<daxa::ComputePipeline> terrain_compute;
     std::shared_ptr<daxa::ComputePipeline> depth_prepass_compute;
+    std::shared_ptr<daxa::ComputePipeline> global_illumination_compute;
     daxa::BufferId chunk_occupancy_buffer;
     daxa::BufferId brick_occupancy_buffer;
     daxa::BufferId state_buffer;
@@ -47,6 +48,7 @@ class VoxelRenderer
         render_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render.slang");
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
         depth_prepass_compute = renderer->AddComputePipeline<ComputePush>("depth_prepass", "depth-prepass.slang");
+        global_illumination_compute = renderer->AddComputePipeline<ComputePush>("brick_global_illumination", "global-illumination.slang");
 
         int chunkLength = GRID_SIZE_CUBE;
         int brickLength = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
@@ -66,8 +68,7 @@ class VoxelRenderer
         renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * max_visible, compact_visible_buffer, task_compact_visible_buffer);
         
         // Create brick data buffer
-        size_t total_bricks = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("brick_data", sizeof(BrickData) * total_bricks, brick_data_buffer, task_brick_data_buffer);
+        renderer->CreateBuffer("brick_data", sizeof(BrickData), brick_data_buffer, task_brick_data_buffer);
 
         // create depth prepass image
         depth_prepass_image = renderer->CreateImage(daxa::ImageInfo{
@@ -76,10 +77,6 @@ class VoxelRenderer
             .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
             .name = "depth_prepass_image",
         }, task_depth_prepass_image);
-
-        printf("chunk length: %d\n", chunkLength);
-        printf("brick length: %d\n", brickLength);
-        printf("bitmask size: %zd\n", sizeof(BrickBitmask));
     }
 
     ~VoxelRenderer()
@@ -175,6 +172,33 @@ class VoxelRenderer
                         ti.recorder.set_pipeline(*depth_prepass_compute);
                         ti.recorder.push_constant(push);
                         ti.recorder.dispatch({((renderer->surface_width / 2) + 7) / 8, ((renderer->surface_height / 2) + 7) / 8});
+                    }));
+
+        // global illumination
+        renderer->AddTask(
+            InlineTask("global_illumination")
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_data_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_compact_visible_buffer)
+                .SetTask(
+                    [this](daxa::TaskInterface ti)
+                    {
+                        auto push = ComputePush{
+                            .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
+                            .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
+                            .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
+                            .compact_visible_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0),
+                            .brick_data_ptr = renderer->GetDeviceAddress(ti, task_brick_data_buffer, 0),
+                            .frame_dim = {renderer->surface_width, renderer->surface_height}};
+                        
+                        // read back length of compacted visible bricks
+                        auto compact_visible = renderer->MapBufferAs<CompactVisibleBricks>(ti.get(task_compact_visible_buffer).ids[0]);
+
+                        ti.recorder.set_pipeline(*global_illumination_compute);
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({(compact_visible->count + 1023) / 1024});
                     }));
 
         renderer->AddTask(

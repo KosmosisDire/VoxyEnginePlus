@@ -333,7 +333,7 @@ class Renderer
 
     static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, std::shared_ptr<Window> window, std::string name)
     {
-        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::FIFO, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
+        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::IMMEDIATE, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
     }
 
     static inline daxa::TaskImage CreateSwapchainImage(daxa::Swapchain &swapchain, std::string name)

@@ -3,7 +3,6 @@
 [[vk::push_constant]]
 const ComputePush p;
 
-static const float EPSILON = 0.0001;
 static const int MAX_STEPS = 1024;
 
 // DDA state structure for raymarching
@@ -134,6 +133,24 @@ inline int brickLocalIndex(int3 localBrickPos)
 inline int brickGlobalIndex(int chunkIndex, int localBrickIndex)
 {
     return chunkIndex * CHUNK_SIZE_CUBE + localBrickIndex;
+}
+
+inline float3 brickWorldPos(int brickIndex)
+{
+    int chunkIndex = brickIndex / CHUNK_SIZE_CUBE;
+    int localBrickIndex = brickIndex % CHUNK_SIZE_CUBE;
+
+    int3 chunkPos = int3(
+        chunkIndex % GRID_SIZE,
+        (chunkIndex / GRID_SIZE) % GRID_SIZE,
+        chunkIndex / (GRID_SIZE * GRID_SIZE));
+
+    int3 localBrickPos = int3(
+        localBrickIndex % CHUNK_SIZE,
+        (localBrickIndex / CHUNK_SIZE) % CHUNK_SIZE,
+        localBrickIndex / CHUNK_SIZE_SQUARE);
+
+    return float3(chunkPos + localBrickPos * WORLD_BRICK_SIZE);
 }
 
 bool brickBitmaskEmpty(BrickBitmask mask)

@@ -36,7 +36,7 @@ float3 ACESFilm(float3 x)
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     RWTexture2D<float4> render_image = RWTexture2D<float4>::get(p.final_image);
-    RWTexture2D<float> dpeth_prepass = RWTexture2D<float>::get(p.depth_prepass);
+    RWTexture2D<float> depth_prepass = RWTexture2D<float>::get(p.depth_prepass);
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -49,19 +49,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float startDepth = 0.0;
     if ((bool)p.state_ptr.settings.beamOptimization)
     {
-        // check center and 4 adjacent pixels, use minimum depth
         uint2 prepassPixel = pixel / 2;
-        float startDepth = dpeth_prepass[prepassPixel];
+        startDepth = depth_prepass[prepassPixel];
 
-        // Check adjacent pixels (up, down, left, right)
-        if (prepassPixel.y > 0)
-            startDepth = min(startDepth, dpeth_prepass[uint2(prepassPixel.x, prepassPixel.y - 1)]);
-        if (prepassPixel.y < p.frame_dim.y / 2 - 1)
-            startDepth = min(startDepth, dpeth_prepass[uint2(prepassPixel.x, prepassPixel.y + 1)]);
-        if (prepassPixel.x > 0)
-            startDepth = min(startDepth, dpeth_prepass[uint2(prepassPixel.x - 1, prepassPixel.y)]);
-        if (prepassPixel.x < p.frame_dim.x / 2 - 1)
-            startDepth = min(startDepth, dpeth_prepass[uint2(prepassPixel.x + 1, prepassPixel.y)]);
+        // Check all pixels in a 3x3 grid
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                uint2 checkPixel = uint2(
+                    clamp(int(prepassPixel.x) + dx, 0, int(p.frame_dim.x / 2) - 1),
+                    clamp(int(prepassPixel.y) + dy, 0, int(p.frame_dim.y / 2) - 1));
+                startDepth = min(startDepth, depth_prepass[checkPixel]);
+            }
+        }
     }
 
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
@@ -74,7 +75,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float shadow = 1.0;
         if (shadowTrace.hit)
         {
-            shadow = 0.2;
+            shadow = 0.0;
         }
 
         float3 normal = normalize(trace.normal);
@@ -86,27 +87,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float3 normalSkyLight = getBaseSkyColor(initAtmosphere(normal, p.state_ptr.sunDir));
         float3 sunColor = getSunColor(initAtmosphere(rayDir, p.state_ptr.sunDir));
 
-        // Check if this brick is in the visible set
-        uint global_brick_idx = trace.chunkIndex * CHUNK_SIZE_CUBE + trace.brickIndex;
-        bool is_visible = false;
+        // get brick data
+        int brickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
+        float3 brickLight = p.brick_data_ptr.light[brickIndex].xyz + 0.05;
 
-        uint bit_idx = global_brick_idx % 32;
-        uint array_idx = global_brick_idx / 32;
-
-        if ((p.visible_bricks_ptr.bits[array_idx] & (1u << bit_idx)) != 0)
-        {
-            is_visible = true;
-        }
-
-        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * 1.0;
-        float3 ambientLight = normalSkyLight * 0.5;
-        color = directLight + ambientLight * p.state_ptr.settings.skyLight;
-
-        // Highlight visible bricks
-        if (is_visible)
-        {
-            color += float3(0.3, 0.0, 0.0);
-        }
+        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * brickLight * 1.0;
+        float3 ambientLight = saturate(normalSkyLight);
+        color = directLight + ambientLight * p.state_ptr.settings.skyLight * brickLight;
 
         // darken sides of the voxel
         float up = dot(normal, float3(0, 1, 0));
@@ -117,6 +104,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // apply tone mapping
         color = ACESFilm(color);
+
+        // color = brickLight;
     }
     else
     {
@@ -135,7 +124,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if ((bool)p.state_ptr.settings.showDepth)
         color = float3(trace.distance / 100.0);
     if ((bool)p.state_ptr.settings.showDepthPrepass)
-        color = float3(dpeth_prepass[pixel / 2] / 100.0);
+        color = float3(depth_prepass[pixel / 2] / 100.0);
 
     setPixel(color, pixel, render_image);
 }

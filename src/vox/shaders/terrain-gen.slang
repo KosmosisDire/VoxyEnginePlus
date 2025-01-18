@@ -38,7 +38,7 @@ bool calculateSolid(int3 gridPos)
     float holes = snoise(worldBlockPos * scale * 0.1);
 
     // Generate caves
-    float caves = snoise(worldBlockPos * scale * 2.0f) * 0.5f + 0.5f;
+    float caves = snoise(worldBlockPos * scale * 1.0f) * 0.5f + 0.3f;
 
     return worldBlockPos.y < h && holes > -0.6f && !(caves > -0.2f && caves < 0.2f);
 }

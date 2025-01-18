@@ -15,9 +15,11 @@ static const daxa_u32 CHUNK_SIZE_SQUARE = CHUNK_SIZE * CHUNK_SIZE;
 static const daxa_u32 CHUNK_SIZE_CUBE = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 static const daxa_f32 WORLD_VOXEL_SIZE = 1.0 / (BRICK_SIZE * CHUNK_SIZE);
-static const daxa_f32 BRICK_VOXEL_SIZE = 1.0 / BRICK_SIZE;
+static const daxa_f32 WORLD_BRICK_SIZE = 1.0 / CHUNK_SIZE;
 
 static const daxa_u32 BITS_PER_BYTE = 8;
+static const float EPSILON = 0.0001;
+static const float PI = 3.14159265359;
 
 struct CameraData
 {
@@ -72,8 +74,6 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
-
-
 struct VisibleBricksBuffer {
     daxa_u32 count;
     daxa_u32 padding[3];  // For alignment
@@ -86,15 +86,15 @@ struct CompactVisibleBricks {
     daxa_u32 indices[];   // Global brick indices
 };
 
-struct BrickData {
-    daxa_u32 data[];  // One entry per brick
+struct BrickData
+{
+    daxa_u32 rayCount[GRID_SIZE_CUBE * CHUNK_SIZE_CUBE];
+    daxa_f32vec4 light[GRID_SIZE_CUBE * CHUNK_SIZE_CUBE];
 };
 
 DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
 DAXA_DECL_BUFFER_PTR(CompactVisibleBricks);
 DAXA_DECL_BUFFER_PTR(BrickData);
-
-
 
 struct ComputePush
 {

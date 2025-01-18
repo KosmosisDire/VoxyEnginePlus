@@ -5,7 +5,6 @@ static const float Hr = 7994.0f;                                 // Rayleigh sca
 static const float Hm = 1200.0f;                                 // Mie scale height
 static const float3 betaR = float3(5.8e-6f, 13.5e-6f, 33.1e-6f); // Rayleigh scattering coefficients
 static const float3 betaM = float3(21e-6f);                      // Mie scattering coefficient
-static const float PI = 3.14159f;
 
 // Struct to hold precomputed atmospheric parameters
 struct AtmosphereParams

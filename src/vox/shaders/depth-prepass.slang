@@ -22,7 +22,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // track visible bricks this frame
 
         // Check if brick is already visible this frame
-        uint global_idx = trace.chunkIndex * CHUNK_SIZE_CUBE + trace.brickIndex;
+        uint global_idx = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
         uint bit_idx = global_idx % 32;
         uint array_idx = global_idx / 32;
 
