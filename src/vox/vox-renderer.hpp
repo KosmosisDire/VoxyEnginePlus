@@ -31,6 +31,8 @@ class VoxelRenderer
 
     daxa::ImageId depth_prepass_image;
     daxa::TaskImage task_depth_prepass_image;
+    daxa::ImageId pixel_to_brick_image;
+    daxa::TaskImage task_pixel_to_brick_image;
 
   public:
     RenderData stateData = {
@@ -77,6 +79,14 @@ class VoxelRenderer
             .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC,
             .name = "depth_prepass_image",
         }, task_depth_prepass_image);
+
+        // create pixel to brick image
+        pixel_to_brick_image = renderer->CreateImage(daxa::ImageInfo{
+            .format = daxa::Format::R32_UINT,
+            .size = {renderer->surface_width / 2, renderer->surface_height / 2, 1},
+            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_DST,
+            .name = "pixel_to_brick_image",
+        }, task_pixel_to_brick_image);
     }
 
     ~VoxelRenderer()
@@ -88,12 +98,14 @@ class VoxelRenderer
         renderer->DestroyBuffer(compact_visible_buffer);
         renderer->DestroyBuffer(brick_data_buffer);
         renderer->DestroyImage(depth_prepass_image);
+        renderer->DestroyImage(pixel_to_brick_image);
     }
 
     void InitializeTasks(daxa::TaskGraph &task_graph, daxa::TaskImage *task_render_image, daxa::ImageId *render_image)
     {
         task_graph.use_persistent_image(*task_render_image);
         task_graph.use_persistent_image(task_depth_prepass_image);
+        task_graph.use_persistent_image(task_pixel_to_brick_image);
         task_graph.use_persistent_buffer(task_chunk_occupancy_buffer);
         task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
         task_graph.use_persistent_buffer(task_state_buffer);
@@ -150,6 +162,7 @@ class VoxelRenderer
         renderer->AddTask(
             InlineTask("depth_prepass")
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_depth_prepass_image)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, task_pixel_to_brick_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_visible_bricks_buffer)
@@ -161,6 +174,7 @@ class VoxelRenderer
                         auto push = ComputePush
                         {
                             .depth_prepass = depth_prepass_image.default_view(),
+                            .pixel_to_brick = pixel_to_brick_image.default_view(),
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
@@ -177,6 +191,7 @@ class VoxelRenderer
         // global illumination
         renderer->AddTask(
             InlineTask("global_illumination")
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_pixel_to_brick_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
@@ -186,19 +201,17 @@ class VoxelRenderer
                     [this](daxa::TaskInterface ti)
                     {
                         auto push = ComputePush{
+                            .pixel_to_brick = pixel_to_brick_image.default_view(),
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
                             .compact_visible_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0),
                             .brick_data_ptr = renderer->GetDeviceAddress(ti, task_brick_data_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
-                        
-                        // read back length of compacted visible bricks
-                        auto compact_visible = renderer->MapBufferAs<CompactVisibleBricks>(ti.get(task_compact_visible_buffer).ids[0]);
 
                         ti.recorder.set_pipeline(*global_illumination_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(compact_visible->count + 1023) / 1024});
+                        ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
                     }));
 
         renderer->AddTask(
@@ -251,6 +264,15 @@ class VoxelRenderer
             .name = "depth_prepass_image",
         });
         task_depth_prepass_image.set_images({.images = std::array{depth_prepass_image}});
+
+        renderer->DestroyImage(pixel_to_brick_image);
+        pixel_to_brick_image = renderer->CreateImage(daxa::ImageInfo{
+            .format = daxa::Format::R32_UINT,
+            .size = {width / 2, height / 2, 1},
+            .usage = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_DST,
+            .name = "pixel_to_brick_image",
+        });
+        task_pixel_to_brick_image.set_images({.images = std::array{pixel_to_brick_image}});
     }
 
 };
