@@ -9,6 +9,8 @@ struct TraceResult
     float distance;
     float3 uvs;
     int steps;
+    int chunkIndex;
+    int brickIndex;
 };
 
 #define continueDDA(state)   \
@@ -90,6 +92,8 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
                         result.normal = normal;
                         result.distance = length(hitPos - trueStart);
                         result.uvs = voxelUv;
+                        result.chunkIndex = chunkIdx;
+                        result.brickIndex = brickIdx;
 
                         // Mark brick as visible
                         uint global_idx = chunkIdx * CHUNK_SIZE_CUBE + brickIdx;
@@ -195,12 +199,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // Modify lighting calculation to include AO
         // Check if this brick is in the visible set
-        uint global_brick_idx = chunkIdx * CHUNK_SIZE_CUBE + brickIdx;
+        uint global_brick_idx = trace.chunkIndex * CHUNK_SIZE_CUBE + trace.brickIndex;
         bool is_visible = false;
         
         for(uint i = 0; i < p.compact_visible_ptr.count; i++) {
             VisibleBrick brick = p.compact_visible_ptr.bricks[i];
-            if(brick.chunk_index == chunkIdx && brick.brick_index == brickIdx) {
+            if(brick.chunk_index == trace.chunkIndex && brick.brick_index == trace.brickIndex) {
                 is_visible = true;
                 break;
             }
