@@ -68,11 +68,23 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
+struct VisibleBrick {
+    daxa_u32 chunk_index;
+    daxa_u32 brick_index;
+};
+
+struct VisibleBricksBuffer {
+    daxa_u32 count;
+    daxa_u32 bits[];
+};
+DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
+
 struct ComputePush
 {
     daxa_ImageViewId image;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
+    daxa_BufferPtr(VisibleBricksBuffer) visible_bricks_ptr;
     daxa_u32vec2 frame_dim;
 };

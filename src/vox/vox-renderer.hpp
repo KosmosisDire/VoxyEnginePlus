@@ -14,12 +14,15 @@ class VoxelRenderer
 
     std::shared_ptr<daxa::ComputePipeline> render_compute;
     std::shared_ptr<daxa::ComputePipeline> terrain_compute;
+    std::shared_ptr<daxa::ComputePipeline> compact_compute;
     daxa::BufferId chunk_occupancy_buffer;
     daxa::BufferId brick_occupancy_buffer;
     daxa::BufferId state_buffer;
+    daxa::BufferId visible_bricks_buffer;
     daxa::TaskBuffer task_chunk_occupancy_buffer;
     daxa::TaskBuffer task_brick_occupancy_buffer;
     daxa::TaskBuffer task_state_buffer;
+    daxa::TaskBuffer task_visible_bricks_buffer;
 
   public:
     RenderData stateData = {
@@ -46,6 +49,11 @@ class VoxelRenderer
         renderer->CreateBuffer("chunk_occupancy", chunkBytes, chunk_occupancy_buffer, task_chunk_occupancy_buffer);
         renderer->CreateBuffer("brick_occupancy", brickBytes, brick_occupancy_buffer, task_brick_occupancy_buffer);
         renderer->CreateBuffer<RenderData>("state buffer", state_buffer, task_state_buffer);
+
+        // Calculate size for visible bricks bitmap ((total possible bricks + 31) / 32 for uint32 alignment)
+        size_t visible_bits_size = ((GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 31) / 32) * sizeof(uint32_t);
+        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) + visible_bits_size, 
+                             visible_bricks_buffer, task_visible_bricks_buffer);
 
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
@@ -80,6 +88,7 @@ class VoxelRenderer
         task_graph.use_persistent_buffer(task_chunk_occupancy_buffer);
         task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
         task_graph.use_persistent_buffer(task_state_buffer);
+        task_graph.use_persistent_buffer(task_visible_bricks_buffer);
 
         // create task to run main compute shader
         renderer->AddTask(
@@ -106,6 +115,7 @@ class VoxelRenderer
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
+                            .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
                         ti.recorder.set_pipeline(*terrain_compute);
@@ -115,12 +125,22 @@ class VoxelRenderer
                         dirtyTerrain = false;
                     }));
 
+        // Clear visible bricks buffer
+        renderer->AddTask(
+            InlineTask("clear_visible_bricks")
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_visible_bricks_buffer)
+                .SetTask([this](daxa::TaskInterface ti) {
+                    renderer->CopyToBuffer<uint32_t>(ti, 0, ti.get(task_visible_bricks_buffer), 0);
+                })
+        );
+
         renderer->AddTask(
             InlineTask("voxel_render")
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, *task_render_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_visible_bricks_buffer)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {

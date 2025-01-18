@@ -72,6 +72,12 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
                     continueDDA(brickDDA);
                 }
 
+                // Mark brick as visible
+                uint global_idx = chunkIdx * CHUNK_SIZE_CUBE + brickIdx;
+                uint bit_idx = global_idx % 32;
+                uint array_idx = global_idx / 32;
+                InterlockedOr(p.visible_bricks_ptr.bits[array_idx], 1u << bit_idx);
+
                 float3 brickUv = getDdaUvs(brickDDA, brickOrigin, direction);
 
                 float3 voxelOrigin = clamp(brickUv * BRICK_SIZE, float3(EPSILON), float3(BRICK_SIZE - EPSILON));
