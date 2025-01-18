@@ -121,8 +121,11 @@ float3 getBaseSkyColor(AtmosphereParams params)
     const float groundAlbedo = 0.1f;
     const float minGroundLevel = 0.0015f;
 
+    // Calculate ground color with stronger sunset darkening
+    float3 baseGroundColor = float3(0.7f, 0.75f, 0.8f);
+    float sunsetDarkening = smoothstep(0.4f, -0.1f, params.sunHeight) * 0.85f;
     float3 groundColor = max(
-        lerp(float3(0.7f, 0.75f, 0.8f), skyColor, groundAlbedo) * params.dayFactor,
+        lerp(baseGroundColor, skyColor, groundAlbedo) * params.dayFactor * (1.0f - sunsetDarkening),
         float3(minGroundLevel));
 
     return lerp(groundColor, sky, horizonBlend);
