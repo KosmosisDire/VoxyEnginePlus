@@ -20,6 +20,7 @@ class VoxelRenderer
     daxa::BufferId state_buffer;
     daxa::BufferId visible_bricks_buffer;
     daxa::BufferId compact_visible_buffer;
+    daxa::BufferId brick_data_buffer;
     daxa::TaskBuffer task_chunk_occupancy_buffer;
     daxa::TaskBuffer task_brick_occupancy_buffer;
     daxa::TaskBuffer task_state_buffer;
@@ -60,8 +61,13 @@ class VoxelRenderer
                              
         // Buffer for compacted visible bricks - assume worst case all bricks visible
         size_t max_visible = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, compact_visible_buffer, task_compact_visible_buffer);
-                             
+        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible, 
+                             compact_visible_buffer, task_compact_visible_buffer);
+        
+        // Create brick data buffer - one uint32 per possible brick
+        size_t total_bricks = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
+        renderer->CreateBuffer("brick_data", sizeof(uint32_t) * total_bricks,
+                             brick_data_buffer, task_brick_data_buffer);
 
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
@@ -143,6 +149,8 @@ class VoxelRenderer
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
                             .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
+                            .compact_visible_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0),
+                            .brick_data_ptr = renderer->GetDeviceAddress(ti, task_brick_data_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
                         ti.recorder.set_pipeline(*render_compute);

@@ -84,8 +84,14 @@ struct CompactVisibleBricks {
     daxa_u32 padding[3];  // For alignment
     VisibleBrick bricks[];
 };
+
+struct BrickData {
+    daxa_u32 data[];  // One entry per brick
+};
+
 DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
 DAXA_DECL_BUFFER_PTR(CompactVisibleBricks);
+DAXA_DECL_BUFFER_PTR(BrickData);
 
 struct CompactPush
 {
@@ -100,5 +106,7 @@ struct ComputePush
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
     daxa_BufferPtr(VisibleBricksBuffer) visible_bricks_ptr;
+    daxa_BufferPtr(CompactVisibleBricks) compact_visible_ptr;
+    daxa_BufferPtr(BrickData) brick_data_ptr;
     daxa_u32vec2 frame_dim;
 };
