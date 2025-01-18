@@ -229,12 +229,20 @@ bool getBit(uint64_t value, int index)
 
 bool getBit(BrickBitmask mask, int index)
 {
-    if (index < 128)
+    // Calculate which 32-bit chunk and bit position
+    uint chunk = index / 32;
+    uint bitPos = index % 32;
+    uint bitMask = 1u << bitPos;
+
+    // Access appropriate part of the mask
+    if (chunk < 4)
     {
-        return (mask.part1[index / 32] & (1 << (index % 32))) != 0;
+        return (mask.part1[chunk] & bitMask) != 0;
     }
-    else
+    else if (chunk < 7) // 216 bits = 6.75 chunks
     {
-        return (mask.part2[(index - 128) / 32] & (1 << ((index - 128) % 32))) != 0;
+        return (mask.part2[chunk - 4] & bitMask) != 0;
     }
+
+    return false;
 }
