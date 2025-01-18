@@ -75,7 +75,14 @@ struct VisibleBrick {
 
 struct VisibleBricksBuffer {
     daxa_u32 count;
-    daxa_u32 bits[];
+    daxa_u32 padding[3];  // For alignment
+    daxa_u32 bits[];      // Bitmap of visible bricks
+};
+
+struct CompactVisibleBricks {
+    daxa_u32 count;
+    daxa_u32 padding[3];  // For alignment
+    VisibleBrick bricks[];
 };
 DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
 

@@ -52,8 +52,15 @@ class VoxelRenderer
 
         // Calculate size for visible bricks bitmap ((total possible bricks + 31) / 32 for uint32 alignment)
         size_t visible_bits_size = ((GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 31) / 32) * sizeof(uint32_t);
-        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) + visible_bits_size, 
+        renderer->CreateBuffer("visible_bricks", sizeof(uint32_t) * 4 + visible_bits_size, 
                              visible_bricks_buffer, task_visible_bricks_buffer);
+                             
+        // Buffer for compacted visible bricks - assume worst case all bricks visible
+        size_t max_visible = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
+        renderer->CreateBuffer("compact_visible", sizeof(uint32_t) * 4 + sizeof(VisibleBrick) * max_visible,
+                             compact_visible_buffer, task_compact_visible_buffer);
+                             
+        compact_compute = renderer->AddComputePipeline<CompactPush>("compact_visible", "compact-visible.slang");
 
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
@@ -157,6 +164,24 @@ class VoxelRenderer
                     }));
 
         // create task to blit render image to swapchain
+        // Compact visible bricks after render
+        renderer->AddTask(
+            InlineTask("compact_visible_bricks")
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_visible_bricks_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_compact_visible_buffer)
+                .SetTask(
+                    [this](daxa::TaskInterface ti)
+                    {
+                        auto push = CompactPush{
+                            .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
+                            .compact_bricks_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0)
+                        };
+
+                        ti.recorder.set_pipeline(*compact_compute);
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({1, 1, 1});
+                    }));
+
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));
     }
 
