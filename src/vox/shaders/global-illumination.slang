@@ -1,8 +1,8 @@
-#include "raycast.slang"
 #include "atmosphere.slang"
+#include "raycast.slang"
 
-static const uint SAMPLES_PER_PIXEL = 4;
-static const float BOUNCE_ATTENUATION = 1.0;
+static const uint SAMPLES_PER_PIXEL = 1;
+static const float BOUNCE_ATTENUATION = 0.0;
 
 float wang_hash(uint seed)
 {
@@ -14,16 +14,11 @@ float wang_hash(uint seed)
     return float(seed) * (1.0 / 4294967296.0);
 }
 
-// Get adjacent brick index in normal direction
-uint getAdjacentBrickIndex(uint brickIndex, float3 normal)
+float3x3 createBasis(float3 normal)
 {
-    int3 offset = int3(round(normal));
-    int3 basePos = brickWorldPos(brickIndex) / WORLD_BRICK_SIZE;
-    int3 neighborPos = basePos + offset;
-
-    uint neighborChunkIndex = chunkIndex(neighborPos / CHUNK_SIZE);
-    uint neighborLocalIndex = brickLocalIndex(neighborPos % CHUNK_SIZE);
-    return brickGlobalIndex(neighborChunkIndex, neighborLocalIndex);
+    float3 tangent = abs(normal.y) < 0.999 ? normalize(cross(float3(0, 1, 0), normal)) : float3(1, 0, 0);
+    float3 bitangent = cross(normal, tangent);
+    return float3x3(tangent, normal, bitangent);
 }
 
 // Safe brick data access
@@ -38,7 +33,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (pixel_i.x >= p.frame_dim.x || pixel_i.y >= p.frame_dim.y)
         return;
 
-    uint seed = pixel_i.x + pixel_i.y * p.frame_dim.x + uint(p.state_ptr.time * 1000.0);
+    uint seed = pixel_i.x * pixel_i.y * p.frame_dim.x * uint(p.state_ptr.time * 123.456);
     float3 totalBrightness = 0.0;
 
     // Get primary ray hit information
@@ -52,8 +47,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // Get the brick that will store the light (adjacent in normal direction)
     uint storageBrickIndex = getAdjacentBrickIndex(
         brickGlobalIndex(primaryHit.chunkIndex, primaryHit.brickIndex),
-        primaryHit.normal
-    );
+        primaryHit.normal);
 
     float3x3 basis = createBasis(primaryHit.normal);
     float3 hitPos = primaryHit.hitPos + primaryHit.normal * EPSILON;
@@ -64,19 +58,19 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // Generate random direction in hemisphere
         float2 rand = float2(
             wang_hash(seed + i),
-            wang_hash(seed + i + SAMPLES_PER_PIXEL)
-        );
-        
+            wang_hash(seed + i + SAMPLES_PER_PIXEL));
+
         float phi = 2.0 * PI * rand.x;
         float theta = acos(sqrt(rand.y));
         float sin_theta = sin(theta);
-        
+
         float3 dir = float3(
             sin_theta * cos(phi),
             cos(theta),
-            sin_theta * sin(phi)
-        );
+            sin_theta * sin(phi));
         float3 worldDir = mul(basis, dir);
+
+        worldDir = normalize(worldDir + p.state_ptr.sunDir * 1);
 
         TraceResult bounceHit = traceVoxelRay(hitPos, worldDir);
 
@@ -90,7 +84,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         else
         {
             // Sample sky color
-            float3 skyColor = getAtmosphereColor(worldDir, p.state_ptr.sunDir, p.state_ptr.time);
+            AtmosphereParams atmosphere = initAtmosphere(worldDir, p.state_ptr.sunDir);
+            float3 skyColor = getBaseSkyColor(atmosphere);
             totalBrightness += skyColor;
         }
     }
@@ -98,9 +93,25 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 finalBrightness = totalBrightness / SAMPLES_PER_PIXEL;
 
     // Temporal blend
-    float3 currentBrightness = getBrickBrightness(storageBrickIndex);
-    float3 blendFactor = 0.1;
-    float3 newBrightness = lerp(currentBrightness, finalBrightness, blendFactor);
+    // float3 currentBrightness = getBrickBrightness(storageBrickIndex);
+    // float3 blendFactor = 0.1;
+    // float3 newBrightness = lerp(currentBrightness, finalBrightness, blendFactor);
 
-    p.brick_data_ptr.light[storageBrickIndex] = float4(newBrightness, 0.0);
+    GroupMemoryBarrierWithGroupSync();
+
+    // add atomically to old value and count
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].x, finalBrightness.x);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].y, finalBrightness.y);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].z, finalBrightness.z);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].w, 1);
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // only one thread should divide by count
+    float original;
+    InterlockedExchange(p.brick_data_ptr.light[storageBrickIndex].w, 1, original);
+    if (original > 1)
+    {
+        p.brick_data_ptr.light[storageBrickIndex].xyz /= original;
+    }
 }
