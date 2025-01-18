@@ -170,18 +170,15 @@ class VoxelRenderer
             InlineTask("compact_visible_bricks")
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_visible_bricks_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_compact_visible_buffer)
-                .SetTask(
-                    [this](daxa::TaskInterface ti)
-                    {
-                        auto push = CompactPush{
-                            .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
-                            .compact_bricks_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0)
-                        };
+                .SetTask([this](daxa::TaskInterface ti) {
+                    auto push = CompactPush{};
+                    push.visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0);
+                    push.compact_bricks_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0);
 
-                        ti.recorder.set_pipeline(*compact_compute);
-                        ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({1, 1, 1});
-                    }));
+                    ti.recorder.set_pipeline(*compact_compute);
+                    ti.recorder.push_constant(push);
+                    ti.recorder.dispatch({1, 1, 1});
+                }));
 
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));
     }

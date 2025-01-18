@@ -85,6 +85,13 @@ struct CompactVisibleBricks {
     VisibleBrick bricks[];
 };
 DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
+DAXA_DECL_BUFFER_PTR(CompactVisibleBricks);
+
+struct CompactPush
+{
+    daxa_BufferPtr(VisibleBricksBuffer) visible_bricks_ptr;
+    daxa_BufferPtr(CompactVisibleBricks) compact_bricks_ptr;
+};
 
 struct ComputePush
 {
