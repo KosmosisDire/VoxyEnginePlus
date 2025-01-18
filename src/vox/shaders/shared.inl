@@ -33,7 +33,11 @@ struct GraphicsSettings
     daxa_u32 skyLight = 1;
     daxa_u32 showNormals = 0;
     daxa_u32 showSteps = 0;
-    daxa_u32 showUvs = 0;
+    daxa_u32 showHitPos = 0;
+    daxa_u32 showUVs = 0;
+    daxa_u32 showDepth = 0;
+    daxa_u32 showDepthPrepass = 0;
+    daxa_u32 beamOptimization = 1;
 };
 
 struct RenderData
@@ -68,6 +72,8 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
+
+
 struct VisibleBricksBuffer {
     daxa_u32 count;
     daxa_u32 padding[3];  // For alignment
@@ -88,15 +94,12 @@ DAXA_DECL_BUFFER_PTR(VisibleBricksBuffer);
 DAXA_DECL_BUFFER_PTR(CompactVisibleBricks);
 DAXA_DECL_BUFFER_PTR(BrickData);
 
-struct CompactPush
-{
-    daxa_BufferPtr(VisibleBricksBuffer) visible_bricks_ptr;
-    daxa_BufferPtr(CompactVisibleBricks) compact_bricks_ptr;
-};
+
 
 struct ComputePush
 {
-    daxa_ImageViewId image;
+    daxa_ImageViewId final_image;
+    daxa_ImageViewId depth_prepass;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(RenderData) state_ptr;

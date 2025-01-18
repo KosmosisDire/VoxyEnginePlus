@@ -115,9 +115,11 @@ struct VoxyApp : public Application
 
     void OnResize(u32 sx, u32 sy) override
     {
+        voxelRenderer.Resize(sx, sy);
         renderer->DestroyImage(render_image);
         render_image = renderer->CreateRenderImage("game_render_image");
         task_render_image.set_images({.images = std::array{render_image}});
         camera.setViewportSize(sx, sy);
+
     }
 };
