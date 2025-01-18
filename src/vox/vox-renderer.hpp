@@ -34,7 +34,7 @@ class VoxelRenderer
     VoxelRenderer(std::shared_ptr<Renderer> renderer)
         : renderer(renderer)
     {
-        render_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "compute.slang");
+        render_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render.slang");
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
 
         int chunkLength = GRID_SIZE_CUBE;

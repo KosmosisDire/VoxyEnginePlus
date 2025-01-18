@@ -4,7 +4,7 @@
 const ComputePush p;
 
 static const float EPSILON = 0.0001;
-static const int MAX_STEPS = 512;
+static const int MAX_STEPS = 1024;
 
 // DDA state structure for raymarching
 struct DDAState

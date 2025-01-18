@@ -57,14 +57,6 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
 
         float3 chunkUv = getDdaUvs(chunkDDA, origin, direction);
 
-        // result.hit = true;
-        // result.normal = normal;
-        // result.hitPos = chunkDDA.cell + chunkUv;
-        // result.distance = length(result.hitPos - trueStart);
-        // result.uvs = chunkUv;
-
-        // return result;
-
         float3 brickOrigin = clamp(chunkUv * CHUNK_SIZE, float3(EPSILON), float3(CHUNK_SIZE - EPSILON));
         DDAState brickDDA = initDDA(brickOrigin, direction, invDir);
         while (result.steps < maxSteps && isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
@@ -81,14 +73,6 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
                 }
 
                 float3 brickUv = getDdaUvs(brickDDA, brickOrigin, direction);
-
-                // result.hit = true;
-                // result.hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + brickUv / float(CHUNK_SIZE);
-                // result.normal = normal;
-                // result.distance = brickIdxGlobal;
-                // result.uvs = brickUv;
-
-                // return result;
 
                 float3 voxelOrigin = clamp(brickUv * BRICK_SIZE, float3(EPSILON), float3(BRICK_SIZE - EPSILON));
                 DDAState voxelDDA = initDDA(voxelOrigin, direction, invDir);
