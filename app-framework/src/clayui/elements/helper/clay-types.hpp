@@ -188,7 +188,7 @@ constexpr Clay_RectangleElementConfig DEFAULT_RECTANGLE = {
     .cornerRadius = {0, 0, 0, 0}};
 
 constexpr Clay_TextElementConfig DEFAULT_TEXT = {
-    .textColor = {1, 1, 1, 1},
+    .textColor = {255, 255, 255, 255},
     .fontId = 0,
     .fontSize = 16,
     .letterSpacing = 0,
