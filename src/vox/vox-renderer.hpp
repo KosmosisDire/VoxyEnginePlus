@@ -66,21 +66,6 @@ class VoxelRenderer
         printf("chunk length: %d\n", chunkLength);
         printf("brick length: %d\n", brickLength);
         printf("bitmask size: %d\n", sizeof(BrickBitmask));
-
-        // auto chunk_ptr = renderer->MapBufferAs<ChunkOccupancy>(chunk_occupancy_buffer);
-        // auto brick_ptr = renderer->MapBufferAs<BrickOccupancy>(brick_occupancy_buffer);
-
-        // // Initialize chunk occupancy buffer
-        // for (usize i = 0; i < BRICK_SIZE_CUBE / BITS_PER_BYTE / sizeof(u64); i++)
-        // {
-        //     chunk_ptr->occupancy[i] = {};
-        // }
-
-        // // Initialize brick occupancy buffer
-        // for (usize i = 0; i < (BRICK_SIZE_CUBE * BRICK_SIZE_CUBE) / BITS_PER_BYTE / sizeof(u64); i++)
-        // {
-        //     brick_ptr->occupancy[i] = {};
-        // }
     }
 
     ~VoxelRenderer()
@@ -97,6 +82,7 @@ class VoxelRenderer
         task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
         task_graph.use_persistent_buffer(task_state_buffer);
         task_graph.use_persistent_buffer(task_visible_bricks_buffer);
+        task_graph.use_persistent_buffer(task_compact_visible_buffer);
 
         // create task to run main compute shader
         renderer->AddTask(
@@ -107,6 +93,15 @@ class VoxelRenderer
                     {
                         renderer->CopyToBuffer<RenderData>(ti, stateData, ti.get(task_state_buffer), 0);
                     }));
+
+        // Clear visible bricks buffer
+        renderer->AddTask(
+            InlineTask("clear_visible_bricks")
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_visible_bricks_buffer)
+                .SetTask([this](daxa::TaskInterface ti) {
+                    renderer->ClearBuffer(ti, ti.get(task_visible_bricks_buffer), 0);
+                })
+        );
 
         renderer->AddTask(
             InlineTask("terrain_gen")
@@ -123,7 +118,6 @@ class VoxelRenderer
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
-                            .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
                         ti.recorder.set_pipeline(*terrain_compute);
@@ -132,15 +126,6 @@ class VoxelRenderer
 
                         dirtyTerrain = false;
                     }));
-
-        // Clear visible bricks buffer
-        renderer->AddTask(
-            InlineTask("clear_visible_bricks")
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_visible_bricks_buffer)
-                .SetTask([this](daxa::TaskInterface ti) {
-                    renderer->CopyToBuffer<uint32_t>(ti, 0, ti.get(task_visible_bricks_buffer), 0);
-                })
-        );
 
         renderer->AddTask(
             InlineTask("voxel_render")
@@ -157,6 +142,7 @@ class VoxelRenderer
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0),
+                            .visible_bricks_ptr = renderer->GetDeviceAddress(ti, task_visible_bricks_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
                         ti.recorder.set_pipeline(*render_compute);
@@ -164,7 +150,6 @@ class VoxelRenderer
                         ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
                     }));
 
-        // create task to blit render image to swapchain
         // Compact visible bricks after render
         renderer->AddTask(
             InlineTask("compact_visible_bricks")
@@ -180,6 +165,7 @@ class VoxelRenderer
                     ti.recorder.dispatch({1, 1, 1});
                 }));
 
+        // create task to blit render image to swapchain
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));
     }
 
