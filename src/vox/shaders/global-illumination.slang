@@ -2,7 +2,6 @@
 #include "raycast.slang"
 
 static const uint SAMPLES_PER_PIXEL = 1;
-static const float BOUNCE_ATTENUATION = 0.0;
 
 float wang_hash(uint seed)
 {
@@ -21,10 +20,44 @@ float3x3 createBasis(float3 normal)
     return float3x3(tangent, normal, bitangent);
 }
 
-// Safe brick data access
-float3 getBrickBrightness(uint index)
+float3 generateBounceDirection(float3 normal, float2 rand, float sunBias)
 {
-    return p.brick_data_ptr.light[index].xyz;
+    float3x3 basis = createBasis(normal);
+
+    float phi = 2.0 * PI * rand.x;
+    float theta = acos(sqrt(rand.y));
+    float sin_theta = sin(theta);
+
+    float3 dir = float3(
+        sin_theta * cos(phi),
+        cos(theta),
+        sin_theta * sin(phi));
+    float3 worldDir = mul(basis, dir);
+
+    return normalize(worldDir + p.state_ptr.sunDir * sunBias);
+}
+
+TraceResult computeBounce(float3 origin, float3 normal, uint seed, uint sampleOffset, float sunBias)
+{
+    float3 hitPos = origin + normal * EPSILON;
+
+    float2 rand = float2(
+        wang_hash(seed + sampleOffset),
+        wang_hash(seed + sampleOffset + SAMPLES_PER_PIXEL));
+
+    float3 worldDir = generateBounceDirection(normal, rand, sunBias);
+
+    return traceVoxelRay(hitPos, worldDir);
+}
+
+float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir, float intensity)
+{
+    if (!bounceResult.hit)
+    {
+        AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
+        return getBaseSkyColor(atmosphere) * intensity;
+    }
+    return float3(0, 0, 0);
 }
 
 [numthreads(8, 8, 1)]
@@ -34,7 +67,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
 
     uint seed = pixel_i.x * pixel_i.y * p.frame_dim.x * uint(p.state_ptr.time * 123.456);
-    float3 totalBrightness = 0.0;
+    float3 accumulatedColor = 0.0;
 
     // Get primary ray hit information
     float3 rayOrigin, rayDir;
@@ -49,53 +82,34 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         brickGlobalIndex(primaryHit.chunkIndex, primaryHit.brickIndex),
         primaryHit.normal);
 
-    float3x3 basis = createBasis(primaryHit.normal);
-    float3 hitPos = primaryHit.hitPos + primaryHit.normal * EPSILON;
+    if (storageBrickIndex < 0 || storageBrickIndex >= GRID_SIZE_CUBE * CHUNK_SIZE_CUBE)
+        return;
 
     [unroll]
     for (uint i = 0; i < SAMPLES_PER_PIXEL; i++)
     {
-        // Generate random direction in hemisphere
-        float2 rand = float2(
-            wang_hash(seed + i),
-            wang_hash(seed + i + SAMPLES_PER_PIXEL));
+        TraceResult primaryBounce = computeBounce(primaryHit.hitPos, primaryHit.normal, seed, i, 1.0);
+        float3 primaryBounceColor = calculateBounceColor(primaryBounce, primaryHit.normal, 1.0);
+        accumulatedColor += primaryBounceColor;
 
-        float phi = 2.0 * PI * rand.x;
-        float theta = acos(sqrt(rand.y));
-        float sin_theta = sin(theta);
-
-        float3 dir = float3(
-            sin_theta * cos(phi),
-            cos(theta),
-            sin_theta * sin(phi));
-        float3 worldDir = mul(basis, dir);
-
-        worldDir = normalize(worldDir + p.state_ptr.sunDir * 1);
-
-        TraceResult bounceHit = traceVoxelRay(hitPos, worldDir);
-
-        if (bounceHit.hit)
+        // If primary bounce hit something, compute secondary bounce
+        if (primaryBounce.hit)
         {
-            uint bounceBrickIndex = brickGlobalIndex(bounceHit.chunkIndex, bounceHit.brickIndex);
-            float3 incomingLight = getBrickBrightness(bounceBrickIndex);
-            float cosTerm = abs(dot(worldDir, bounceHit.normal));
-            totalBrightness += incomingLight * cosTerm * BOUNCE_ATTENUATION;
-        }
-        else
-        {
-            // Sample sky color
-            AtmosphereParams atmosphere = initAtmosphere(worldDir, p.state_ptr.sunDir);
-            float3 skyColor = getBaseSkyColor(atmosphere);
-            totalBrightness += skyColor;
+            TraceResult secondaryBounce = computeBounce(
+                primaryBounce.hitPos,
+                primaryBounce.normal,
+                seed,
+                i + SAMPLES_PER_PIXEL * 2,
+                0.5);
+
+            accumulatedColor += calculateBounceColor(secondaryBounce, primaryBounce.normal, 0.5);
         }
     }
 
-    float3 finalBrightness = totalBrightness / SAMPLES_PER_PIXEL;
+    accumulatedColor /= SAMPLES_PER_PIXEL;
 
-    // Use atomic operations to accumulate light values and sample count
-    DeviceMemoryBarrier();
-    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].x, finalBrightness.x);
-    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].y, finalBrightness.y);
-    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].z, finalBrightness.z);
-    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].w, 1);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].x, accumulatedColor.x);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].y, accumulatedColor.y);
+    InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].z, accumulatedColor.z);
+    InterlockedAdd(p.brick_data_ptr.rayCount[storageBrickIndex], 1);
 }

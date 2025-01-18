@@ -100,6 +100,7 @@ struct ComputePush
 {
     daxa_ImageViewId final_image;
     daxa_ImageViewId depth_prepass;
+    daxa_ImageViewId pixel_to_brick;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(RenderData) state_ptr;

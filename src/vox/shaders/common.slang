@@ -153,6 +153,18 @@ inline float3 brickWorldPos(int brickIndex)
     return float3(chunkPos + localBrickPos * WORLD_BRICK_SIZE);
 }
 
+// Get adjacent brick index in normal direction
+uint getAdjacentBrickIndex(uint brickIndex, float3 normal)
+{
+    int3 offset = int3(round(normal));
+    int3 basePos = int3(brickWorldPos(brickIndex) / WORLD_BRICK_SIZE);
+    int3 neighborPos = basePos + offset;
+
+    uint neighborChunkIndex = chunkIndex(neighborPos / CHUNK_SIZE);
+    uint neighborLocalIndex = brickLocalIndex(neighborPos % CHUNK_SIZE);
+    return brickGlobalIndex(neighborChunkIndex, neighborLocalIndex);
+}
+
 bool brickBitmaskEmpty(BrickBitmask mask)
 {
     return all(mask.part1 == 0) && all(mask.part2 == 0);

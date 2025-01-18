@@ -219,18 +219,23 @@ class VoxelRenderer
         // GI averaging pass
         renderer->AddTask(
             InlineTask("gi_average")
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_brick_data_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_brick_data_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_compact_visible_buffer)
                 .SetTask(
                     [this](daxa::TaskInterface ti)
                     {
                         auto push = ComputePush{
+                            .compact_visible_ptr = renderer->GetDeviceAddress(ti, task_compact_visible_buffer, 0),
                             .brick_data_ptr = renderer->GetDeviceAddress(ti, task_brick_data_buffer, 0),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}
                         };
 
+                        auto visible_count = renderer->MapBufferAs<CompactVisibleBricks>(compact_visible_buffer)->count;
+                        printf("Visible count: %d\n", visible_count);
+
                         ti.recorder.set_pipeline(*gi_average_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(GRID_SIZE_CUBE * CHUNK_SIZE_CUBE + 255) / 256, 1, 1});
+                        ti.recorder.dispatch({(visible_count + 255) / 256, 1, 1});
                     }));
 
         renderer->AddTask(

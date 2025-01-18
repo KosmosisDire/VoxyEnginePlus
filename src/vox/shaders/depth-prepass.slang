@@ -5,6 +5,8 @@
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     RWTexture2D<float> render_image = RWTexture2D<float>::get(p.depth_prepass);
+    RWTexture2D<float> pixel_to_brick = RWTexture2D<float>::get(p.pixel_to_brick);
+
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -37,6 +39,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             InterlockedAdd(p.visible_bricks_ptr.count, 1, write_idx);
             InterlockedAdd(p.compact_visible_ptr.count, 1, write_idx);
             p.compact_visible_ptr.indices[write_idx] = global_idx;
+            pixel_to_brick[pixel] = global_idx;
         }
     }
     else

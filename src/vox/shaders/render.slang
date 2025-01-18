@@ -89,23 +89,23 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // get brick data
         int brickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-        float3 brickLight = p.brick_data_ptr.light[brickIndex].xyz + 0.05;
+        int adjacentIndex = getAdjacentBrickIndex(brickIndex, normal);
+        float3 brickLight = p.brick_data_ptr.light[adjacentIndex].xyz + 0.05;
 
-        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * brickLight * 1.0;
-        float3 ambientLight = saturate(normalSkyLight);
-        color = directLight + ambientLight * p.state_ptr.settings.skyLight * brickLight;
+        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * length(brickLight);
+        color = directLight + brickLight;
 
         // darken sides of the voxel
         float up = dot(normal, float3(0, 1, 0));
         if (up < 0.1)
         {
-            color *= 0.8;
+            color *= 0.9;
         }
 
         // apply tone mapping
         color = ACESFilm(color);
 
-        // color = brickLight;
+        color = brickLight;
     }
     else
     {
