@@ -29,6 +29,8 @@ class VoxelRenderer
         .settings = {},
     };
 
+    bool dirtyTerrain = true;
+
     VoxelRenderer(std::shared_ptr<Renderer> renderer)
         : renderer(renderer)
     {
@@ -97,6 +99,8 @@ class VoxelRenderer
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {
+                        if (!dirtyTerrain) return;
+                            
                         auto push = ComputePush{
                             .image = render_image->default_view(),
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
@@ -106,7 +110,9 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*terrain_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(GRID_SIZE * CHUNK_SIZE + 7) / 8, (GRID_SIZE * CHUNK_SIZE + 7) / 8, (GRID_SIZE * CHUNK_SIZE + 7) / 8});
+                        ti.recorder.dispatch({(GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4});
+
+                        dirtyTerrain = false;
                     }));
 
         renderer->AddTask(

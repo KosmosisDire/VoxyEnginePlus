@@ -71,6 +71,11 @@ struct VoxyApp : public Application
             ClayUI::DebugMode(!ClayUI::GetDebugMode());
         }
 
+        if (InputManager::WasKeyPressed(Key::R))
+        {
+            voxelRenderer.dirtyTerrain = true;
+        }
+
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
         {

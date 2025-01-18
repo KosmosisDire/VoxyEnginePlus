@@ -99,8 +99,7 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, int maxSteps = MAX_ST
                     if (getBit(brickMask, voxelIdx))
                     {
                         float3 voxelUv = getDdaUvs(voxelDDA, voxelOrigin, direction);
-                        int3 absoluteCell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
-                        float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + voxelDDA.cell / float(BRICK_SIZE) + voxelUv / float(BRICK_SIZE);
+                        float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + voxelDDA.cell / float(BRICK_SIZE) / float(CHUNK_SIZE) + voxelUv / float(BRICK_SIZE) / float(CHUNK_SIZE);
 
                         result.hit = true;
                         result.hitPos = hitPos;
