@@ -60,7 +60,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 uint2 checkPixel = uint2(
                     clamp(int(prepassPixel.x) + dx, 0, int(p.frame_dim.x / 2) - 1),
                     clamp(int(prepassPixel.y) + dy, 0, int(p.frame_dim.y / 2) - 1));
-                startDepth = min(startDepth, depth_prepass[checkPixel]);
+                startDepth = min(startDepth, depth_prepass[checkPixel]) - WORLD_VOXEL_SIZE / 4;
             }
         }
     }
@@ -90,10 +90,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // get brick data
         int brickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
         int adjacentIndex = getAdjacentBrickIndex(brickIndex, normal);
-        float3 brickLight = p.brick_data_ptr.light[adjacentIndex].xyz + 0.05;
 
-        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow * length(brickLight);
-        color = directLight + brickLight;
+        float3 directLight = (sunColor * 0.7 + normalSkyLight * 0.3) * lDot * shadow;
+        color = directLight;
 
         // darken sides of the voxel
         float up = dot(normal, float3(0, 1, 0));
@@ -104,8 +103,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // apply tone mapping
         color = ACESFilm(color);
-
-        color = brickLight;
     }
     else
     {

@@ -85,8 +85,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (storageBrickIndex < 0 || storageBrickIndex >= GRID_SIZE_CUBE * CHUNK_SIZE_CUBE)
         return;
 
-    [unroll]
-    for (uint i = 0; i < SAMPLES_PER_PIXEL; i++)
+    uint sampleCount;
+    // if we are far use 2 samples, otherwise use 1
+    if (length(primaryHit.hitPos - rayOrigin) > 10.0)
+        sampleCount = 5;
+    else
+        sampleCount = 1;
+
+    for (uint i = 0; i < sampleCount; i++)
     {
         TraceResult primaryBounce = computeBounce(primaryHit.hitPos, primaryHit.normal, seed, i, 1.0);
         float3 primaryBounceColor = calculateBounceColor(primaryBounce, primaryHit.normal, 1.0);
@@ -99,14 +105,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 primaryBounce.hitPos,
                 primaryBounce.normal,
                 seed,
-                i + SAMPLES_PER_PIXEL * 2,
+                i + sampleCount * 2,
                 0.5);
 
             accumulatedColor += calculateBounceColor(secondaryBounce, primaryBounce.normal, 0.5);
         }
     }
 
-    accumulatedColor /= SAMPLES_PER_PIXEL;
+    accumulatedColor /= sampleCount;
 
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].x, accumulatedColor.x);
     InterlockedAdd(p.brick_data_ptr.light[storageBrickIndex].y, accumulatedColor.y);
