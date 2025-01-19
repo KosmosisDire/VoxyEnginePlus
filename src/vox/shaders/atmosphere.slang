@@ -188,3 +188,12 @@ float3 getAtmosphereColor(float3 dir, float3 sunDir, float time)
 
     return sky + sun + stars;
 }
+
+float3 getAtmosphereColor(AtmosphereParams params, float time)
+{
+    float3 sky = getBaseSkyColor(params);
+    float3 sun = getSunEffect(params);
+    float3 stars = getStarEffect(params, time);
+
+    return sky + sun + stars;
+}

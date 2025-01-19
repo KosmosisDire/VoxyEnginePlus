@@ -187,7 +187,11 @@ class Renderer
         return device.create_image(info);
     }
 
-    inline daxa::ImageId CreateRenderImage(std::string name, daxa::ImageUsageFlags flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC)
+    static constexpr daxa::ImageUsageFlags color_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::COLOR_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
+    static constexpr daxa::ImageUsageFlags depth_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::DEPTH_STENCIL_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
+    static constexpr daxa::ImageUsageFlags transfer_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC;
+
+    inline daxa::ImageId CreateRenderImage(std::string name, daxa::ImageUsageFlags flags = color_image_flags)
     {
         return CreateImage({
             .format = swapchain.get_format(),
@@ -197,17 +201,47 @@ class Renderer
         });
     }
 
-    inline daxa::ImageId CreateImage(daxa::ImageInfo info, daxa::TaskImage &out_task_image)
+    inline daxa::ImageId CreateRenderImage(std::string name, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
     {
-        auto id = CreateImage(info);
-        out_task_image = daxa::TaskImage({.initial_images = {.images = std::array{id}}, .name = ("task_" + std::string(info.name.view())).c_str()});
+        return CreateImage({
+            .format = format,
+            .size = {static_cast<u32>(surface_width * scale), static_cast<u32>(surface_height * scale), 1},
+            .usage = flags,
+            .name = name,
+        });
+    }
+
+    inline void SetTaskImage(std::string name, daxa::ImageId image, daxa::TaskImage *out_task_image)
+    {
+        if (out_task_image->is_valid())
+        {
+            out_task_image->set_images({.images = std::array{image}});
+        }
+        else
+        {
+            *out_task_image = daxa::TaskImage({.initial_images = {.images = std::array{image}}, .name = ("task_" + name).c_str()});
+        }
+    }
+
+    inline daxa::ImageId CreateRenderImage(std::string name, daxa::TaskImage *out_task_image, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
+    {
+        auto id = CreateRenderImage(name, format, scale, flags);
+        SetTaskImage(name, id, out_task_image);
         return id;
     }
 
-    inline daxa::ImageId CreateRenderImage(std::string name, daxa::TaskImage &out_task_image, daxa::ImageUsageFlags flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC)
+
+    inline daxa::ImageId CreateImage(daxa::ImageInfo info, daxa::TaskImage *out_task_image)
+    {
+        auto id = CreateImage(info);
+        SetTaskImage(std::string(info.name.view()), id, out_task_image);
+        return id;
+    }
+
+    inline daxa::ImageId CreateRenderImage(std::string name, daxa::TaskImage *out_task_image, daxa::ImageUsageFlags flags = color_image_flags)
     {
         auto id = CreateRenderImage(name, flags);
-        out_task_image = daxa::TaskImage({.initial_images = {.images = std::array{id}}, .name = ("task_" + name).c_str()});
+        SetTaskImage(name, id, out_task_image);
         return id;
     }
 
@@ -333,7 +367,7 @@ class Renderer
 
     static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, std::shared_ptr<Window> window, std::string name)
     {
-        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::FIFO, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
+        return device.create_swapchain({.native_window = window->GetNativeHandle(), .native_window_platform = window->GetNativePlatform(), .present_mode = daxa::PresentMode::IMMEDIATE, .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, .name = name});
     }
 
     static inline daxa::TaskImage CreateSwapchainImage(daxa::Swapchain &swapchain, std::string name)

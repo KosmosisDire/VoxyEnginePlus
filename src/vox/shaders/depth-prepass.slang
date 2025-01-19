@@ -4,7 +4,7 @@
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
-    RWTexture2D<float> render_image = RWTexture2D<float>::get(p.depth_prepass);
+    RWTexture2D<float> depth_tex = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
 
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
@@ -18,10 +18,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     if (trace.hit)
     {
-        render_image[pixel] = trace.distance;
+        depth_tex[pixel] = trace.distance;
     }
     else
     {
-        render_image[pixel] = 0.0;
+        depth_tex[pixel] = 0.0;
     }
 }

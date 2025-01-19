@@ -22,7 +22,7 @@ struct VoxyApp : public Application
           voxelRenderer(renderer),
           uiState({.renderData = &voxelRenderer.stateData})
     {
-        render_image = renderer->CreateRenderImage("game_render_image", task_render_image);
+        render_image = renderer->CreateRenderImage("game_render_image", &task_render_image);
         camera.speed = 16.0f;
     }
 

@@ -1,32 +1,9 @@
 #pragma once
 
 #include "daxa/daxa.inl"
+#include "voxel-hashmap.inl"
+#include "const.inl"
 
-static const daxa_u32 GRID_SIZE = 100;
-static const daxa_u32 GRID_SIZE_SQUARE = GRID_SIZE * GRID_SIZE;
-static const daxa_u32 GRID_SIZE_CUBE = GRID_SIZE * GRID_SIZE * GRID_SIZE;
-
-static const daxa_u32 BRICK_SIZE = 6;
-static const daxa_u32 BRICK_SIZE_SQUARE = BRICK_SIZE * BRICK_SIZE;
-static const daxa_u32 BRICK_SIZE_CUBE = BRICK_SIZE * BRICK_SIZE * BRICK_SIZE;
-
-static const daxa_u32 CHUNK_SIZE = 4;
-static const daxa_u32 CHUNK_SIZE_SQUARE = CHUNK_SIZE * CHUNK_SIZE;
-static const daxa_u32 CHUNK_SIZE_CUBE = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-
-static const daxa_f32 WORLD_VOXEL_SIZE = 1.0 / (BRICK_SIZE * CHUNK_SIZE);
-static const daxa_f32 WORLD_BRICK_SIZE = 1.0 / CHUNK_SIZE;
-
-static const daxa_u32 TOTAL_CHUNKS = GRID_SIZE_SQUARE;
-static const daxa_u32 TOTAL_BRICKS = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE;
-static const daxa_u32 TOTAL_VOXELS = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE * BRICK_SIZE_CUBE;
-
-static const daxa_u32 MAX_VISIBLE_VOXELS = GRID_SIZE_CUBE * CHUNK_SIZE_CUBE / 10; // Assuming ~10% visibility
-static const daxa_u32 HASH_TABLE_SIZE = MAX_VISIBLE_VOXELS * 2; // 2x size for lower collision rate
-
-static const daxa_u32 BITS_PER_BYTE = 8;
-static const float EPSILON = 0.0001;
-static const float PI = 3.14159265359;
 
 struct CameraData
 {
@@ -81,13 +58,24 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
+struct GBuffer
+{
+    daxa_ImageViewId color;
+    daxa_ImageViewId normal;
+    daxa_ImageViewId position;
+    daxa_ImageViewId indirect; // indirect light (global illumination)
+    daxa_ImageViewId depth;
+    daxa_ImageViewId depthHalfRes;
+    daxa_ImageViewId voxelIDs; // global brick id and local voxel id
+};
 
 struct ComputePush
 {
+    GBuffer gbuffer;
     daxa_ImageViewId final_image;
-    daxa_ImageViewId depth_prepass;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
+    daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
     daxa_u32vec2 frame_dim;
-};
+}; 

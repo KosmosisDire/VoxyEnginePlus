@@ -10,6 +10,7 @@ struct TraceResult
     int steps;
     int chunkIndex;
     int brickIndex;
+    int voxelIndex;
 };
 
 #define continueDDA(state)   \
@@ -95,6 +96,7 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, float startDepth = 0,
                         result.uvs = voxelUv;
                         result.chunkIndex = chunkIdx;
                         result.brickIndex = brickIdx;
+                        result.voxelIndex = voxelIdx;
 
                         return result;
                     }
