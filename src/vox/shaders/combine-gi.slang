@@ -19,7 +19,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 lastFrameIndirect = lastFrame.indirectLight / max(lastFrame.hitCount, 1);
     float3 thisFrameIndirect = indirect[pixel].xyz;
-    float3 newIndirect = (lastFrameIndirect + thisFrameIndirect);
+    float3 newIndirect = (lastFrameIndirect + thisFrameIndirect) / 2.0;
 
     addVoxelToHashmap(p.voxel_hashmap_ptr, p.voxel_queue_ptr, voxelIDs[pixel].x, voxelIDs[pixel].y, newIndirect);
 }
