@@ -3,13 +3,12 @@
 #include "daxa/daxa.inl"
 #include "const.inl"
 
-static const daxa_u32 HASH_TABLE_SIZE = 2457 * GRID_SIZE_SQUARE;
+static const daxa_u32 HASH_TABLE_SIZE = 16000000 * 2;
 
 struct VoxelHashmapEntry
 {
-    daxa_u32 visibleCount;
-    daxa_u32 globalBrickIndex;
-    daxa_u32 localVoxelIndex;
+    daxa_u32 hitCount;  // Contains visibleCount and status flags
+    daxa_u32 indices; // Packed globalBrickIndex and localVoxelIndex
     daxa_f32vec3 indirectLight;
 };
 
@@ -27,3 +26,4 @@ struct VoxelQueue
 
 DAXA_DECL_BUFFER_PTR(VoxelHashmap);
 DAXA_DECL_BUFFER_PTR(VoxelQueue);
+

@@ -48,13 +48,13 @@ struct BrickBitmask
 };
 struct BrickOccupancy
 {
-    BrickBitmask occupancy[];
+    BrickBitmask occupancy[TOTAL_BRICKS];
 };
 DAXA_DECL_BUFFER_PTR(BrickOccupancy);
 
 struct ChunkOccupancy
 {
-    daxa_u64 occupancy[];
+    daxa_u32vec2 occupancy[TOTAL_CHUNKS];
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
@@ -73,9 +73,12 @@ struct ComputePush
 {
     GBuffer gbuffer;
     daxa_ImageViewId final_image;
+    daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
+    daxa_BufferPtr(VoxelQueue) voxel_queue_ptr;
+    daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
     daxa_u32vec2 frame_dim;
 }; 

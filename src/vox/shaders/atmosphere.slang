@@ -1,3 +1,5 @@
+#include "const.inl"
+
 // Constants
 static const float earthRadius = 6371000.0f;
 static const float atmosphereHeight = 100000.0f;

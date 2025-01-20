@@ -52,9 +52,9 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, float startDepth = 0,
     while (result.steps < maxSteps && isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
     {
         int chunkIdx = chunkIndex(chunkDDA.cell);
-        daxa_u64 chunkMask = p.chunk_occupancy_ptr.occupancy[chunkIdx];
+        daxa_u32vec2 chunkMask = p.chunk_occupancy_ptr.occupancy[chunkIdx];
 
-        if (chunkMask == 0)
+        if (all(chunkMask == 0))
         {
             continueDDA(chunkDDA);
         }

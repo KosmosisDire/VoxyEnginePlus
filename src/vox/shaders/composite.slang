@@ -1,5 +1,6 @@
 #include "atmosphere.slang"
 #include "raycast.slang"
+#include "voxel-hashmap.slang"
 
 static const float AMBIENT_STRENGTH = 0.1;
 static const float DEPTH_SCALE = 0.008;
@@ -26,10 +27,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float4 albedoColor = albedo[pixel];
     float3 normalVector = normalize((normal[pixel].xyz - 0.5) * 2.0);
     float3 worldPos = position[pixel].xyz;
-    float3 indirectLight = indirect[pixel].xyz;
+    float3 indirectColor = indirect[pixel].xyz;
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
+
+    VoxelHashmapEntry entry = getVoxelFromHashmap(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
+    float3 indirectLight = entry.indirectLight / entry.hitCount;
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -52,10 +56,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float attenuation = 1.0 / (1.0 + DEPTH_SCALE * depthValue);
 
     // Combine lighting
-    float3 directLight = lightColor * NdotL * attenuation;
-    float3 ambientLight = lightColor * AMBIENT_STRENGTH;
-    float3 finalColor = albedoColor.rgb * (directLight + ambientLight) +
-                        indirectLight.rgb;
+    float3 directLight = lightColor * NdotL * attenuation * clamp(indirectLight + AMBIENT_STRENGTH, 0.0, 1.0);
+    float3 ambientLight = lightColor * indirectLight * AMBIENT_STRENGTH;
+    float3 finalColor = albedoColor.rgb * (directLight + ambientLight);
 
     // Fog effect
     float fogFactor = saturate(depthValue * DEPTH_SCALE);
@@ -63,13 +66,16 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // Debug visualization modes
     if ((bool)p.state_ptr.settings.showNormals)
-        finalColor = normalVector;
+        finalColor = normalVector * 0.5 + 0.5;
     if ((bool)p.state_ptr.settings.showHitPos)
         finalColor = worldPos / float(GRID_SIZE);
     if ((bool)p.state_ptr.settings.showDepth)
         finalColor = float3(depthValue / 100.0);
     if ((bool)p.state_ptr.settings.showDepthPrepass)
         finalColor = float3(depthValueHalfRes / 100.0);
+
+    finalColor = indirectLight;
+    // finalColor = indirectColor;
 
     render_image[pixel] = float4(finalColor, albedoColor.a);
 }

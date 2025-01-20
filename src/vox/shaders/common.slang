@@ -216,16 +216,6 @@ void clearBit(Ptr<BrickOccupancy> occupancy, int brickIndex, int voxelIndex)
     }
 }
 
-void setBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
-{
-    InterlockedOr(occupancy.occupancy[chunkIndex], (uint64_t(1) << brickIndex));
-}
-
-void clearBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
-{
-    InterlockedAnd(occupancy.occupancy[chunkIndex], ~(uint64_t(1) << brickIndex));
-}
-
 void setBit(inout BrickBitmask mask, int index)
 {
 
@@ -251,11 +241,6 @@ void clearBit(inout BrickBitmask mask, int index)
     }
 }
 
-bool getBit(uint64_t value, int index)
-{
-    return (value & (uint64_t(1) << index)) != 0;
-}
-
 bool getBit(BrickBitmask mask, int index)
 {
     // Calculate which 32-bit chunk and bit position
@@ -274,4 +259,19 @@ bool getBit(BrickBitmask mask, int index)
     }
 
     return false;
+}
+
+bool getBit(daxa_u32vec2 value, int index)
+{
+    return (bool)(value[index / 32] & (1 << (index % 32)));
+}
+
+void setBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+{
+    InterlockedOr(occupancy.occupancy[chunkIndex][brickIndex / 32], (1 << (brickIndex % 32)));
+}
+
+void clearBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+{
+    InterlockedAnd(occupancy.occupancy[chunkIndex][brickIndex / 32], ~(1 << (brickIndex % 32)));
 }

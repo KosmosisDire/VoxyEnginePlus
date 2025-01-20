@@ -11,6 +11,7 @@ using namespace daxa::types;
 #include <imgui_impl_glfw.h>
 #include <string>
 #include <vector>
+#include "image.hpp"
 
 struct InlineTask
 {
@@ -187,6 +188,48 @@ class Renderer
         return device.create_image(info);
     }
 
+    inline daxa::ImageId CreateImage(std::string name, defect::Image &image)
+    {
+        auto id = CreateImage(daxa::ImageInfo
+        {
+            .format = daxa::Format::R8G8B8A8_UNORM,
+            .size = {(uint)image.width(), (uint)image.height(), 1},
+            .usage = daxa::ImageUsageFlagBits::TRANSFER_DST | daxa::ImageUsageFlagBits::SHADER_STORAGE,
+            .name = name,
+        });
+
+        // create temp buffer
+        auto buffer = device.create_buffer({
+            .size = image.size(),
+            .allocate_info = daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE,
+        });
+
+        // copy image data to buffer
+        auto data = device.get_host_address_as<std::byte>(buffer).value();
+        std::memcpy(data, image.data(), image.size());
+
+        // execute a task to copy the image data to the gpu
+        auto recorder = device.create_command_recorder({});
+        recorder.copy_buffer_to_image({
+            .buffer = buffer,
+            .image = id,
+            .image_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
+            .image_slice = {0, 0},
+            .image_offset = {0, 0, 0},
+            .image_extent = {(uint)image.width(), (uint)image.height(), 1},
+        });
+        
+        auto executable_commands = recorder.complete_current_commands();
+        recorder.~CommandRecorder();
+        device.submit_commands({.command_lists = std::array{executable_commands}});
+        device.wait_idle();
+        device.collect_garbage();
+
+        device.destroy_buffer(buffer);
+
+        return id;
+    }
+
     static constexpr daxa::ImageUsageFlags color_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::COLOR_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
     static constexpr daxa::ImageUsageFlags depth_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::DEPTH_STENCIL_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
     static constexpr daxa::ImageUsageFlags transfer_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC;
@@ -349,6 +392,17 @@ class Renderer
         });
     }
 
+    static inline void CopyBuffer(daxa::TaskInterface ti, daxa::TaskBuffer src, daxa::TaskBuffer dst, u32 dst_offset = 0)
+    {
+        ti.recorder.copy_buffer_to_buffer({
+            .src_buffer = ti.get(src).ids[0],
+            .dst_buffer = ti.get(dst).ids[0],
+            .src_offset = 0,
+            .dst_offset = dst_offset,
+            .size = ti.device.buffer_info(ti.get(src).ids[0]).value().size,
+        });
+    }
+
     static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBufferAttachmentInfo buffer, u32 value = 0)
     {
         ti.recorder.clear_buffer(
@@ -360,7 +414,12 @@ class Renderer
             });
     }
 
-    static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex)
+    static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBuffer buffer, u32 value = 0)
+    {
+        ClearBuffer(ti, ti.get(buffer), value);
+    }
+
+    static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex = 0)
     {
         return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
     }

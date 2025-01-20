@@ -2,7 +2,8 @@
 #include "lygia/generative/snoise.hlsl"
 
 // Terrain generation parameters
-static const float noiseScale = 0.1f;
+static const float noiseScale = 0.3f;
+static const uint blockSize = 1;
 
 // Convert grid coordinates to world position for noise sampling
 float3 gridToWorldPos(int3 gridPos)
@@ -15,9 +16,9 @@ float3 getBlockAlignedPos(int3 gridPos)
 {
     float3 worldPos = gridToWorldPos(gridPos);
     return float3(
-        floor(worldPos.x / (WORLD_VOXEL_SIZE * 6.0f)) * (WORLD_VOXEL_SIZE * 6.0f),
-        floor(worldPos.y / (WORLD_VOXEL_SIZE * 6.0f)) * (WORLD_VOXEL_SIZE * 6.0f),
-        floor(worldPos.z / (WORLD_VOXEL_SIZE * 6.0f)) * (WORLD_VOXEL_SIZE * 6.0f));
+        floor(worldPos.x / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize),
+        floor(worldPos.y / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize),
+        floor(worldPos.z / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize));
 }
 
 // Calculate if a position should be solid based on height map and caves
@@ -31,8 +32,8 @@ bool calculateSolid(int3 gridPos)
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.5f) * 0.5f;
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.9f) * 0.25f;
     h = h * 0.5f + 0.5f;
-    h *= 1.0f / noiseScale;
-    h += 14.0f;
+    h *= 2.0f / noiseScale;
+    h += 39.0f;
 
     // Generate holes
     float holes = snoise(worldBlockPos * scale * 0.1);
