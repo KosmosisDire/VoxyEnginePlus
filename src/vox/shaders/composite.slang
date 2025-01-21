@@ -1,9 +1,10 @@
 #include "atmosphere.slang"
+#include "lygia/color/tonemap/unreal.hlsl"
 #include "raycast.slang"
 #include "voxel-hashmap.slang"
 
 static const float AMBIENT_STRENGTH = 0.1;
-static const float DEPTH_SCALE = 0.008;
+static const float DEPTH_SCALE = 0.00002;
 
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
@@ -63,7 +64,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // Handle background pixels (sky)
     if (depthValue == 0.0f)
     {
-        render_image[pixel] = float4(getAtmosphereColor(atmosphere, p.state_ptr.time), 1.0);
+        render_image[pixel] = tonemapUnreal(float4(getAtmosphereColor(atmosphere, p.state_ptr.time), 1.0));
         return;
     }
 
@@ -74,7 +75,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 finalColor = voxelLight * albedoColor.rgb;
 
     // Fog effect
-    float fogFactor = saturate(depthValue * DEPTH_SCALE);
+    float fogFactor = saturate(depthValue * depthValue * DEPTH_SCALE);
     finalColor = lerp(finalColor, baseSkyColor, fogFactor);
 
     // Debug visualization modes
@@ -88,8 +89,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         finalColor = float3(depthValueHalfRes / 100.0);
 
     // finalColor = voxelLight;
-    finalColor = pixelLight;
+    // finalColor = pixelLight;
     // finalColor = albedoColor.rgb;
+
+    // post process
+    finalColor = tonemapUnreal(finalColor);
 
     render_image[pixel] = float4(finalColor, 1.0);
 }

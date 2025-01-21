@@ -33,6 +33,7 @@ float normal_edge_stopping(float3 n1, float3 n2, float sigma)
 [numthreads(16, 16, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
+    // return;
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -50,7 +51,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 center_color = image_indirect[pixel];
     float3 center_normal = convert_normal(image_normal[pixel]);
 
-    const float sigma_geom = 0.1f;
+    const float sigma_geom = 0.001f;
     const float sigma_normal = 0.1f;
 
     float3 sum_color = float3(0, 0, 0);
@@ -62,7 +63,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         [unroll]
         for (int x = -2; x <= 2; x++)
         {
-            int2 offset_pos = int2(pixel) + int2(x, y) * p.pass;
+            int2 offset_pos = int2(pixel) + int2(x, y) * (p.pass);
 
             if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
@@ -87,5 +88,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         }
     }
 
-    image_indirect[pixel] = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
+    var final = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
+    image_indirect[pixel] = final;
 }

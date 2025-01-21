@@ -153,6 +153,51 @@ inline float3 brickWorldPos(int brickIndex)
     return float3(chunkPos + localBrickPos * WORLD_BRICK_SIZE);
 }
 
+inline int3 getVoxelCoord(int globalBrickIndex, int localVoxelIndex)
+{
+    int3 localVoxelPos = int3(
+        localVoxelIndex % BRICK_SIZE,
+        (localVoxelIndex / BRICK_SIZE) % BRICK_SIZE,
+        localVoxelIndex / BRICK_SIZE_SQUARE);
+
+    int3 brickPos = int3(
+        globalBrickIndex % GRID_SIZE,
+        (globalBrickIndex / GRID_SIZE) % GRID_SIZE,
+        globalBrickIndex / (GRID_SIZE * GRID_SIZE));
+
+    return brickPos * BRICK_SIZE + localVoxelPos;
+}
+
+int2 getIndicesFromVoxelCoord(int3 coord)
+{
+    // Get brick position by integer division
+    int3 brickPos = int3(
+        coord.x / BRICK_SIZE,
+        coord.y / BRICK_SIZE,
+        coord.z / BRICK_SIZE);
+
+    // Get local position within brick using remainder
+    int3 localPos = int3(
+        coord.x % BRICK_SIZE,
+        coord.y % BRICK_SIZE,
+        coord.z % BRICK_SIZE);
+
+    int2 indices;
+    // Convert brick position to global index
+    indices.x =
+        brickPos.x +
+        brickPos.y * GRID_SIZE +
+        brickPos.z * (GRID_SIZE * GRID_SIZE);
+
+    // Convert local position to voxel index
+    indices.y =
+        localPos.x +
+        localPos.y * BRICK_SIZE +
+        localPos.z * BRICK_SIZE_SQUARE;
+
+    return indices;
+}
+
 // Get adjacent brick index in normal direction
 uint getAdjacentBrickIndex(uint brickIndex, float3 normal)
 {

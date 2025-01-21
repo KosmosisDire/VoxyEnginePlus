@@ -2,51 +2,51 @@
 #include "raycast.slang"
 #include "voxel-hashmap.slang"
 
-static const uint SAMPLES_PER_PIXEL = 1;
+static const float3 UP_VECTOR = float3(0, 1, 0);
+static const float3 FORWARD_VECTOR = float3(0, 0, 1);
+static const float PARALLEL_THRESHOLD = 0.9999f;
 
-float3x3 createBasis(float3 normal)
+// Creates a 3x3 rotation matrix that rotates from up vector to the given normal
+float3x3 CreateRotationFromNormal3x3(float3 normal)
 {
-    float3 tangent = abs(normal.y) < 0.999 ? normalize(cross(float3(0, 1, 0), normal)) : float3(1, 0, 0);
-    float3 bitangent = cross(normal, tangent);
-    return float3x3(tangent, normal, bitangent);
-}
+    // Ensure normal is normalized
+    normal = normalize(normal);
 
-// Transform blue noise sample with temporal variation
-float2 transformBlueNoise(float3 sample, uint frameIndex)
-{
-    // Simple Cranley-Patterson rotation using frame index
-    float2 shift = float2(
-        frac(frameIndex * sample.z * sample.x * sample.y * 2 * 0.754877669), // Using golden ratio conjugate
-        frac(frameIndex * sample.z * sample.x * sample.y * 2 * 0.569840291));
-    return frac(sample.xy + shift);
-}
+    // Check if normal is nearly parallel to up vector
+    float upDot = dot(normal, UP_VECTOR);
 
-float3 generateBounceDirection(float3 normal, float3 blueNoiseSample, uint frameIndex)
-{
-    float3x3 basis = createBasis(normal);
+    float3 right;
+    if (abs(upDot) > PARALLEL_THRESHOLD)
+    {
+        // If parallel, use forward vector as reference
+        right = normalize(cross(FORWARD_VECTOR, normal));
+    }
+    else
+    {
+        right = normalize(cross(UP_VECTOR, normal));
+    }
 
-    // Transform the first two components of blue noise
-    float2 transformed = transformBlueNoise(blueNoiseSample, frameIndex);
+    // Create forward vector to complete orthonormal basis
+    float3 forward = normalize(cross(normal, right));
 
-    // Cosine-weighted hemisphere sampling
-    float phi = 2.0 * PI * transformed.x;
-    float cosTheta = sqrt(transformed.y); // Cosine weighted
-    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-    float3 localDir = float3(
-        cos(phi) * sinTheta,
-        cosTheta,
-        sin(phi) * sinTheta);
-
-    // Transform to world space
-    float3 worldDir = mul(basis, localDir);
-    return normalize(worldDir + normal * 0.001);
+    // Construct rotation matrix
+    // Each column represents one of our basis vectors
+    return float3x3(
+        right.x, normal.x, forward.x,
+        right.y, normal.y, forward.y,
+        right.z, normal.z, forward.z);
 }
 
 TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, out float3 rayDir)
 {
     float3 hitPos = origin + normal * EPSILON;
-    rayDir = generateBounceDirection(normal, blueNoiseSample, frameIndex);
+
+    float3x3 basis = CreateRotationFromNormal3x3(normal);
+    float3 blue = (blueNoiseSample * 2.0 - 1.0);
+    blue.y = abs(blue.y);
+    blue = mul(basis, blue);
+    blue += normal * 0.1;
+    rayDir = normalize(blue);
     return traceVoxelRay(hitPos, rayDir, 0.0, 64);
 }
 
@@ -62,22 +62,8 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
         float3 color = float3(0.9, 0.3, 1) * 1;
         return color;
     }
-    return float3(0, 0, 0);
-}
 
-float3 runMultiSampleBounce(uint2 pixel, float3 rayOrigin, float3 rayDir, RWTexture2D<float4> blueNoiseSample)
-{
-    float3 bounceColor = float3(0, 0, 0);
-    uint frameIndex = p.state_ptr.frame;
-
-    for (uint i = 0; i < SAMPLES_PER_PIXEL; i++)
-    {
-        float3 bounceRayDir;
-        float3 noiseSample = blueNoiseSample[pixel % 128].xyz;
-        TraceResult bounceResult = computeBounce(rayOrigin, rayDir, noiseSample, frameIndex + i * 7, bounceRayDir);
-        bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
-    }
-    return bounceColor / float(SAMPLES_PER_PIXEL);
+    return -float3(0.01);
 }
 
 [numthreads(8, 8, 1)]
@@ -121,19 +107,31 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-    float3 bounceColor = runMultiSampleBounce(pixel, trace.hitPos, trace.normal, blueNoise);
+
+    float3 bounceRayDir;
+    float3 bounceColor = float3(0, 0, 0);
+
+    float2 sampleUv = pixel / float2(p.frame_dim) * 128;
+    sampleUv = pixel;
+    // sampleUv = trace.uvs.xy * 128;
+    // sampleUv = ((trace.hitPos.xy + trace.hitPos.yz * 17 + trace.hitPos.zx * 23) * 160.0);
+    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoise[sampleUv % 128].xyz, 0, bounceRayDir);
+    bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
+
     float3 albedoColor = float3(1, 1, 1);
 
     if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 4096 < 64)
     {
-        albedoColor = float3(0.9, 0.3, 1) * 5;
+        albedoColor = float3(0.9, 0.3, 1) * 10;
     }
+
+    float3 indirectFinal = bounceColor;
 
     // write to the gbuffer
     albedo[pixel] = albedoColor;
     normal[pixel] = trace.normal * 0.5 + 0.5;
     position[pixel] = trace.hitPos;
-    indirect[pixel] = bounceColor;
+    indirect[pixel] = indirectFinal;
     depth[pixel] = trace.distance;
     voxelIDs[pixel] = int2(globalBrickIndex, trace.voxelIndex);
 }

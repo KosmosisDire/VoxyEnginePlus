@@ -2,7 +2,7 @@
 #include "lygia/generative/snoise.hlsl"
 
 // Terrain generation parameters
-static const float noiseScale = 0.3f;
+static const float noiseScale = 0.2f;
 static const uint blockSize = 6;
 
 // Convert grid coordinates to world position for noise sampling
@@ -32,8 +32,8 @@ bool calculateSolid(int3 gridPos)
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.5f) * 0.5f;
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.9f) * 0.25f;
     h = h * 0.5f + 0.5f;
-    h *= 2.0f / noiseScale;
-    h += 39.0f;
+    h *= 1.0f / scale;
+    h += 28.0f;
 
     // Generate holes
     float holes = snoise(worldBlockPos * scale * 0.1);
@@ -41,7 +41,7 @@ bool calculateSolid(int3 gridPos)
     // Generate caves
     float caves = snoise(worldBlockPos * scale * 1.0f) * 0.5f + 0.3f;
 
-    return worldBlockPos.y < h && holes > -0.6f && !(caves > -0.2f && caves < 0.2f);
+    return worldBlockPos.y < h && holes > -0.5f && !(caves > -0.2f && caves < 0.2f);
 }
 
 [numthreads(4, 4, 4)]

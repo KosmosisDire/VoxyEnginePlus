@@ -265,6 +265,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, task_blue_noise_image)
                 .SetTask(
@@ -273,10 +274,11 @@ class VoxelRenderer
 
                         auto push = ComputePush{
                             .gbuffer = gbufferGPU,
-                            .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
+                            .blueNoise = blue_noise_images[stateData.frame % 7].default_view(),
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer),
                             .voxel_hashmap_ptr = renderer->GetDeviceAddress(ti, task_voxel_hashmap_buffer),
+                            .past_voxel_hashmap_ptr = renderer->GetDeviceAddress(ti, task_past_voxel_hashmap_buffer),
                             .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer),
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
@@ -307,7 +309,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*denoise_gi_compute);
 
-                        for (int i = 0; i < 6; i++)
+                        for (int i = 0; i < 8; i++)
                         {
                             push.pass = i;
                             ti.recorder.push_constant(push);
