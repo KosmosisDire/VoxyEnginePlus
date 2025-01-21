@@ -69,13 +69,13 @@ float3 hsv2rgb(float3 hsv)
 
 float3 getMaterial(TraceResult trace, bool emission)
 {
-    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 4096 < 64)
+    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % (4096 * 2) < 64)
     {
         // Project position onto a diagonal axis for consistent rainbow direction
         float posProjection = dot(trace.hitPos, normalize(float3(1.0, 1.0, 1.0)));
 
         // Create scrolling effect with time
-        float scrollSpeed = 0.5; // Adjust speed as needed
+        float scrollSpeed = 0.1; // Adjust speed as needed
         float timeOffset = p.state_ptr.time * scrollSpeed;
 
         // Calculate hue from position and time
@@ -84,10 +84,10 @@ float3 getMaterial(TraceResult trace, bool emission)
         // Convert HSV to RGB with full saturation and value
         float3 color = hsv2rgb(float3(hue, 1.0, 1.0));
 
-        return color * 2;
+        return color * 4;
     }
 
-    return emission ? float3(0.0) : float3(1.0);
+    return emission ? float3(0.0) : float3(0.09f, 0.23f, 0.14f);
 }
 
 float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
@@ -95,14 +95,26 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
     if (!bounceResult.hit)
     {
         AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
-        return getBaseSkyColor(atmosphere) * 3;
+        return getBaseSkyColor(atmosphere) * 1;
     }
     else
     {
         return getMaterial(bounceResult, true);
     }
+}
 
-    return float3(0.0);
+bool IsObjectSmallerThanPixel(
+    float objectWorldSize,  // Size of object in world units
+    float distanceToCamera, // Distance from camera to object in world units
+    float horizontalFOV,    // Camera's horizontal FOV in radians
+    uint screenWidth)       // Screen width in pixels
+{
+    // Calculate how many radians one pixel represents
+    float radiansPerPixel = horizontalFOV / screenWidth; 
+    float objectAngularSize = objectWorldSize / distanceToCamera;
+
+    // angular size is smaller than one pixel
+    return objectAngularSize < radiansPerPixel;
 }
 
 [numthreads(32, 32, 1)]
@@ -150,13 +162,39 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 bounceRayDir;
     float3 bounceColor = float3(0, 0, 0);
-
-    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoise[(pixel % 64) % 128].xyz, p.state_ptr.frame, bounceRayDir);
+    float3 noise = blueNoise[(pixel % 64) % 128].xyz;
+    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
     bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
+
+    TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.01), 0.0, 512);
+
+    if (bounceResult.hit)
+    {
+        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.01), 0.0, 512);
+        if (!bounceShadow.hit)
+        {
+            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir));
+        }
+    }
 
     float3 albedoColor = getMaterial(trace, false);
 
     float3 indirectFinal = bounceColor;
+
+    bool isVoxelFarLOD = IsObjectSmallerThanPixel(
+        WORLD_VOXEL_SIZE * 0.3,
+        trace.distance,
+        p.state_ptr.camera.fov * 0.0174532925f,
+        p.frame_dim.x);
+
+    if (shadow.hit)
+    {
+        // indirectFinal *= 0.1;
+    }
+    else
+    {
+        indirectFinal += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
+    }
 
     // write to the gbuffer
     albedo[pixel] = albedoColor;
@@ -164,5 +202,5 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     position[pixel] = trace.hitPos;
     indirect[pixel] = indirectFinal;
     depth[pixel] = trace.distance;
-    voxelIDs[pixel] = int2(globalBrickIndex, trace.voxelIndex);
+    voxelIDs[pixel] = int2(globalBrickIndex, isVoxelFarLOD ? 0 : trace.voxelIndex);
 }

@@ -12,6 +12,7 @@ struct CameraData
     daxa_f32vec3 position;
     float near;
     float far;
+    float fov;
 };
 
 struct GraphicsSettings

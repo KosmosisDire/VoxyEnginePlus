@@ -176,6 +176,13 @@ class VoxelRenderer
         renderer->DestroyBuffer(chunk_occupancy_buffer);
         renderer->DestroyBuffer(brick_occupancy_buffer);
         renderer->DestroyBuffer(state_buffer);
+        renderer->DestroyBuffer(voxel_hashmap_buffer);
+        renderer->DestroyBuffer(past_voxel_hashmap_buffer);
+
+        for (int i = 0; i < 64; i++)
+        {
+            renderer->DestroyImage(blue_noise_images[i]);
+        }
         
         gbuffer.DestroyImages(*renderer);
     }

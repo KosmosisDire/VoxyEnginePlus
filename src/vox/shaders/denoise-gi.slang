@@ -20,7 +20,7 @@ static const float kernel3x3[9] = {
 };
 
 // Define as compile time constant for better optimization
-#define USE_KERNEL_SIZE_3 0
+#define USE_KERNEL_SIZE_3 1
 
 float3 convert_normal(float3 normal)
 {
@@ -76,7 +76,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         [unroll]
         for (int x = -kernel_radius; x <= kernel_radius; x++)
         {
-            int2 offset_pos = int2(pixel) + int2(x, y) * (p.pass);
+            int2 offset_pos = int2(pixel) + int2(x, y) * (p.pass * 2);
 
             if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)

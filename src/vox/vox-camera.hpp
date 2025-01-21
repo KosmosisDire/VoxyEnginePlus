@@ -20,6 +20,7 @@ class VoxCamera : public Camera
         data.position = to_daxa(getPosition());
         data.near = getNearPlane();
         data.far = getFarPlane();
+        data.fov = getFOV();
         return data;
     }
 };

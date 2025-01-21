@@ -2,7 +2,7 @@
 #include "lygia/generative/snoise.hlsl"
 
 // Terrain generation parameters
-static const float noiseScale = 0.2f;
+static const float noiseScale = 0.1f;
 static const uint blockSize = 6;
 
 // Convert grid coordinates to world position for noise sampling
