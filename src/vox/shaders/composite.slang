@@ -54,8 +54,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         tries++;
     }
 
-    // float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
-    float3 voxelLight = p.voxel_hashmap_ptr.temporalFrames[slot] / 100.0;
+    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    // float3 voxelLight = p.voxel_hashmap_ptr.temporalFrames[slot] / 100.0;
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;

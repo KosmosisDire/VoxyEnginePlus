@@ -278,7 +278,7 @@ class VoxelRenderer
 
                         auto push = ComputePush{
                             .gbuffer = gbufferGPU,
-                            .blueNoise = blue_noise_images[stateData.frame % 7].default_view(),
+                            .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
                             .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer),
                             .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer),
                             .voxel_hashmap_ptr = renderer->GetDeviceAddress(ti, task_voxel_hashmap_buffer),

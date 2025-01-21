@@ -53,9 +53,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     }
 
     int lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
-    float blendFactor = 1 / (lastTempFrames);
+    float3 lastColor = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(p.past_voxel_hashmap_ptr.hitCounts[slot], 1));
+    float lastLuminance = dot(lastColor, float3(0.2126, 0.7152, 0.0722));
+    float blendFactor = 1.0 / (lastTempFrames);
+    blendFactor = clamp(blendFactor, lastLuminance / 3, 0.99);
     // float blendFactor = 0.9;
-    float3 thisFrameIndirect = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(p.past_voxel_hashmap_ptr.hitCounts[slot], 1) * (blendFactor) + color * (1 - blendFactor));
+    float3 thisFrameIndirect = lastColor * (1 - blendFactor) + color * (blendFactor);
     // indirect[pixel] = thisFrameIndirect;
 
     voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, thisFrameIndirect, lastTempFrames + 1);
