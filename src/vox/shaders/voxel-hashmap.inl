@@ -8,6 +8,7 @@ static const daxa_u32 EMPTY_KEY = 0;
 
 struct VoxelHashmap
 {
+    daxa_u32 temporalFrames[HASH_TABLE_SIZE];
     daxa_u32 hitCounts[HASH_TABLE_SIZE];
     daxa_u32 brickIndices[HASH_TABLE_SIZE];
     daxa_u32 voxelIndices[HASH_TABLE_SIZE];

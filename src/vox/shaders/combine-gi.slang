@@ -9,7 +9,7 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
     uint slot = hashVoxel(brickIndex, voxelIndex);
 
     uint32_t tries = 0;
-    while (tries < 100)
+    while (tries < 10)
     {
         var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
         var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
@@ -34,6 +34,7 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
+    // return;
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -47,12 +48,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     var color = indirect[pixel];
     if (slot == EMPTY_KEY)
     {
-        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color);
+        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 1);
         return;
     }
 
-    float3 thisFrameIndirect = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(p.past_voxel_hashmap_ptr.hitCounts[slot], 1) * (0.9) + color * 0.1);
+    int lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
+    float blendFactor = 1 / (lastTempFrames);
+    // float blendFactor = 0.9;
+    float3 thisFrameIndirect = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(p.past_voxel_hashmap_ptr.hitCounts[slot], 1) * (blendFactor) + color * (1 - blendFactor));
     // indirect[pixel] = thisFrameIndirect;
 
-    voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, thisFrameIndirect);
+    voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, thisFrameIndirect, lastTempFrames + 1);
 }

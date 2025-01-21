@@ -37,17 +37,57 @@ float3x3 CreateRotationFromNormal3x3(float3 normal)
         right.z, normal.z, forward.z);
 }
 
+float3 transformBlueNoise(float3 sample, uint frameIndex)
+{
+    // Simple Cranley-Patterson rotation using frame index
+    float3 shift = float3(
+        frac(frameIndex * 0.754877669), // Using golden ratio conjugate
+        frac(frameIndex * 0.569840291),
+        frac(frameIndex * 0.682327803));
+    return frac(sample + shift);
+}
+
 TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, out float3 rayDir)
 {
     float3 hitPos = origin + normal * EPSILON;
 
     float3x3 basis = CreateRotationFromNormal3x3(normal);
-    float3 blue = (blueNoiseSample * 2.0 - 1.0);
+    float3 blue = transformBlueNoise(blueNoiseSample, p.state_ptr.frame + uint(origin.x * origin.y * origin.z * 64)) * 2.0 - 1.0;
     blue.y = abs(blue.y);
     blue = mul(basis, blue);
     blue += normal * 0.1;
     rayDir = normalize(blue);
-    return traceVoxelRay(hitPos, rayDir, 0.0, 64);
+    return traceVoxelRay(hitPos, rayDir, 0.0, 512);
+}
+
+float3 hsv2rgb(float3 hsv)
+{
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(hsv.xxx + K.xyz) * 6.0 - K.www);
+    return hsv.z * lerp(K.xxx, saturate(p - K.xxx), hsv.y);
+}
+
+float3 getMaterial(TraceResult trace, bool emission)
+{
+    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 4096 < 64)
+    {
+        // Project position onto a diagonal axis for consistent rainbow direction
+        float posProjection = dot(trace.hitPos, normalize(float3(1.0, 1.0, 1.0)));
+
+        // Create scrolling effect with time
+        float scrollSpeed = 0.5; // Adjust speed as needed
+        float timeOffset = p.state_ptr.time * scrollSpeed;
+
+        // Calculate hue from position and time
+        float hue = frac(posProjection * 1 + timeOffset);
+
+        // Convert HSV to RGB with full saturation and value
+        float3 color = hsv2rgb(float3(hue, 1.0, 1.0));
+
+        return color * 2;
+    }
+
+    return emission ? float3(0.0) : float3(1.0);
 }
 
 float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
@@ -57,18 +97,18 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
         AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
         return getBaseSkyColor(atmosphere) * 3;
     }
-    else if (brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex) % 4096 < 64)
+    else
     {
-        float3 color = float3(0.9, 0.3, 1) * 1;
-        return color;
+        return getMaterial(bounceResult, true);
     }
 
-    return -float3(0.01);
+    return float3(0.0);
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(32, 32, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
+    // return;
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -111,19 +151,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 bounceRayDir;
     float3 bounceColor = float3(0, 0, 0);
 
-    float2 sampleUv = pixel / float2(p.frame_dim) * 128;
-    sampleUv = pixel;
-    // sampleUv = trace.uvs.xy * 128;
-    // sampleUv = ((trace.hitPos.xy + trace.hitPos.yz * 17 + trace.hitPos.zx * 23) * 160.0);
-    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoise[sampleUv % 128].xyz, 0, bounceRayDir);
+    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoise[(pixel % 64) % 128].xyz, p.state_ptr.frame, bounceRayDir);
     bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
 
-    float3 albedoColor = float3(1, 1, 1);
-
-    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 4096 < 64)
-    {
-        albedoColor = float3(0.9, 0.3, 1) * 10;
-    }
+    float3 albedoColor = getMaterial(trace, false);
 
     float3 indirectFinal = bounceColor;
 

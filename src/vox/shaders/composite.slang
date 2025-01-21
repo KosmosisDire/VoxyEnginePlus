@@ -9,6 +9,7 @@ static const float DEPTH_SCALE = 0.00002;
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
+    // return;
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -36,7 +37,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     uint slot = hashVoxel(voxelID.x, voxelID.y);
 
     uint32_t tries = 0;
-    while (tries < 100)
+    while (tries < 10)
     {
         if (p.voxel_hashmap_ptr.brickIndices[slot] == voxelID.x && p.voxel_hashmap_ptr.voxelIndices[slot] == voxelID.y)
         {
@@ -53,7 +54,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         tries++;
     }
 
-    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    // float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    float3 voxelLight = p.voxel_hashmap_ptr.temporalFrames[slot] / 100.0;
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;

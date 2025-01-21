@@ -199,7 +199,11 @@ class VoxelRenderer
                     [this](daxa::TaskInterface ti)
                     {
                         gbufferGPU = gbuffer.GetGPUBuffer();
-                        renderer->CopyBuffer(ti, task_voxel_hashmap_buffer, task_past_voxel_hashmap_buffer);
+                        
+                        auto temp = task_voxel_hashmap_buffer;
+                        task_voxel_hashmap_buffer = task_past_voxel_hashmap_buffer;
+                        task_past_voxel_hashmap_buffer = temp;
+
                         renderer->ClearBuffer(ti, task_voxel_hashmap_buffer, 0);
                     }));
 
@@ -284,7 +288,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*render_gbuffer_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
                     });
         gbuffer.TaskAddAll(main_render_gbuffer_task, daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT);
         renderer->AddTask(main_render_gbuffer_task);
@@ -309,7 +313,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*denoise_gi_compute);
 
-                        for (int i = 0; i < 8; i++)
+                        for (int i = 0; i < 4; i++)
                         {
                             push.pass = i;
                             ti.recorder.push_constant(push);

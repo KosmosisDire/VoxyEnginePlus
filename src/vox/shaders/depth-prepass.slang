@@ -4,6 +4,7 @@
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
+    // return;
     RWTexture2D<float> depth_tex = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
 
     uint2 pixel = pixel_i.xy;
