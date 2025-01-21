@@ -15,25 +15,49 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float4> render_image = RWTexture2D<float4>::get(p.final_image);
 
     // Read from gbuffer textures
-    RWTexture2D<float4> albedo = RWTexture2D<float4>::get(p.gbuffer.color);
-    RWTexture2D<float4> normal = RWTexture2D<float4>::get(p.gbuffer.normal);
-    RWTexture2D<float4> position = RWTexture2D<float4>::get(p.gbuffer.position);
-    RWTexture2D<float4> indirect = RWTexture2D<float4>::get(p.gbuffer.indirect);
+    RWTexture2D<float3> albedo = RWTexture2D<float3>::get(p.gbuffer.color);
+    RWTexture2D<float3> normal = RWTexture2D<float3>::get(p.gbuffer.normal);
+    RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
+    RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
 
     // Sample all buffers at current pixel
-    float4 albedoColor = albedo[pixel];
+    float3 albedoColor = albedo[pixel];
     float3 normalVector = normalize((normal[pixel].xyz - 0.5) * 2.0);
     float3 worldPos = position[pixel].xyz;
-    float3 indirectColor = indirect[pixel].xyz;
+    float3 indirectColor = indirect[pixel];
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
 
-    VoxelHashmapEntry entry = getVoxelFromHashmap(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
-    float3 indirectLight = entry.indirectLight / entry.hitCount;
+    uint slot = hashVoxel(voxelID.x, voxelID.y);
+
+    uint32_t tries = 0;
+    while (tries < 100)
+    {
+        if (p.voxel_hashmap_ptr.brickIndices[slot] == voxelID.x && p.voxel_hashmap_ptr.voxelIndices[slot] == voxelID.y)
+        {
+            break;
+        }
+        if (p.voxel_hashmap_ptr.brickIndices[slot] == EMPTY_KEY && p.voxel_hashmap_ptr.voxelIndices[slot] == EMPTY_KEY)
+        {
+            slot = EMPTY_KEY;
+        }
+
+        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
+
+        tries++;
+    }
+
+    if (slot == EMPTY_KEY)
+    {
+        render_image[pixel] = float4(0, 0, 0, 1);
+        return;
+    }
+
+    float3 indirectLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -52,13 +76,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 lightColor = getSunColor(atmosphere);
     float3 baseSkyColor = getBaseSkyColor(atmosphere);
 
-    float NdotL = max(dot(normalVector, sunDir), 0.0);
-    float attenuation = 1.0 / (1.0 + DEPTH_SCALE * depthValue);
-
-    // Combine lighting
-    float3 directLight = lightColor * NdotL * attenuation * clamp(indirectLight + AMBIENT_STRENGTH, 0.0, 1.0);
-    float3 ambientLight = lightColor * indirectLight * AMBIENT_STRENGTH;
-    float3 finalColor = albedoColor.rgb * (directLight + ambientLight);
+    float3 finalColor = indirectLight * albedoColor.rgb;
 
     // Fog effect
     float fogFactor = saturate(depthValue * DEPTH_SCALE);
@@ -74,8 +92,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if ((bool)p.state_ptr.settings.showDepthPrepass)
         finalColor = float3(depthValueHalfRes / 100.0);
 
-    finalColor = indirectLight;
+    // finalColor = indirectLight;
     // finalColor = indirectColor;
+    // finalColor = albedoColor.rgb;
 
-    render_image[pixel] = float4(finalColor, albedoColor.a);
+    render_image[pixel] = float4(finalColor, 1.0);
 }

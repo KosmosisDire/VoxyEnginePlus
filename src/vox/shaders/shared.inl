@@ -77,8 +77,14 @@ struct ComputePush
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
-    daxa_BufferPtr(VoxelQueue) voxel_queue_ptr;
     daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
+    daxa_u32vec2 frame_dim;
+};
+
+struct DenoisePush
+{
+    GBuffer gbuffer;
+    daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 

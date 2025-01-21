@@ -3,7 +3,7 @@
 
 // Terrain generation parameters
 static const float noiseScale = 0.3f;
-static const uint blockSize = 1;
+static const uint blockSize = 6;
 
 // Convert grid coordinates to world position for noise sampling
 float3 gridToWorldPos(int3 gridPos)

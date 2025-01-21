@@ -22,7 +22,7 @@ public:
             channels_ = desired_channels;
         }
     }
-
+ 
     // Move constructor
     Image(Image&& other) noexcept
         : data_(other.data_), width_(other.width_), height_(other.height_), channels_(other.channels_) {
