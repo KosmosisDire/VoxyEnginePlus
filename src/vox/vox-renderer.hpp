@@ -162,7 +162,7 @@ class VoxelRenderer
         for (int i = 0; i < 64; i++)
         {
             auto filename = std::to_string(i) + ".png";
-            auto image = std::make_unique<defect::Image>("resources/textures/noise/unitvec2/" + filename);
+            auto image = std::make_unique<defect::Image>("resources/textures/noise/vec3/" + filename);
             blue_noise_images[i] = renderer->CreateImage(filename, *image);
             blue_noise_images_data[i] = std::move(image);
         }
@@ -293,6 +293,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbuffer.task_indirect)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbuffer.task_depth)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbuffer.task_normal)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbuffer.task_position)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
                 .SetTask(
                     [this](daxa::TaskInterface ti)

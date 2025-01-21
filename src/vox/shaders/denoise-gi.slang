@@ -1,7 +1,8 @@
 #include "shared.inl"
+
 [[vk::push_constant]]
 const DenoisePush p;
-// À-Trous filter weights based on a B3 spline (1/16, 1/4, 3/8, 1/4, 1/16)
+
 static const float kernel[25] = {
     1.0f / 256.0f, 1.0f / 64.0f, 3.0f / 128.0f, 1.0f / 64.0f, 1.0f / 256.0f,
     1.0f / 64.0f, 1.0f / 16.0f, 3.0f / 32.0f, 1.0f / 16.0f, 1.0f / 64.0f,
@@ -9,66 +10,82 @@ static const float kernel[25] = {
     1.0f / 64.0f, 1.0f / 16.0f, 3.0f / 32.0f, 1.0f / 16.0f, 1.0f / 64.0f,
     1.0f / 256.0f, 1.0f / 64.0f, 3.0f / 128.0f, 1.0f / 64.0f, 1.0f / 256.0f
 };
-// Edge-stopping function
-float edge_stopping(float value, float sigma)
+
+float3 convert_normal(float3 normal)
 {
-    return exp(-value / (sigma * sigma));
+    return normal * 2.0f - 1.0f;
 }
+
+float geometry_edge_stopping(float3 pos1, float3 pos2, float3 normal, float sigma)
+{
+    float3 pos_diff = pos2 - pos1;
+    float diff_along_normal = abs(dot(pos_diff, normal));
+    return exp(-diff_along_normal / sigma);
+}
+
+float normal_edge_stopping(float3 n1, float3 n2, float sigma)
+{
+    float normal_similarity = dot(n1, n2);
+    float diff = 1.0f - normal_similarity;
+    return exp(-diff / (sigma * sigma));
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
+
     RWTexture2D<float3> image_indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
-    RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depth);
+    RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float3> image_normal = RWTexture2D<float3>::get(p.gbuffer.normal);
-    // Get center pixel values
+
+    float3 center_pos = image_position[pixel];
+
+    // Skip denoising for sky pixels
+    if (all(center_pos == float3(0, 0, 0)))
+        return;
+
     float3 center_color = image_indirect[pixel];
-    float center_depth = image_depth[pixel];
-    float3 center_normal = image_normal[pixel] * 2.0 - 1.0;
-    // Filter parameters
-    const float sigma_color = 1000;   // Color edge-stopping parameter
-    const float sigma_normal = 0.01f; // Normal edge-stopping parameter
-    const float sigma_depth = 0.3f;   // Depth edge-stopping parameter
+    float3 center_normal = convert_normal(image_normal[pixel]);
+
+    const float sigma_geom = 0.1f;
+    const float sigma_normal = 0.1f;
+
     float3 sum_color = float3(0, 0, 0);
     float sum_weights = 0.0f;
-    // 5x5 filter kernel
+
     [unroll]
     for (int y = -2; y <= 2; y++)
     {
         [unroll]
         for (int x = -2; x <= 2; x++)
         {
-            int2 sample_pos = int2(pixel) + int2(x, y) * (p.pass + 4);
-            // Skip samples outside the image
-            if (sample_pos.x < 0 || sample_pos.x >= p.frame_dim.x ||
-                sample_pos.y < 0 || sample_pos.y >= p.frame_dim.y)
-                continue;
-            // Get sample values
-            float3 sample_color = image_indirect[sample_pos];
-            float sample_depth = image_depth[sample_pos];
-            float3 sample_normal = image_normal[sample_pos] * 2.0 - 1.0;
+            int2 offset_pos = int2(pixel) + int2(x, y) * p.pass;
 
-            if (sample_depth == 0.0f)
+            if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
+                offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
                 continue;
 
-            // Compute weights based on color, normal, and depth differences
-            float color_diff = length(sample_color.rgb - center_color.rgb);
-            float normal_diff = 1.0f - dot(sample_normal.xyz, center_normal.xyz);
-            float depth_diff = abs(sample_depth - center_depth);
-            // Combine edge-stopping functions
-            // float w_color = edge_stopping(color_diff, sigma_color);
-            float w_color = 1.0f;
-            float w_normal = edge_stopping(normal_diff, sigma_normal);
-            float w_depth = edge_stopping(depth_diff, sigma_depth);
-            // Final weight combines kernel weight with edge-stopping weights
+            float3 sample_worldpos = image_position[offset_pos];
+
+            // Skip sky samples
+            if (all(sample_worldpos == float3(0, 0, 0)))
+                continue;
+
+            float3 sample_color = image_indirect[offset_pos];
+            float3 sample_normal = convert_normal(image_normal[offset_pos]);
+
             float kernel_weight = kernel[(y + 2) * 5 + (x + 2)];
-            float weight = kernel_weight * w_color * w_normal * w_depth;
+            float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
+            float normal_weight = normal_edge_stopping(center_normal, sample_normal, sigma_normal);
+            float weight = kernel_weight * geom_weight * normal_weight;
+
             sum_color += sample_color * weight;
             sum_weights += weight;
         }
     }
-    // Write filtered result
-    image_indirect[pixel] = sum_color / sum_weights;
+
+    image_indirect[pixel] = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
 }

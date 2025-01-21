@@ -2,7 +2,7 @@
 #include "raycast.slang"
 #include "voxel-hashmap.slang"
 
-static const uint SAMPLES_PER_PIXEL = 2;
+static const uint SAMPLES_PER_PIXEL = 1;
 
 float3x3 createBasis(float3 normal)
 {
@@ -12,13 +12,13 @@ float3x3 createBasis(float3 normal)
 }
 
 // Transform blue noise sample with temporal variation
-float2 transformBlueNoise(float2 sample, uint frameIndex)
+float2 transformBlueNoise(float3 sample, uint frameIndex)
 {
     // Simple Cranley-Patterson rotation using frame index
     float2 shift = float2(
-        frac(frameIndex * 0.754877669), // Using golden ratio conjugate
-        frac(frameIndex * 0.569840291));
-    return frac(sample + shift);
+        frac(frameIndex * sample.z * sample.x * sample.y * 2 * 0.754877669), // Using golden ratio conjugate
+        frac(frameIndex * sample.z * sample.x * sample.y * 2 * 0.569840291));
+    return frac(sample.xy + shift);
 }
 
 float3 generateBounceDirection(float3 normal, float3 blueNoiseSample, uint frameIndex)
@@ -26,7 +26,7 @@ float3 generateBounceDirection(float3 normal, float3 blueNoiseSample, uint frame
     float3x3 basis = createBasis(normal);
 
     // Transform the first two components of blue noise
-    float2 transformed = transformBlueNoise(blueNoiseSample.xy, frameIndex);
+    float2 transformed = transformBlueNoise(blueNoiseSample, frameIndex);
 
     // Cosine-weighted hemisphere sampling
     float phi = 2.0 * PI * transformed.x;
@@ -40,14 +40,14 @@ float3 generateBounceDirection(float3 normal, float3 blueNoiseSample, uint frame
 
     // Transform to world space
     float3 worldDir = mul(basis, localDir);
-    return normalize(worldDir);
+    return normalize(worldDir + normal * 0.001);
 }
 
 TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, out float3 rayDir)
 {
     float3 hitPos = origin + normal * EPSILON;
     rayDir = generateBounceDirection(normal, blueNoiseSample, frameIndex);
-    return traceVoxelRay(hitPos, rayDir, 0.0, 256);
+    return traceVoxelRay(hitPos, rayDir, 0.0, 64);
 }
 
 float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
@@ -55,14 +55,12 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
     if (!bounceResult.hit)
     {
         AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
-        return getBaseSkyColor(atmosphere) * 5;
+        return getBaseSkyColor(atmosphere) * 3;
     }
     else if (brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex) % 4096 < 64)
     {
-        float3 color = float3(0.9, 0.3, 1) * 10;
-        float dist = bounceResult.distance;
-        float atten = 1.0 / (1.0 + dist * dist * 0.01);
-        return color * atten;
+        float3 color = float3(0.9, 0.3, 1) * 1;
+        return color;
     }
     return float3(0, 0, 0);
 }
@@ -76,7 +74,7 @@ float3 runMultiSampleBounce(uint2 pixel, float3 rayOrigin, float3 rayDir, RWText
     {
         float3 bounceRayDir;
         float3 noiseSample = blueNoiseSample[pixel % 128].xyz;
-        TraceResult bounceResult = computeBounce(rayOrigin, rayDir, noiseSample, frameIndex + i * 32, bounceRayDir);
+        TraceResult bounceResult = computeBounce(rayOrigin, rayDir, noiseSample, frameIndex + i * 7, bounceRayDir);
         bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
     }
     return bounceColor / float(SAMPLES_PER_PIXEL);

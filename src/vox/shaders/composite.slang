@@ -27,7 +27,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 albedoColor = albedo[pixel];
     float3 normalVector = normalize((normal[pixel].xyz - 0.5) * 2.0);
     float3 worldPos = position[pixel].xyz;
-    float3 indirectColor = indirect[pixel];
+    float3 pixelLight = indirect[pixel];
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
@@ -44,6 +44,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         if (p.voxel_hashmap_ptr.brickIndices[slot] == EMPTY_KEY && p.voxel_hashmap_ptr.voxelIndices[slot] == EMPTY_KEY)
         {
             slot = EMPTY_KEY;
+            break;
         }
 
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
@@ -51,13 +52,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         tries++;
     }
 
-    if (slot == EMPTY_KEY)
-    {
-        render_image[pixel] = float4(0, 0, 0, 1);
-        return;
-    }
-
-    float3 indirectLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -76,7 +71,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 lightColor = getSunColor(atmosphere);
     float3 baseSkyColor = getBaseSkyColor(atmosphere);
 
-    float3 finalColor = indirectLight * albedoColor.rgb;
+    float3 finalColor = voxelLight * albedoColor.rgb;
 
     // Fog effect
     float fogFactor = saturate(depthValue * DEPTH_SCALE);
@@ -92,8 +87,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if ((bool)p.state_ptr.settings.showDepthPrepass)
         finalColor = float3(depthValueHalfRes / 100.0);
 
-    // finalColor = indirectLight;
-    // finalColor = indirectColor;
+    // finalColor = voxelLight;
+    finalColor = pixelLight;
     // finalColor = albedoColor.rgb;
 
     render_image[pixel] = float4(finalColor, 1.0);
