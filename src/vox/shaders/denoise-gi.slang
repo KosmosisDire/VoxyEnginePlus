@@ -52,6 +52,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> image_indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
     RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float3> image_normal = RWTexture2D<float3>::get(p.gbuffer.normal);
+    RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
 
     float3 center_pos = image_position[pixel];
 
@@ -61,6 +62,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 center_color = image_indirect[pixel];
     float3 center_normal = convert_normal(image_normal[pixel]);
+    float center_depth = image_depth[pixel / 2];
 
     const float sigma_geom = 0.1f;
     const float sigma_normal = 0.1f;
@@ -76,7 +78,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         [unroll]
         for (int x = -kernel_radius; x <= kernel_radius; x++)
         {
-            int2 offset_pos = int2(pixel) + int2(x, y) * (p.pass * 2);
+            int2 offset_pos = int2(pixel) + int2(x, y) * (center_depth < 10 ? p.pass * 3 : p.pass);
 
             if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)

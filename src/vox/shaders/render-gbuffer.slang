@@ -95,7 +95,7 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
     if (!bounceResult.hit)
     {
         AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
-        return getBaseSkyColor(atmosphere) * 1;
+        return getBaseSkyColor(atmosphere) * 2;
     }
     else
     {
@@ -133,7 +133,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
 
-    Texture2D<float> depthHalfRes = Texture2D<float>::get(p.gbuffer.depthHalfRes);
+    RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<float4> blueNoise = RWTexture2D<float4>::get(p.blueNoise);
 
     float3 rayOrigin, rayDir;
@@ -152,12 +152,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 uint2 checkPixel = uint2(
                     clamp(int(prepassPixel.x) + dx, 0, int(p.frame_dim.x / 2) - 1),
                     clamp(int(prepassPixel.y) + dy, 0, int(p.frame_dim.y / 2) - 1));
-                startDepth = min(startDepth, depthHalfRes[checkPixel]);
+                startDepth = min(startDepth, depthHalfRes[checkPixel]) - WORLD_VOXEL_SIZE * 0.5;
             }
         }
     }
 
-    TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
+    TraceResult trace = traceVoxelRayReuse(rayOrigin, rayDir, startDepth);
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
 
     float3 bounceRayDir;
@@ -166,14 +166,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
     bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
 
-    TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.01), 0.0, 512);
+    TraceResult shadow = traceVoxelRayReuse(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.001));
 
     if (bounceResult.hit)
     {
-        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.01), 0.0, 512);
+        TraceResult bounceShadow = traceVoxelRayReuse(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.001));
         if (!bounceShadow.hit)
         {
-            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir));
+            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
         }
     }
 

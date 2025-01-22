@@ -92,7 +92,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // finalColor = voxelLight;
     // finalColor = pixelLight;
-    // finalColor = albedoColor.rgb;
+    // finalColor = albedoColor.rgb / 300;
 
     // post process
     finalColor = tonemapUnreal(finalColor);

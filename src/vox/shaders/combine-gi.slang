@@ -56,7 +56,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 lastColor = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(p.past_voxel_hashmap_ptr.hitCounts[slot], 1));
     float lastLuminance = dot(lastColor, float3(0.2126, 0.7152, 0.0722));
     float blendFactor = 1.0 / (lastTempFrames);
-    blendFactor = clamp(blendFactor, lastLuminance / 3, 0.99);
+    blendFactor = clamp(blendFactor, 0.01, 1.0);
     // float blendFactor = 0.9;
     float3 thisFrameIndirect = lastColor * (1 - blendFactor) + color * (blendFactor);
     // indirect[pixel] = thisFrameIndirect;
