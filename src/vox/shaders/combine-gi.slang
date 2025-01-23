@@ -56,11 +56,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 lastColor = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(lastHits, 1));
     int lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
 
-    if (lastTempFrames > 64 && p.state_ptr.frame % 2 != 0)
-    {
-        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, lastColor, lastTempFrames + 1);
-        return;
-    }
+    // if (lastTempFrames > 64 && p.state_ptr.frame % 2 != 0)
+    // {
+    //     voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, lastColor, lastTempFrames + 1);
+    //     return;
+    // }
 
     float lastLuminance = dot(lastColor, float3(0.2126, 0.7152, 0.0722));
     float blendFactor = 1.0 / (lastTempFrames);

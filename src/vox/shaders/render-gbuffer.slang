@@ -188,31 +188,28 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
 
-    uint slot = get_hashtable_index(globalBrickIndex, trace.voxelIndex);
-    uint frameCount = p.past_voxel_hashmap_ptr.temporalFrames[slot];
+    // uint slot = get_hashtable_index(globalBrickIndex, trace.voxelIndex);
+    // uint frameCount = p.past_voxel_hashmap_ptr.temporalFrames[slot];
 
     float3 bounceRayDir;
     float3 bounceColor = float3(0, 0, 0);
 
-    if (frameCount < 64 || p.state_ptr.frame % 2 == 0)
+    float3 noise = blueNoise[(pixel % 64) % 128].xyz;
+    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
+    bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
+
+    TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
+    if (!shadow.hit)
     {
-        float3 noise = blueNoise[(pixel % 64) % 128].xyz;
-        TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
-        bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
+        bounceColor += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
+    }
 
-        TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
-        if (!shadow.hit)
+    if (bounceResult.hit)
+    {
+        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
+        if (!bounceShadow.hit)
         {
-            bounceColor += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
-        }
-
-        if (bounceResult.hit)
-        {
-            TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
-            if (!bounceShadow.hit)
-            {
-                bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
-            }
+            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
         }
     }
 
