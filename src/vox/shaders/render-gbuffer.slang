@@ -57,7 +57,8 @@ TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, 
     blue = mul(basis, blue);
     blue += normal * 0.1;
     rayDir = normalize(blue);
-    return traceVoxelRay(hitPos, rayDir, 0.0, 512);
+
+    return traceVoxelRay(hitPos, rayDir, 0, 512);
 }
 
 float3 hsv2rgb(float3 hsv)
@@ -110,11 +111,38 @@ bool IsObjectSmallerThanPixel(
     uint screenWidth)       // Screen width in pixels
 {
     // Calculate how many radians one pixel represents
-    float radiansPerPixel = horizontalFOV / screenWidth; 
+    float radiansPerPixel = horizontalFOV / screenWidth;
     float objectAngularSize = objectWorldSize / distanceToCamera;
 
     // angular size is smaller than one pixel
     return objectAngularSize < radiansPerPixel;
+}
+
+uint get_hashtable_index(uint brickIndex, uint voxelIndex)
+{
+    uint slot = hashVoxel(brickIndex, voxelIndex);
+
+    uint32_t tries = 0;
+    while (tries < 10)
+    {
+        var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
+        var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
+
+        if (brickIdx == brickIndex && voxelIdx == voxelIndex)
+        {
+            return slot;
+        }
+        if (brickIdx == EMPTY_KEY && voxelIdx == EMPTY_KEY)
+        {
+            return EMPTY_KEY;
+        }
+
+        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
+
+        tries++;
+    }
+
+    return EMPTY_KEY;
 }
 
 [numthreads(32, 32, 1)]
@@ -157,23 +185,34 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         }
     }
 
-    TraceResult trace = traceVoxelRayReuse(rayOrigin, rayDir, startDepth);
+    TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
+
+    uint slot = get_hashtable_index(globalBrickIndex, trace.voxelIndex);
+    uint frameCount = p.past_voxel_hashmap_ptr.temporalFrames[slot];
 
     float3 bounceRayDir;
     float3 bounceColor = float3(0, 0, 0);
-    float3 noise = blueNoise[(pixel % 64) % 128].xyz;
-    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
-    bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
 
-    TraceResult shadow = traceVoxelRayReuse(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.001));
-
-    if (bounceResult.hit)
+    if (frameCount < 64 || p.state_ptr.frame % 2 == 0)
     {
-        TraceResult bounceShadow = traceVoxelRayReuse(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.001));
-        if (!bounceShadow.hit)
+        float3 noise = blueNoise[(pixel % 64) % 128].xyz;
+        TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
+        bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
+
+        TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
+        if (!shadow.hit)
         {
-            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
+            bounceColor += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
+        }
+
+        if (bounceResult.hit)
+        {
+            TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
+            if (!bounceShadow.hit)
+            {
+                bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
+            }
         }
     }
 
@@ -186,15 +225,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         trace.distance,
         p.state_ptr.camera.fov * 0.0174532925f,
         p.frame_dim.x);
-
-    if (shadow.hit)
-    {
-        // indirectFinal *= 0.1;
-    }
-    else
-    {
-        indirectFinal += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
-    }
 
     // write to the gbuffer
     albedo[pixel] = albedoColor;

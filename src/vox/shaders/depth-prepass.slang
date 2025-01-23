@@ -15,7 +15,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 rayOrigin, rayDir;
     getRayFromPixel(pixel, p.frame_dim / 2, p.state_ptr.camera, rayOrigin, rayDir);
 
-    TraceResult trace = traceVoxelRayReuse(rayOrigin, rayDir);
+    TraceResult trace = traceVoxelRay(rayOrigin, rayDir);
 
     if (trace.hit)
     {
