@@ -34,7 +34,7 @@ struct GBufferCPU
         color = renderer.CreateRenderImage("color", &task_color, daxa::Format::R32G32B32A32_SFLOAT);
         normal = renderer.CreateRenderImage("normal", &task_normal, daxa::Format::R32G32B32A32_SFLOAT);
         position = renderer.CreateRenderImage("position", &task_position, daxa::Format::R32G32B32A32_SFLOAT);
-        indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R32G32B32A32_SFLOAT);
+        indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1, Renderer::depth_image_flags);
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5, Renderer::depth_image_flags);
         voxelIDs = renderer.CreateRenderImage("voxelIDs", &task_voxelIDs, daxa::Format::R32G32_UINT, 1.0, Renderer::transfer_image_flags);
@@ -295,7 +295,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*render_gbuffer_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
+                        ti.recorder.dispatch({(renderer->surface_width + 15) / 16, (renderer->surface_height + 15) / 16});
                     });
         gbuffer.TaskAddAll(main_render_gbuffer_task, daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT);
         renderer->AddTask(main_render_gbuffer_task);
@@ -320,11 +320,11 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*denoise_gi_compute);
 
-                        for (int i = 0; i < 4; i++)
+                        for (int i = 0; i < 8; i++)
                         {
                             push.pass = i;
                             ti.recorder.push_constant(push);
-                            ti.recorder.dispatch({(renderer->surface_width + 15) / 16, (renderer->surface_height + 15) / 16});
+                            ti.recorder.dispatch({(renderer->surface_width / 2 + 15) / 16, (renderer->surface_height / 2 + 15) / 16});
                         }
                     }));
 
@@ -348,7 +348,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*combine_gi_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
                     }));
 
 

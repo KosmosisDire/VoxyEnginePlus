@@ -54,15 +54,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> image_normal = RWTexture2D<float3>::get(p.gbuffer.normal);
     RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
 
-    float3 center_pos = image_position[pixel];
+    float3 center_pos = image_position[pixel * 2];
 
     // Skip denoising for sky pixels
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
     float3 center_color = image_indirect[pixel];
-    float3 center_normal = convert_normal(image_normal[pixel]);
-    float center_depth = image_depth[pixel / 2];
+    float3 center_normal = convert_normal(image_normal[pixel * 2]);
+    float center_depth = image_depth[pixel];
 
     const float sigma_geom = 0.1f;
     const float sigma_normal = 0.1f;
@@ -78,20 +78,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         [unroll]
         for (int x = -kernel_radius; x <= kernel_radius; x++)
         {
-            int2 offset_pos = int2(pixel) + int2(x, y) * (center_depth < 10 ? p.pass * 3 : p.pass);
+            int2 offset_pos = int2(pixel) + int2(x, y) * (center_depth < 10 ? p.pass * 1 : p.pass);
 
             if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
                 continue;
 
-            float3 sample_worldpos = image_position[offset_pos];
+            float3 sample_worldpos = image_position[offset_pos * 2];
 
             // Skip sky samples
             if (all(sample_worldpos == float3(0, 0, 0)))
                 continue;
 
             float3 sample_color = image_indirect[offset_pos];
-            float3 sample_normal = convert_normal(image_normal[offset_pos]);
+            float3 sample_normal = convert_normal(image_normal[offset_pos * 2]);
 
             float kernel_weight = kernel3x3[(y + 1) * 3 + (x + 1)];
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
@@ -110,20 +110,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         [unroll]
         for (int x = -kernel_radius; x <= kernel_radius; x++)
         {
-            int2 offset_pos = int2(pixel) + int2(x, y) * (p.pass);
+            int2 offset_pos = int2(pixel) + int2(x, y) * (center_depth < 10 ? p.pass * 1 : p.pass);
 
             if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
                 continue;
 
-            float3 sample_worldpos = image_position[offset_pos];
+            float3 sample_worldpos = image_position[offset_pos * 2];
 
             // Skip sky samples
             if (all(sample_worldpos == float3(0, 0, 0)))
                 continue;
 
             float3 sample_color = image_indirect[offset_pos];
-            float3 sample_normal = convert_normal(image_normal[offset_pos]);
+            float3 sample_normal = convert_normal(image_normal[offset_pos * 2]);
 
             float kernel_weight = kernel5x5[(y + 2) * 5 + (x + 2)];
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);

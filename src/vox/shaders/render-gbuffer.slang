@@ -5,6 +5,7 @@
 static const float3 UP_VECTOR = float3(0, 1, 0);
 static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
+static const uint INIT_RAY_COUNT = 16; // Number of rays to cast for new voxels
 
 // Creates a 3x3 rotation matrix that rotates from up vector to the given normal
 float3x3 CreateRotationFromNormal3x3(float3 normal)
@@ -88,7 +89,7 @@ float3 getMaterial(TraceResult trace, bool emission)
         return color * 4;
     }
 
-    return emission ? float3(0.0) : float3(0.09f, 0.23f, 0.14f);
+    return emission ? float3(0.0) : float3(1, 1, 1);
 }
 
 float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
@@ -145,7 +146,7 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
     return EMPTY_KEY;
 }
 
-[numthreads(32, 32, 1)]
+[numthreads(16, 16, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     // return;
@@ -188,46 +189,79 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
 
-    // uint slot = get_hashtable_index(globalBrickIndex, trace.voxelIndex);
-    // uint frameCount = p.past_voxel_hashmap_ptr.temporalFrames[slot];
+    bool isVoxelFarLOD = IsObjectSmallerThanPixel(
+        WORLD_VOXEL_SIZE * 0.15,
+        trace.distance,
+        p.state_ptr.camera.fov * 0.0174532925f,
+        p.frame_dim.x);
+
+    // create id from normal and voxel index
+    int voxelIndex = isVoxelFarLOD ? 1 : trace.voxelIndex + 1;
+
+    // int lightRes = trace.distance / 8.0;
+    // voxelIndex = trace.voxelCell.x / lightRes * lightRes + (trace.voxelCell.y / lightRes * lightRes << 8) + (trace.voxelCell.z / lightRes * lightRes << 16) + 1;
+    // voxelIndex += (int(trace.normal.x * 127) << 0) + (int(trace.normal.y * 127) << 8) + (int(trace.normal.z * 127) << 16);
+
+    // voxelIndex = int(trace.brickUv.x * 16) + (int(trace.brickUv.y * 16) << 8) + (int(trace.brickUv.z * 16) << 16) + 1;
 
     float3 bounceRayDir;
     float3 bounceColor = float3(0, 0, 0);
 
-    float3 noise = blueNoise[(pixel % 64) % 128].xyz;
-    TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, noise, p.state_ptr.frame, bounceRayDir);
-    bounceColor += calculateBounceColor(bounceResult, bounceRayDir);
-
-    TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
-    if (!shadow.hit)
+    if (all(pixel % 2 == 0))
     {
-        bounceColor += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
-    }
+        float3 baseNoise = blueNoise[(pixel % 64) % 128].xyz;
 
-    if (bounceResult.hit)
-    {
-        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir + (noise * 2 - 1.0) * 0.004));
-        if (!bounceShadow.hit)
+        // Offset the noise pattern for each additional ray while maintaining good distribution
+        float3 offsetNoise = transformBlueNoise(baseNoise, p.state_ptr.frame);
+
+        TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, offsetNoise, p.state_ptr.frame, bounceRayDir);
+        float3 rayBounceColor = calculateBounceColor(bounceResult, bounceRayDir);
+
+        TraceResult shadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON,
+                                           normalize(p.state_ptr.sunDir + (offsetNoise * 2 - 1.0) * 0.004));
+
+        if (!shadow.hit)
         {
-            bounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
+            rayBounceColor += getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 0.5;
         }
+
+        if (bounceResult.hit)
+        {
+            TraceResult bounceShadow = traceVoxelRay(
+                bounceResult.hitPos + bounceResult.normal * EPSILON,
+                normalize(p.state_ptr.sunDir + (offsetNoise * 2 - 1.0) * 0.004));
+
+            if (!bounceShadow.hit)
+            {
+                rayBounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 2;
+            }
+        }
+
+        bounceColor = rayBounceColor;
+
+        uint slot = get_hashtable_index(globalBrickIndex, voxelIndex);
+        if (slot == EMPTY_KEY)
+        {
+            bounceColor = clamp(indirect[pixel / 2], 0, 10);
+        }
+
+        indirect[pixel / 2] = bounceColor;
     }
 
     float3 albedoColor = getMaterial(trace, false);
-
-    float3 indirectFinal = bounceColor;
-
-    bool isVoxelFarLOD = IsObjectSmallerThanPixel(
-        WORLD_VOXEL_SIZE * 0.3,
-        trace.distance,
-        p.state_ptr.camera.fov * 0.0174532925f,
-        p.frame_dim.x);
 
     // write to the gbuffer
     albedo[pixel] = albedoColor;
     normal[pixel] = trace.normal * 0.5 + 0.5;
     position[pixel] = trace.hitPos;
-    indirect[pixel] = indirectFinal;
     depth[pixel] = trace.distance;
-    voxelIDs[pixel] = int2(globalBrickIndex, isVoxelFarLOD ? 0 : trace.voxelIndex);
+
+    if (trace.hit)
+    {
+        voxelIDs[pixel] = int2(globalBrickIndex, voxelIndex);
+    }
+    else
+    {
+        voxelIDs[pixel] = int2(EMPTY_KEY, EMPTY_KEY);
+    }
 }

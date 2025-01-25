@@ -6,10 +6,47 @@
 static const float AMBIENT_STRENGTH = 0.1;
 static const float DEPTH_SCALE = 0.00002;
 
+bool isEffectivelyZero(float3 color)
+{
+    return length(color) < EPSILON;
+}
+
+float3 sampleSurroundingIndirect(RWTexture2D<float3> indirect, uint2 halfRes_pixel)
+{
+    float3 sum = 0.0;
+    int validSamples = 0;
+
+    // Sample 3x3 neighborhood
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            // Skip center pixel
+            if (x == 0 && y == 0)
+                continue;
+
+            int2 samplePos = int2(halfRes_pixel) + int2(x, y);
+
+            // Check bounds
+            if (samplePos.x >= 0 && samplePos.y >= 0 &&
+                samplePos.x < p.frame_dim.x / 2 && samplePos.y < p.frame_dim.y / 2)
+            {
+                float3 sample = indirect[samplePos];
+                if (!isEffectivelyZero(sample))
+                {
+                    sum += sample;
+                    validSamples++;
+                }
+            }
+        }
+    }
+
+    return validSamples > 0 ? sum / validSamples : float3(0, 0, 0);
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
-    // return;
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
@@ -29,7 +66,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 albedoColor = albedo[pixel];
     float3 normalVector = normalize((normal[pixel].xyz - 0.5) * 2.0);
     float3 worldPos = position[pixel].xyz;
-    float3 pixelLight = indirect[pixel];
+    float3 pixelLight = indirect[pixel / 2];
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
@@ -50,12 +87,17 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         }
 
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
-
         tries++;
     }
 
     float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
-    // float3 voxelLight = p.voxel_hashmap_ptr.temporalFrames[slot] / 100.0;
+    int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
+
+    // Apply morphological fill if voxelLight is zero
+    if (isEffectivelyZero(voxelLight) || samples < 3)
+    {
+        voxelLight = sampleSurroundingIndirect(indirect, pixel / 2);
+    }
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -89,10 +131,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         finalColor = float3(depthValue / 100.0);
     if ((bool)p.state_ptr.settings.showDepthPrepass)
         finalColor = float3(depthValueHalfRes / 100.0);
-
-    // finalColor = voxelLight;
-    // finalColor = pixelLight;
-    // finalColor = albedoColor.rgb / 300;
 
     // post process
     finalColor = tonemapUnreal(finalColor);

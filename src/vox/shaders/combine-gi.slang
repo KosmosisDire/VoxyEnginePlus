@@ -41,11 +41,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
-    int2 voxelID = voxelIDs[pixel];
+    int2 voxelID = voxelIDs[pixel * 2];
+
+    if (voxelID.x == EMPTY_KEY || voxelID.y == EMPTY_KEY)
+        return;
 
     uint slot = get_hashtable_index(voxelID.x, voxelID.y);
 
     var color = indirect[pixel];
+
     if (slot == EMPTY_KEY)
     {
         voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 1);
@@ -64,10 +68,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float lastLuminance = dot(lastColor, float3(0.2126, 0.7152, 0.0722));
     float blendFactor = 1.0 / (lastTempFrames);
-    blendFactor = clamp(blendFactor, 0.01, 0.99);
+    blendFactor = clamp(blendFactor, lastLuminance / 10, 0.2);
     // float blendFactor = 0.9;
     float3 thisFrameIndirect = lastColor * (1 - blendFactor) + color * (blendFactor);
-    // indirect[pixel] = thisFrameIndirect;
+    indirect[pixel] = thisFrameIndirect;
 
     voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, thisFrameIndirect, lastTempFrames + 1);
 }

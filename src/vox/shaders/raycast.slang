@@ -6,7 +6,9 @@ struct TraceResult
     float3 hitPos;
     float3 normal;
     float distance;
-    float3 uvs;
+    float3 voxelUv;
+    float3 brickUv;
+    int3 voxelCell;
     int steps;
     int chunkIndex;
     int brickIndex;
@@ -25,13 +27,7 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, float startDepth = 0,
 
     float3 invDir = inverseDirection(direction);
 
-    TraceResult result;
-    result.hit = false;
-    result.hitPos = float3(0.0);
-    result.normal = float3(0.0);
-    result.distance = 0.0;
-    result.uvs = float3(0.0);
-    result.steps = 0;
+    TraceResult result = (TraceResult)0;
 
     // intersect with bounding box
     float tMin, tMax;
@@ -93,7 +89,9 @@ TraceResult traceVoxelRay(float3 origin, float3 direction, float startDepth = 0,
                         result.hitPos = hitPos;
                         result.normal = normal;
                         result.distance = length(hitPos - trueStart);
-                        result.uvs = voxelUv;
+                        result.voxelUv = voxelUv;
+                        result.brickUv = brickUv;
+                        result.voxelCell = voxelDDA.cell;
                         result.chunkIndex = chunkIdx;
                         result.brickIndex = brickIdx;
                         result.voxelIndex = voxelIdx;
