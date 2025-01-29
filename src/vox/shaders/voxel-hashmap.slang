@@ -1,10 +1,5 @@
 #include "voxel-hashmap.inl"
 
-// daxa_u32 hashVoxel(daxa_u32 globalBrickIndex, daxa_u32 localVoxelIndex)
-// {
-//     return (globalBrickIndex * BRICK_SIZE_CUBE + localVoxelIndex) % HASH_TABLE_SIZE;
-// }
-
 uint hashVoxel(uint globalBrickIndex, uint localVoxelIndex)
 {
     // Improved hash function to reduce collisions
@@ -28,6 +23,10 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxel
             {
                 InterlockedExchange(hashtable.temporalFrames[slot], temporalFrames);
                 InterlockedExchange(hashtable.voxelIndices[slot], voxelIndex);
+            }
+            else if (hashtable.hitCounts[slot] > 100)
+            {
+                break;
             }
 
             InterlockedAdd(hashtable.hitCounts[slot], 1);
