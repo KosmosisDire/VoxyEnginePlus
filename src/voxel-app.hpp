@@ -12,7 +12,6 @@ struct VoxyApp : public Application
 {
   public:
     VoxelRenderer voxelRenderer;
-    VoxCamera camera;
     UIData uiState;
     daxa::ImageId render_image;
     daxa::TaskImage task_render_image;
@@ -23,7 +22,8 @@ struct VoxyApp : public Application
           uiState({.renderData = &voxelRenderer.stateData})
     {
         render_image = renderer->CreateRenderImage("game_render_image", &task_render_image);
-        camera.speed = 16.0f;
+        voxelRenderer.camera.speed = 6.0f;
+        voxelRenderer.camera.sensitivity = 0.05f;
     }
 
     ~VoxyApp()
@@ -44,7 +44,6 @@ struct VoxyApp : public Application
     {
         // renderer state
         RenderData &renderData = voxelRenderer.stateData;
-        renderData.camera = camera.getCameraData();
         renderData.dt = dt;
         renderData.time = GetTime();
         renderData.frame++;
@@ -79,7 +78,7 @@ struct VoxyApp : public Application
         // if pressing L, sun dir is locked to camera
         if (InputManager::IsKeyPressed(Key::L))
         {
-            renderData.sunDir = to_daxa(-camera.getForward());
+            renderData.sunDir = to_daxa(-voxelRenderer.camera.getForward());
         }
 
         // mouse capture
@@ -97,8 +96,8 @@ struct VoxyApp : public Application
         if (InputManager::IsMouseCaptured())
         {
             auto delta = InputManager::GetMouseDelta();
-            camera.processMouseMovement(delta, true);
-            camera.processKeyboard(dt);
+            voxelRenderer.camera.processMouseMovement(delta, true);
+            voxelRenderer.camera.processKeyboard(dt);
         }
 
         uiState.mouseIsActive = !InputManager::IsMouseCaptured(); // assuming that the mouse is active when it is not captured (so it is visible and can interact with UI)
@@ -119,7 +118,5 @@ struct VoxyApp : public Application
         renderer->DestroyImage(render_image);
         render_image = renderer->CreateRenderImage("game_render_image");
         task_render_image.set_images({.images = std::array{render_image}});
-        camera.setViewportSize(sx, sy);
-
     }
 };

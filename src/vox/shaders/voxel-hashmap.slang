@@ -18,7 +18,7 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxel
     uint slot = hashVoxel(brickIndex, voxelIndex);
 
     uint tries = 0;
-    while (tries < 10)
+    while (tries < 100)
     {
         uint prev = 0;
         InterlockedCompareExchange(hashtable.brickIndices[slot], EMPTY_KEY, brickIndex, prev);

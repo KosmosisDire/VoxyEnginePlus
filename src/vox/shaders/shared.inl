@@ -13,6 +13,8 @@ struct CameraData
     float near;
     float far;
     float fov;
+    // padding
+    daxa_f32vec2 padding;
 };
 
 struct GraphicsSettings
@@ -31,9 +33,12 @@ struct RenderData
 {
     daxa_f32vec3 sunDir;
     daxa_f32 dt;
-    CameraData camera;
     daxa_f32 time;
     daxa_u32 frame;
+    // padding
+    daxa_f32vec2 padding;
+    CameraData camera;
+    CameraData lastCamera;
     GraphicsSettings settings;
 };
 
@@ -65,6 +70,9 @@ struct GBuffer
     daxa_ImageViewId normal;
     daxa_ImageViewId position;
     daxa_ImageViewId indirect; // indirect light (global illumination)
+    daxa_ImageViewId indirectLast; // indirect light from last frame
+    daxa_ImageViewId indirectHistory; // indirect light accumulation
+    daxa_ImageViewId motion;
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
@@ -72,20 +80,20 @@ struct GBuffer
 
 struct ComputePush
 {
-    GBuffer gbuffer;
-    daxa_ImageViewId final_image;
-    daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
+    daxa_BufferPtr(GBuffer) gbuffer;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
     daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
+    daxa_ImageViewId final_image;
+    daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
     daxa_u32vec2 frame_dim;
 };
 
 struct DenoisePush
 {
-    GBuffer gbuffer;
+    daxa_BufferPtr(GBuffer) gbuffer;
     daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 

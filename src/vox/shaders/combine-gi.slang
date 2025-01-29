@@ -9,7 +9,7 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
     uint slot = hashVoxel(brickIndex, voxelIndex);
 
     uint32_t tries = 0;
-    while (tries < 10)
+    while (tries < 100)
     {
         var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
         var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
@@ -40,19 +40,22 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
 
     RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
+    RWTexture2D<float4> indirectHistory = RWTexture2D<float4>::get(p.gbuffer.indirectHistory);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
-    int2 voxelID = voxelIDs[pixel * 2];
+    int2 voxelID = voxelIDs[pixel];
 
-    if (voxelID.x == EMPTY_KEY || voxelID.y == EMPTY_KEY)
+    if (voxelID.x == EMPTY_KEY && voxelID.y == EMPTY_KEY)
+    {
         return;
+    }
 
     uint slot = get_hashtable_index(voxelID.x, voxelID.y);
 
-    var color = indirect[pixel];
+    var color = indirect[pixel / 2].xyz;
 
     if (slot == EMPTY_KEY)
     {
-        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 1);
+        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 2);
         return;
     }
 
@@ -60,18 +63,18 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 lastColor = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(lastHits, 1));
     int lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
 
-    // if (lastTempFrames > 64 && p.state_ptr.frame % 2 != 0)
-    // {
-    //     voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, lastColor, lastTempFrames + 1);
-    //     return;
-    // }
+    float variance = 0.0;
+    if (lastTempFrames > 1)
+    {
+        float3 diff = color - lastColor;
+        variance = dot(diff, diff) / (lastTempFrames - 1);
+    }
 
     float lastLuminance = dot(lastColor, float3(0.2126, 0.7152, 0.0722));
-    float blendFactor = 1.0 / (lastTempFrames);
-    blendFactor = clamp(blendFactor, lastLuminance / 10, 0.2);
-    // float blendFactor = 0.9;
+    float blendFactor = 1.0 / (lastTempFrames) * (1 - variance);
+    blendFactor = clamp(blendFactor, 0.005, 0.9);
     float3 thisFrameIndirect = lastColor * (1 - blendFactor) + color * (blendFactor);
-    indirect[pixel] = thisFrameIndirect;
+    // indirect[pixel / 2] = thisFrameIndirect;
 
     voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, thisFrameIndirect, lastTempFrames + 1);
 }

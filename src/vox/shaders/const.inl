@@ -26,3 +26,5 @@ static const float EPSILON = 0.0001;
 static const float PI = 3.14159265359;
 static const daxa_u32 MAX_UINT32 = 0xFFFFFFFF;
 static const daxa_u64 MAX_UINT64 = 0xFFFFFFFFFFFFFFFF;
+static const daxa_f32 MAX_FLOAT = 3.402823466e+38f;
+static const daxa_f32 MIN_FLOAT = -3.402823466e+38f;

@@ -3,7 +3,7 @@
 #include "daxa/daxa.inl"
 #include "const.inl"
 
-static const daxa_u32 HASH_TABLE_SIZE = 16777216;
+static const daxa_u32 HASH_TABLE_SIZE = 16777216 / 8;
 static const daxa_u32 EMPTY_KEY = 0;
 
 struct VoxelHashmap
