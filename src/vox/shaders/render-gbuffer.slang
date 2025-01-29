@@ -143,8 +143,9 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
     uint32_t tries = 0;
     while (tries < 100)
     {
-        var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
-        var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
+        var entry = p.past_voxel_hashmap_ptr.entries[slot];
+        var brickIdx = entry.brickIndex;
+        var voxelIdx = entry.voxelIndex;
 
         if (brickIdx == brickIndex && voxelIdx == voxelIndex)
         {
@@ -388,19 +389,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         motionPixels = float2(0, 0);
     }
 
-    // float2 debugMotion = motionPixels;
-    // if (pixel.x < 10 && pixel.y < 10)
-    // {
-    //     // Print debug info for top-left pixels
-    //     printf("Pixel: %d,%d Motion: %f,%f ViewProj: %f,%f,%f,%f\n",
-    //            pixel.x, pixel.y,
-    //            debugMotion.x, debugMotion.y,
-    //            p.state_ptr.camera.viewProj[0][0],
-    //            p.state_ptr.camera.viewProj[0][1],
-    //            p.state_ptr.camera.viewProj[0][2],
-    //            p.state_ptr.camera.viewProj[0][3]);
-    // }
-
     float3 bounceRayDir;
 
     if (all(pixel % 2 == 0))
@@ -435,7 +423,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             last = clamp(last, float3(0), float3(100));
 
             // Final blend
-            float3 blended = lerp(last, rayBounceColor, 0.1);
+            float3 blended = lerp(last, rayBounceColor, 0.2);
             indirect[halfPixel] = blended;
             indirectLast[halfPixel] = rayBounceColor;
         }
