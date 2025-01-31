@@ -11,9 +11,8 @@ uint get_hashtable_index(uint brickIndex, uint voxelIndex)
     uint32_t tries = 0;
     while (tries < 100)
     {
-        var entry = p.past_voxel_hashmap_ptr.entries[slot];
-        var brickIdx = entry.brickIndex;
-        var voxelIdx = entry.voxelIndex;
+        var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
+        var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
 
         if (brickIdx == brickIndex && voxelIdx == voxelIndex)
         {
@@ -60,9 +59,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
-    float lastHits = p.past_voxel_hashmap_ptr.entries[slot].hitCount;
-    float3 lastColor = (p.past_voxel_hashmap_ptr.entries[slot].indirectLight / max(lastHits, 1));
-    int lastTempFrames = p.past_voxel_hashmap_ptr.entries[slot].temporalFrame;
+    float lastHits = p.past_voxel_hashmap_ptr.hitCounts[slot];
+    float3 lastColor = (p.past_voxel_hashmap_ptr.indirectLight[slot] / max(lastHits, 1));
+    int lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
 
     float variance = 0.0;
     if (lastTempFrames > 1)

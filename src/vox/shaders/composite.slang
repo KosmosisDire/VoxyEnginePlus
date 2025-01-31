@@ -106,34 +106,6 @@ float3 sampleSurroundingIndirect(RWTexture2D<float3> indirect, uint2 halfRes_pix
     return validSamples > 0 ? sum / validSamples : float3(0, 0, 0);
 }
 
-uint get_hashtable_index(uint brickIndex, uint voxelIndex)
-{
-    uint slot = hashVoxel(brickIndex, voxelIndex);
-
-    uint32_t tries = 0;
-    while (tries < 100)
-    {
-        var entry = p.past_voxel_hashmap_ptr.entries[slot];
-        var brickIdx = entry.brickIndex;
-        var voxelIdx = entry.voxelIndex;
-
-        if (brickIdx == brickIndex && voxelIdx == voxelIndex)
-        {
-            return slot;
-        }
-        if (brickIdx == EMPTY_KEY && voxelIdx == EMPTY_KEY)
-        {
-            return EMPTY_KEY;
-        }
-
-        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
-
-        tries++;
-    }
-
-    return EMPTY_KEY;
-}
-
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
@@ -165,9 +137,27 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
 
-    uint slot = get_hashtable_index(voxelID.x, voxelID.y);
-    float3 voxelLight = p.voxel_hashmap_ptr.entries[slot].indirectLight / max(p.voxel_hashmap_ptr.entries[slot].hitCount, 1);
-    int samples = p.voxel_hashmap_ptr.entries[slot].temporalFrame;
+    uint slot = hashVoxel(voxelID.x, voxelID.y);
+
+    uint32_t tries = 0;
+    while (tries < 100)
+    {
+        if (p.voxel_hashmap_ptr.brickIndices[slot] == voxelID.x && p.voxel_hashmap_ptr.voxelIndices[slot] == voxelID.y)
+        {
+            break;
+        }
+        if (p.voxel_hashmap_ptr.brickIndices[slot] == EMPTY_KEY && p.voxel_hashmap_ptr.voxelIndices[slot] == EMPTY_KEY)
+        {
+            slot = EMPTY_KEY;
+            break;
+        }
+
+        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
+        tries++;
+    }
+
+    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;

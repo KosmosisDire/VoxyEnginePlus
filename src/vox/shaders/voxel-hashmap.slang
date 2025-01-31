@@ -16,23 +16,23 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxel
     while (tries < 100)
     {
         uint prev = 0;
-        InterlockedCompareExchange(hashtable.entries[slot].brickIndex, EMPTY_KEY, brickIndex, prev);
+        InterlockedCompareExchange(hashtable.brickIndices[slot], EMPTY_KEY, brickIndex, prev);
         if (prev == EMPTY_KEY || prev == brickIndex)
         {
             if (prev == EMPTY_KEY)
             {
-                InterlockedExchange(hashtable.entries[slot].temporalFrame, temporalFrames);
-                InterlockedExchange(hashtable.entries[slot].voxelIndex, voxelIndex);
+                InterlockedExchange(hashtable.temporalFrames[slot], temporalFrames);
+                InterlockedExchange(hashtable.voxelIndices[slot], voxelIndex);
             }
-            else if (hashtable.entries[slot].hitCount > 100)
+            else if (hashtable.hitCounts[slot] > 100)
             {
                 break;
             }
 
-            InterlockedAdd(hashtable.entries[slot].hitCount, 1);
-            InterlockedAdd(hashtable.entries[slot].indirectLight.x, lighting.x);
-            InterlockedAdd(hashtable.entries[slot].indirectLight.y, lighting.y);
-            InterlockedAdd(hashtable.entries[slot].indirectLight.z, lighting.z);
+            InterlockedAdd(hashtable.hitCounts[slot], 1);
+            InterlockedAdd(hashtable.indirectLight[slot].x, lighting.x);
+            InterlockedAdd(hashtable.indirectLight[slot].y, lighting.y);
+            InterlockedAdd(hashtable.indirectLight[slot].z, lighting.z);
             break;
         }
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
