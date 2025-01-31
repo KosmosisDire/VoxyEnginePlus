@@ -94,6 +94,8 @@ struct ComputePush
 struct DenoisePush
 {
     daxa_BufferPtr(GBuffer) gbuffer;
+    daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
+    daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 

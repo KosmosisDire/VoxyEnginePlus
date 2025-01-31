@@ -43,7 +43,6 @@ float3x3 CreateRotationFromNormal3x3(float3 normal)
 
 float3 transformBlueNoise(float3 sample, uint frameIndex)
 {
-    // return sample;
     // Simple Cranley-Patterson rotation using frame index
     float3 shift = float3(
         frac(frameIndex * 0.754877669), // Using golden ratio conjugate
@@ -98,14 +97,16 @@ float3 getMaterial(TraceResult trace, bool emission)
 
 float3 calculateSkyContribution(float3 rayDir, float3 normal, float3 offsetNoise, RenderData *state)
 {
-    TraceResult shadow = traceVoxelRay(
+    TraceResult shadowTrace = traceVoxelRay(
         rayDir + normal * EPSILON,
         normalize(state.sunDir + (offsetNoise * 2 - 1.0) * 0.001));
 
-    if (!shadow.hit)
-    {
-        return getSunColor(initAtmosphere(normal, state.sunDir));
-    }
+    // shadow = shadowTrace.hit;
+
+    // if (!shadow)
+    // {
+    //     return getSunColor(initAtmosphere(normal, state.sunDir));
+    // }
     return float3(0, 0, 0);
 }
 
@@ -134,33 +135,6 @@ bool IsObjectSmallerThanPixel(
 
     // angular size is smaller than one pixel
     return objectAngularSize < radiansPerPixel;
-}
-
-uint get_hashtable_index(uint brickIndex, uint voxelIndex)
-{
-    uint slot = hashVoxel(brickIndex, voxelIndex);
-
-    uint32_t tries = 0;
-    while (tries < 100)
-    {
-        var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
-        var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
-
-        if (brickIdx == brickIndex && voxelIdx == voxelIndex)
-        {
-            return slot;
-        }
-        if (brickIdx == EMPTY_KEY && voxelIdx == EMPTY_KEY)
-        {
-            return EMPTY_KEY;
-        }
-
-        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
-
-        tries++;
-    }
-
-    return EMPTY_KEY;
 }
 
 bool isEffectivelyZero(float3 color)
@@ -402,6 +376,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // }
 
     float3 bounceRayDir;
+    bool shadow = false;
+    TraceResult bounceShadow = traceVoxelRay(
+        trace.hitPos + trace.normal * EPSILON,
+        normalize(p.state_ptr.sunDir));
+    shadow = bounceShadow.hit;
 
     if (all(pixel % 2 == 0))
     {
@@ -411,13 +390,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
         float3 rayBounceColor = calculateBounceColor(bounceResult, bounceRayDir);
+
         rayBounceColor += calculateSkyContribution(trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr);
 
         if (bounceResult.hit)
         {
             TraceResult bounceShadow = traceVoxelRay(
                 bounceResult.hitPos + bounceResult.normal * EPSILON,
-                normalize(p.state_ptr.sunDir + (blueNoiseSample.xyz * 2 - 1.0) * 0.001));
+                normalize(p.state_ptr.sunDir + (blueNoiseSample.xyz * 2 - 1.0) * 0.002));
 
             if (!bounceShadow.hit)
             {
@@ -448,9 +428,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 albedoColor = getMaterial(trace, false);
 
+    if (!shadow)
+    {
+        albedoColor *= getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 3;
+    }
+
     // write to the gbuffer
     albedo[pixel] = albedoColor;
-    normal[pixel] = trace.normal;
+    normal[pixel] = int3(normalize(trace.normal));
     position[pixel] = trace.hitPos;
     depth[pixel] = trace.distance;
     motion[pixel] = trace.hit ? motionPixels : float2(0, 0);

@@ -128,7 +128,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // Sample all buffers at current pixel
     float3 albedoColor = albedo[pixel];
-    float3 normalVector = normalize((normal[pixel].xyz - 0.5) * 2.0);
+    float3 normalVector = normal[pixel];
     float3 worldPos = position[pixel].xyz;
     float3 pixelLight = indirect[pixel / 2];
     float3 lastPixelLight = indirectHistory[pixel / 2].xyz;
@@ -184,7 +184,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // Debug visualization modes
     if ((bool)p.state_ptr.settings.showNormals)
-        finalColor = normalVector * 0.5 + 0.5;
+        finalColor = normalVector;
     if ((bool)p.state_ptr.settings.showHitPos)
         finalColor = worldPos / float(GRID_SIZE);
     if ((bool)p.state_ptr.settings.showDepth)

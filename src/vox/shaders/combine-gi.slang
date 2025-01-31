@@ -4,33 +4,6 @@
 [[vk::push_constant]]
 const ComputePush p;
 
-uint get_hashtable_index(uint brickIndex, uint voxelIndex)
-{
-    uint slot = hashVoxel(brickIndex, voxelIndex);
-
-    uint32_t tries = 0;
-    while (tries < 100)
-    {
-        var brickIdx = p.past_voxel_hashmap_ptr.brickIndices[slot];
-        var voxelIdx = p.past_voxel_hashmap_ptr.voxelIndices[slot];
-
-        if (brickIdx == brickIndex && voxelIdx == voxelIndex)
-        {
-            return slot;
-        }
-        if (brickIdx == EMPTY_KEY && voxelIdx == EMPTY_KEY)
-        {
-            return EMPTY_KEY;
-        }
-
-        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
-
-        tries++;
-    }
-
-    return EMPTY_KEY;
-}
-
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
@@ -49,13 +22,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
-    uint slot = get_hashtable_index(voxelID.x, voxelID.y);
+    uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, voxelID.x, voxelID.y);
 
     var color = indirect[pixel / 2].xyz;
 
     if (slot == EMPTY_KEY)
     {
-        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 2);
+        voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, color, 0);
         return;
     }
 

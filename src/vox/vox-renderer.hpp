@@ -171,7 +171,7 @@ class VoxelRenderer
         terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
         depth_prepass_compute = renderer->AddComputePipeline<ComputePush>("depth_prepass", "depth-prepass.slang");
         render_gbuffer_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render-gbuffer.slang");
-        denoise_gi_compute = renderer->AddComputePipeline<ComputePush>("denoise_gi", "denoise-gi.slang");
+        denoise_gi_compute = renderer->AddComputePipeline<DenoisePush>("denoise_gi", "denoise-gi.slang");
         combine_gi_compute = renderer->AddComputePipeline<ComputePush>("combine_gi", "combine-gi.slang");
         render_composite_compute = renderer->AddComputePipeline<ComputePush>("composite", "composite.slang");
 
@@ -337,6 +337,9 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_depthHalfRes)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_normal)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_position)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelIDs)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_voxel_hashmap_buffer)
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
                 .SetTask(
@@ -345,9 +348,11 @@ class VoxelRenderer
                         auto push = DenoisePush
                         {
                             .gbuffer = renderer->GetDeviceAddress(ti, task_gbufferGPU),
+                            .voxel_hashmap_ptr = renderer->GetDeviceAddress(ti, task_voxel_hashmap_buffer),
+                            .past_voxel_hashmap_ptr = renderer->GetDeviceAddress(ti, task_past_voxel_hashmap_buffer),
                             .pass = 1,
-                            .frame_dim = {renderer->surface_width, renderer->surface_height
-                        }};
+                            .frame_dim = {renderer->surface_width, renderer->surface_height}
+                        };
 
                         ti.recorder.set_pipeline(*denoise_gi_compute);
 

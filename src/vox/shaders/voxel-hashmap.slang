@@ -40,3 +40,29 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxel
     }
 }
 
+uint get_hashtable_index(VoxelHashmap *hashtable, uint brickIndex, uint voxelIndex)
+{
+    uint slot = hashVoxel(brickIndex, voxelIndex);
+
+    uint32_t tries = 0;
+    while (tries < 100)
+    {
+        var brickIdx = hashtable.brickIndices[slot];
+        var voxelIdx = hashtable.voxelIndices[slot];
+
+        if (brickIdx == brickIndex && voxelIdx == voxelIndex)
+        {
+            return slot;
+        }
+        if (brickIdx == EMPTY_KEY && voxelIdx == EMPTY_KEY)
+        {
+            return EMPTY_KEY;
+        }
+
+        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
+
+        tries++;
+    }
+
+    return EMPTY_KEY;
+}

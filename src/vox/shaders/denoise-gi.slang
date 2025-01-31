@@ -1,16 +1,8 @@
 #include "shared.inl"
+#include "voxel-hashmap.slang"
 
 [[vk::push_constant]]
 const DenoisePush p;
-
-// 5x5 kernel remains the same
-static const float kernel5x5[25] = {
-    1.0f / 256.0f, 1.0f / 64.0f, 3.0f / 128.0f, 1.0f / 64.0f, 1.0f / 256.0f,
-    1.0f / 64.0f, 1.0f / 16.0f, 3.0f / 32.0f, 1.0f / 16.0f, 1.0f / 64.0f,
-    3.0f / 128.0f, 3.0f / 32.0f, 9.0f / 64.0f, 3.0f / 32.0f, 3.0f / 128.0f,
-    1.0f / 64.0f, 1.0f / 16.0f, 3.0f / 32.0f, 1.0f / 16.0f, 1.0f / 64.0f,
-    1.0f / 256.0f, 1.0f / 64.0f, 3.0f / 128.0f, 1.0f / 64.0f, 1.0f / 256.0f
-};
 
 // 3x3 kernel with similar Gaussian distribution
 static const float kernel3x3[9] = {
@@ -18,12 +10,6 @@ static const float kernel3x3[9] = {
     1.0f / 8.0f, 1.0f / 4.0f, 1.0f / 8.0f,
     1.0f / 16.0f, 1.0f / 8.0f, 1.0f / 16.0f
 };
-
-float3 convert_normal(int3 normal)
-{
-    return normal;
-    return normal * 2.0f - 1.0f;
-}
 
 float geometry_edge_stopping(float3 pos1, float3 pos2, float3 normal, float sigma)
 {
@@ -39,15 +25,17 @@ float normal_edge_stopping(float3 n1, float3 n2, float sigma)
     return exp(-diff / (sigma * sigma));
 }
 
+float color_edge_stopping(float3 c1, float3 c2, float sigma)
+{
+    float3 diff = c1 - c2;
+    float diff_sq = dot(diff, diff);
+    return exp(-diff_sq / (sigma * sigma));
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     // return;
-
-    if (p.pass > 8)
-    {
-        return;
-    }
 
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
@@ -57,6 +45,18 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<int3> image_normal = RWTexture2D<int3>::get(p.gbuffer.normal);
     RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
+    RWTexture2D<uint2> voxelIDs = RWTexture2D<uint2>::get(p.gbuffer.voxelIDs);
+
+    uint2 voxelID = voxelIDs[pixel * 2];
+
+    // get hashmap entry for this pixel so we can decide how many passes to do based on the number of frames
+    uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, voxelID.x, voxelID.y);
+    int tempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
+
+    if (p.pass > (uint)max(9 - tempFrames, 4))
+    {
+        return;
+    }
 
     float3 center_pos = image_position[pixel * 2];
 
@@ -65,21 +65,21 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
 
     float3 center_color = image_indirect[pixel];
-    float3 center_normal = convert_normal(image_normal[pixel * 2]);
+    float3 center_normal = image_normal[pixel * 2];
     float center_depth = image_depth[pixel];
 
     const float sigma_geom = 0.01f;
     const float sigma_normal = 0.1f;
+    const float sigma_color = 0.1f;
 
     float3 sum_color = float3(0, 0, 0);
     float sum_weights = 0.0f;
 
-    const int kernel_radius = 1;
     [unroll]
-    for (int y = -kernel_radius; y <= kernel_radius; y++)
+    for (int y = -1; y <= 1; y++)
     {
         [unroll]
-        for (int x = -kernel_radius; x <= kernel_radius; x++)
+        for (int x = -1; x <= 1; x++)
         {
             int2 offset_pos = int2(pixel) + int2(x, y) * p.pass;
 
@@ -89,7 +89,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
             float3 sample_worldpos = image_position[offset_pos * 2];
             float3 sample_color = image_indirect[offset_pos];
-            float3 sample_normal = convert_normal(image_normal[offset_pos * 2]);
+            float3 sample_normal = image_normal[offset_pos * 2];
 
             // Skip sky samples
             if (all(sample_normal == float3(0, 0, 0)))
@@ -98,6 +98,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             float kernel_weight = kernel3x3[(y + 1) * 3 + (x + 1)];
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
             float normal_weight = normal_edge_stopping(center_normal, sample_normal, sigma_normal);
+            float color_weight = color_edge_stopping(center_color, sample_color, sigma_color);
             float weight = kernel_weight * geom_weight * normal_weight;
 
             sum_color += sample_color * weight;
