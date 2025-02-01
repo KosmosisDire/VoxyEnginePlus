@@ -71,11 +71,12 @@ struct GBuffer
     daxa_ImageViewId position;
     daxa_ImageViewId indirect; // indirect light (global illumination)
     daxa_ImageViewId indirectLast; // indirect light from last frame
-    daxa_ImageViewId indirectHistory; // indirect light accumulation
+    daxa_ImageViewId indirectDenoised; // indirect light denoised    
     daxa_ImageViewId motion;
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
+    daxa_ImageViewId ssao; // screen space ambient occlusion
 };
 
 struct ComputePush

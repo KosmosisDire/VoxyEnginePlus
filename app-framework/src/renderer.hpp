@@ -230,9 +230,9 @@ class Renderer
         return id;
     }
 
-    static constexpr daxa::ImageUsageFlags color_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::COLOR_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
-    static constexpr daxa::ImageUsageFlags depth_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::DEPTH_STENCIL_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC;
-    static constexpr daxa::ImageUsageFlags transfer_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC;
+    static constexpr daxa::ImageUsageFlags color_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::COLOR_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC | daxa::ImageUsageFlagBits::TRANSFER_DST;
+    static constexpr daxa::ImageUsageFlags depth_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::DEPTH_STENCIL_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC | daxa::ImageUsageFlagBits::TRANSFER_DST;
+    static constexpr daxa::ImageUsageFlags transfer_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC | daxa::ImageUsageFlagBits::TRANSFER_DST;
 
     inline daxa::ImageId CreateRenderImage(std::string name, daxa::ImageUsageFlags flags = color_image_flags)
     {
@@ -419,6 +419,14 @@ class Renderer
         ClearBuffer(ti, ti.get(buffer), value);
     }
 
+    static inline void CopyImage(daxa::TaskInterface ti, daxa::TaskImage src, daxa::TaskImage dst)
+    {
+        ti.recorder.copy_image_to_image({
+            .src_image = ti.get(src).ids[0],
+            .dst_image = ti.get(dst).ids[0]
+        });
+    }
+
     static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex = 0)
     {
         return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
@@ -430,7 +438,7 @@ class Renderer
             {
                 .native_window = window->GetNativeHandle(), 
                 .native_window_platform = window->GetNativePlatform(), 
-                .present_mode = daxa::PresentMode::FIFO, 
+                .present_mode = daxa::PresentMode::IMMEDIATE, 
                 .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, 
                 .name = name
             });

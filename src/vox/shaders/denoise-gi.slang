@@ -35,36 +35,29 @@ float color_edge_stopping(float3 c1, float3 c2, float sigma)
 [numthreads(16, 16, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
-    // return;
-
     uint2 pixel = pixel_i.xy;
     if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
         return;
 
+    RWTexture2D<float3> image_indirectDenoise = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
     RWTexture2D<float3> image_indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
+    // image_indirectDenoise[pixel] = image_indirect[pixel];
+    // return;
+
     RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<int3> image_normal = RWTexture2D<int3>::get(p.gbuffer.normal);
     RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<uint2> voxelIDs = RWTexture2D<uint2>::get(p.gbuffer.voxelIDs);
 
     uint2 voxelID = voxelIDs[pixel * 2];
-
-    // get hashmap entry for this pixel so we can decide how many passes to do based on the number of frames
-    uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, voxelID.x, voxelID.y);
-    int tempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
-
-    if (p.pass > (uint)max(9 - tempFrames, 4))
-    {
-        return;
-    }
-
     float3 center_pos = image_position[pixel * 2];
+    RWTexture2D<float3> read_texture = p.pass == 1 ? image_indirect : image_indirectDenoise;
 
     // Skip denoising for sky pixels
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    float3 center_color = image_indirect[pixel];
+    float3 center_color = read_texture[pixel];
     float3 center_normal = image_normal[pixel * 2];
     float center_depth = image_depth[pixel];
 
@@ -88,7 +81,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 continue;
 
             float3 sample_worldpos = image_position[offset_pos * 2];
-            float3 sample_color = image_indirect[offset_pos];
+            float3 sample_color = read_texture[offset_pos];
             float3 sample_normal = image_normal[offset_pos * 2];
 
             // Skip sky samples
@@ -107,5 +100,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     }
 
     var final = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
-    image_indirect[pixel] = final;
+
+    image_indirectDenoise[pixel] = final;
+
+    if (p.pass == 1)
+        image_indirect[pixel].xyz = final;
 }
