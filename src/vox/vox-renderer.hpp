@@ -163,7 +163,7 @@ class VoxelRenderer
   public:
     VoxCamera camera;
     RenderData stateData = {
-        .sunDir = {1.0f, 0.2f, 0.0f},
+        .sunDir = {1.0f, 0.2f, 0.1f},
         .frame = 0,
         .padding = {},
         .camera = {},
