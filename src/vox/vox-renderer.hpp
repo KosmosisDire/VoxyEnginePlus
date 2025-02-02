@@ -19,6 +19,7 @@ struct GBufferCPU
     daxa::ImageId indirect;
     daxa::ImageId indirectLast;
     daxa::ImageId indirectDenoised;
+    daxa::ImageId bounceDirections;
     daxa::ImageId motion;
     daxa::ImageId depth;
     daxa::ImageId depthHalfRes;
@@ -32,6 +33,7 @@ struct GBufferCPU
     daxa::TaskImage task_indirect;
     daxa::TaskImage task_indirectLast;
     daxa::TaskImage task_indirectDenoised;
+    daxa::TaskImage task_bounceDirections;
     daxa::TaskImage task_motion;
     daxa::TaskImage task_depth;
     daxa::TaskImage task_depthHalfRes;
@@ -47,6 +49,7 @@ struct GBufferCPU
         indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         indirectLast = renderer.CreateRenderImage("indirectLast", &task_indirectLast, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         indirectDenoised = renderer.CreateRenderImage("indirectDenoised", &task_indirectDenoised, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
+        bounceDirections = renderer.CreateRenderImage("bounceDirections", &task_bounceDirections, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         motion = renderer.CreateRenderImage("motion", &task_motion, daxa::Format::R16G16_SFLOAT);
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1);
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5);
@@ -69,6 +72,7 @@ struct GBufferCPU
         renderer.DestroyImage(indirect);
         renderer.DestroyImage(indirectLast);
         renderer.DestroyImage(indirectDenoised);
+        renderer.DestroyImage(bounceDirections);
         renderer.DestroyImage(motion);
         renderer.DestroyImage(depth);
         renderer.DestroyImage(depthHalfRes);
@@ -85,11 +89,13 @@ struct GBufferCPU
         task_graph.use_persistent_image(task_indirect);
         task_graph.use_persistent_image(task_indirectLast);
         task_graph.use_persistent_image(task_indirectDenoised);
+        task_graph.use_persistent_image(task_bounceDirections);
         task_graph.use_persistent_image(task_motion);
         task_graph.use_persistent_image(task_depth);
         task_graph.use_persistent_image(task_depthHalfRes);
         task_graph.use_persistent_image(task_voxelIDs);
         task_graph.use_persistent_image(task_ssao);
+        task_graph.use_persistent_image(task_shadow);
     }
 
     inline GBuffer GetGPUBuffer(int frame)
@@ -101,6 +107,7 @@ struct GBufferCPU
             .indirect = frame % 2 == 0 ? indirect.default_view() : indirectLast.default_view(),
             .indirectLast = frame % 2 == 0 ? indirectLast.default_view() : indirect.default_view(),
             .indirectDenoised = indirectDenoised.default_view(),
+            .bounceDirections = bounceDirections.default_view(),
             .motion = motion.default_view(),
             .depth = depth.default_view(),
             .depthHalfRes = depthHalfRes.default_view(),
@@ -118,11 +125,13 @@ struct GBufferCPU
         task.AddAttachment(access, task_indirect);
         task.AddAttachment(access, task_indirectLast);
         task.AddAttachment(access, task_indirectDenoised);
+        task.AddAttachment(access, task_bounceDirections);
         task.AddAttachment(access, task_motion);
         task.AddAttachment(access, task_depth);
         task.AddAttachment(access, task_depthHalfRes);
         task.AddAttachment(access, task_voxelIDs);
         task.AddAttachment(access, task_ssao);
+        task.AddAttachment(access, task_shadow);
     }
 };
 
@@ -226,6 +235,12 @@ class VoxelRenderer
         }
         
         gbufferCPU.DestroyImages(*renderer);
+    }
+
+    void Update()
+    {
+        // rotate sun around y axis
+        // stateData.sunDir = daxa_transform_normal(stateData.sunDir, daxa_mat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f * stateData.dt));
     }
 
     void InitializeTasks(daxa::TaskGraph &task_graph, daxa::TaskImage *task_render_image, daxa::ImageId *render_image)
@@ -453,12 +468,6 @@ class VoxelRenderer
 
         // create task to blit render image to swapchain
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));
-    }
-
-    void Update()
-    {
-        // rotate sun around y axis
-        // stateData.sunDir = daxa_transform_normal(stateData.sunDir, daxa_mat_from_axis_angle({0.0f, 1.0f, 0.0f}, 0.01f * stateData.dt));
     }
 
     void Resize(u32 width, u32 height)

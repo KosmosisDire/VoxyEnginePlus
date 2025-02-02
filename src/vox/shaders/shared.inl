@@ -71,7 +71,8 @@ struct GBuffer
     daxa_ImageViewId position;
     daxa_ImageViewId indirect; // indirect light (global illumination)
     daxa_ImageViewId indirectLast; // indirect light from last frame
-    daxa_ImageViewId indirectDenoised; // indirect light denoised    
+    daxa_ImageViewId indirectDenoised; // indirect light denoised   
+    daxa_ImageViewId bounceDirections;
     daxa_ImageViewId motion;
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;

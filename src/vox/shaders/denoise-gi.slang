@@ -65,8 +65,45 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     const float sigma_normal = 0.1f;
     const float sigma_color = 0.1f;
 
+    // First pass - calculate mean and variance for firefly detection
+    float3 mean_color = float3(0, 0, 0);
+    float3 mean_sq_color = float3(0, 0, 0);
+    float weight_sum = 0.0f;
+    int valid_samples = 0;
+
+    [unroll]
+    for (int y = -1; y <= 1; y++)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; x++)
+        {
+            int2 offset_pos = int2(pixel) + int2(x, y) * p.pass;
+
+            if (offset_pos.x < 0 || offset_pos.x >= p.frame_dim.x ||
+                offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
+                continue;
+
+            float3 sample_color = read_texture[offset_pos];
+            float kernel_weight = kernel3x3[(y + 1) * 3 + (x + 1)];
+
+            mean_color += sample_color * kernel_weight;
+            mean_sq_color += sample_color * sample_color * kernel_weight;
+            weight_sum += kernel_weight;
+            valid_samples++;
+        }
+    }
+
+    mean_color /= weight_sum;
+    mean_sq_color /= weight_sum;
+    float3 variance = max(mean_sq_color - mean_color * mean_color, 0.0f);
+    float3 std_dev = sqrt(variance);
+
+    // Second pass - apply denoising with firefly removal
     float3 sum_color = float3(0, 0, 0);
     float sum_weights = 0.0f;
+
+    // Firefly removal threshold (adjust these constants to tune the effect)
+    const float firefly_threshold = 300;
 
     [unroll]
     for (int y = -1; y <= 1; y++)
@@ -92,7 +129,17 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
             float normal_weight = normal_edge_stopping(center_normal, sample_normal, sigma_normal);
             float color_weight = color_edge_stopping(center_color, sample_color, sigma_color);
-            float weight = kernel_weight * geom_weight * normal_weight;
+            // Firefly removal - reduce weight for samples that deviate too much from the mean
+            float3 color_diff = abs(sample_color - mean_color);
+            float3 threshold = firefly_threshold * std_dev;
+            float firefly_weight = 1.0f;
+
+            if (any(color_diff > threshold))
+            {
+                firefly_weight = exp(-dot(color_diff, color_diff) / dot(threshold, threshold));
+            }
+
+            float weight = kernel_weight * geom_weight * normal_weight * firefly_weight;
 
             sum_color += sample_color * weight;
             sum_weights += weight;
@@ -103,6 +150,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     image_indirectDenoise[pixel] = final;
 
-    if (p.pass == 1)
+    if (p.pass <= 3)
         image_indirect[pixel].xyz = final;
 }

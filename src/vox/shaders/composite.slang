@@ -25,6 +25,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
     RWTexture2D<float> shadow = RWTexture2D<float>::get(p.gbuffer.shadow);
+    RWTexture2D<float3> bounceDirections = RWTexture2D<float3>::get(p.gbuffer.bounceDirections);
 
     // Sample all buffers at current pixel
     float3 albedoColor = albedo[pixel];
@@ -37,6 +38,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
     float shadowValue = shadow[pixel];
+    float3 bounceDir = bounceDirections[pixel / 2];
 
     uint slot = hashVoxel(voxelID.x, voxelID.y);
 
@@ -57,8 +59,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         tries++;
     }
 
-    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(p.voxel_hashmap_ptr.hitCounts[slot], 1);
+    uint hitCount = p.voxel_hashmap_ptr.hitCounts[slot];
+    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(hitCount, 1);
     int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
+    float3 lightBias = p.voxel_hashmap_ptr.lightBias[slot] / max(hitCount, 1);
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -97,6 +101,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3((float2)pixel.xy / p.frame_dim.xy, 0);
     // finalColor = float3((float2)pixel.xy / p.frame_dim.xy, 0);
     // finalColor = float3(ssaoValue, ssaoValue, ssaoValue);
+    // finalColor = float3(depthValue, depthValue, depthValue);
+    // finalColor = float3(depthValueHalfRes, depthValueHalfRes, depthValueHalfRes);
+    // finalColor = float3(voxelID.x, voxelID.y, 0);
+    // finalColor = float3(shadowValue, shadowValue, shadowValue);
+    // finalColor = bounceDir;
+    // finalColor = float3(samples, samples, samples);
+    // finalColor = lightBias;
+    // finalColor = float3(hitCount, hitCount, hitCount);
 
     // Apply firefly removal after all other processing but before final output
     // finalColor = removeFireflies(finalColor, pixel, render_image);

@@ -13,6 +13,7 @@ struct VoxelHashmap
     daxa_u32 brickIndices[HASH_TABLE_SIZE];
     daxa_u32 voxelIndices[HASH_TABLE_SIZE];
     daxa_f32vec3 indirectLight[HASH_TABLE_SIZE];
+    daxa_f32vec3 lightBias[HASH_TABLE_SIZE];
 };
 
 DAXA_DECL_BUFFER_PTR(VoxelHashmap);
