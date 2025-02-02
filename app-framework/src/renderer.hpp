@@ -438,7 +438,7 @@ class Renderer
             {
                 .native_window = window->GetNativeHandle(), 
                 .native_window_platform = window->GetNativePlatform(), 
-                .present_mode = daxa::PresentMode::IMMEDIATE, 
+                .present_mode = daxa::PresentMode::FIFO, 
                 .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, 
                 .name = name
             });

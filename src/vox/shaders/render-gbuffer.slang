@@ -74,7 +74,7 @@ float3 hsv2rgb(float3 hsv)
 
 float3 getMaterial(TraceResult trace, bool emission)
 {
-    if (trace.absCell.x % 64 == 0)
+    if (trace.absCell.x % 47 == 0)
     {
         // Project position onto a diagonal axis for consistent rainbow direction
         float posProjection = dot(trace.hitPos, normalize(float3(1.0, 1.0, 1.0)));
@@ -274,6 +274,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<float4> blueNoise = RWTexture2D<float4>::get(p.blueNoise);
+    RWTexture2D<float> shadowTex = RWTexture2D<float>::get(p.gbuffer.shadow);
 
     float halfResDepth = depthHalfRes[pixel / 2];
 
@@ -388,17 +389,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 albedoColor = getMaterial(trace, false);
 
-    if (!shadow)
-    {
-        albedoColor *= getSunColor(initAtmosphere(trace.normal, p.state_ptr.sunDir)) * 3;
-    }
-
     // write to the gbuffer
     albedo[pixel] = albedoColor;
     normal[pixel] = int3(normalize(trace.normal));
     position[pixel] = trace.hitPos;
     depth[pixel] = trace.distance;
     motion[pixel] = trace.hit ? motionPixels : float2(0, 0);
+    shadowTex[pixel] = shadow ? 1.0 : 0.0;
 
     if (trace.hit)
     {

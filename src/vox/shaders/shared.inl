@@ -77,6 +77,7 @@ struct GBuffer
     daxa_ImageViewId depthHalfRes;
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
     daxa_ImageViewId ssao; // screen space ambient occlusion
+    daxa_ImageViewId shadow; // shadow map
 };
 
 struct ComputePush

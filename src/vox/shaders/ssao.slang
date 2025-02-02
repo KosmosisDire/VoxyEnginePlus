@@ -38,7 +38,7 @@ void main(uint3 DTid: SV_DispatchThreadID)
     RWTexture2D<float4> position = RWTexture2D<float4>::get(p.gbuffer.position);
     RWTexture2D<int4> normal = RWTexture2D<int4>::get(p.gbuffer.normal);
     RWTexture2D<float> ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
-    RWTexture2D<float4> blueNoiseTex = RWTexture2D<float4>::get(p.blueNoise);
+    RWTexture2D<float3> blueNoiseTex = RWTexture2D<float3>::get(p.blueNoise);
 
     float3 pos = position[pixel * 2].xyz;
     float3 norm = normalize(float3(normal[pixel * 2].xyz) / 127.0f);
@@ -53,7 +53,7 @@ void main(uint3 DTid: SV_DispatchThreadID)
     float occlusion = 0.0;
 
     // Use blue noise for rotation
-    float4 blueNoise = blueNoiseTex[pixel % 128];
+    float3 blueNoise = blueNoiseTex[pixel % 128];
     float3 randomVec = normalize(blueNoise.xyz * 2.0 - 1.0);
 
     float3 tangent = normalize(randomVec - norm * dot(randomVec, norm));

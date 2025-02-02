@@ -24,6 +24,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
+    RWTexture2D<float> shadow = RWTexture2D<float>::get(p.gbuffer.shadow);
 
     // Sample all buffers at current pixel
     float3 albedoColor = albedo[pixel];
@@ -35,6 +36,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
+    float shadowValue = shadow[pixel];
 
     uint slot = hashVoxel(voxelID.x, voxelID.y);
 
@@ -71,6 +73,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
+    if (!shadowValue)
+    {
+        voxelLight += getSunColor(initAtmosphere(normalVector, p.state_ptr.sunDir));
+    }
+
     // Get sun color from atmosphere for lighting
     float3 lightColor = getSunColor(atmosphere);
     float3 baseSkyColor = getBaseSkyColor(atmosphere);
@@ -80,6 +87,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // Fog effect
     float fogFactor = saturate(depthValue * depthValue * DEPTH_SCALE);
     finalColor = lerp(finalColor, baseSkyColor, fogFactor);
+    // finalColor *= ssaoValue;
 
     // finalColor = voxelLight;
     // finalColor = pixelLight;

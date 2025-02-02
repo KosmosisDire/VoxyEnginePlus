@@ -24,6 +24,7 @@ struct GBufferCPU
     daxa::ImageId depthHalfRes;
     daxa::ImageId voxelIDs;
     daxa::ImageId ssao;
+    daxa::ImageId shadow;
 
     daxa::TaskImage task_color;
     daxa::TaskImage task_normal;
@@ -36,6 +37,7 @@ struct GBufferCPU
     daxa::TaskImage task_depthHalfRes;
     daxa::TaskImage task_voxelIDs;
     daxa::TaskImage task_ssao;
+    daxa::TaskImage task_shadow;
 
     inline void CreateImages(Renderer &renderer)
     {
@@ -50,6 +52,7 @@ struct GBufferCPU
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5);
         voxelIDs = renderer.CreateRenderImage("voxelIDs", &task_voxelIDs, daxa::Format::R32G32_UINT, 1.0);
         ssao = renderer.CreateRenderImage("ssao", &task_ssao, daxa::Format::R32_SFLOAT, 0.5);
+        shadow = renderer.CreateRenderImage("shadow", &task_shadow, daxa::Format::R32_SFLOAT, 1.0);
     }
 
     inline void ResizeImages(Renderer &renderer)
@@ -71,6 +74,7 @@ struct GBufferCPU
         renderer.DestroyImage(depthHalfRes);
         renderer.DestroyImage(voxelIDs);
         renderer.DestroyImage(ssao);
+        renderer.DestroyImage(shadow);
     }
 
     inline void UseImages(daxa::TaskGraph &task_graph)
@@ -102,6 +106,7 @@ struct GBufferCPU
             .depthHalfRes = depthHalfRes.default_view(),
             .voxelIDs = voxelIDs.default_view(),
             .ssao = ssao.default_view(),
+            .shadow = shadow.default_view(),
         };
     }
 
@@ -315,7 +320,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_state_buffer)
-                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, task_blue_noise_image)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
@@ -344,6 +349,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_position)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_normal)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_ssao)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
                 .SetTask(
