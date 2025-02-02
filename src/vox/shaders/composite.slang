@@ -16,7 +16,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // Read from gbuffer textures
     RWTexture2D<float3> albedo = RWTexture2D<float3>::get(p.gbuffer.color);
-    RWTexture2D<float3> normal = RWTexture2D<float3>::get(p.gbuffer.normal);
+    RWTexture2D<int3> normal = RWTexture2D<int3>::get(p.gbuffer.normal);
     RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
@@ -25,11 +25,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
     RWTexture2D<float> shadow = RWTexture2D<float>::get(p.gbuffer.shadow);
-    RWTexture2D<float3> bounceDirections = RWTexture2D<float3>::get(p.gbuffer.bounceDirections);
 
     // Sample all buffers at current pixel
     float3 albedoColor = albedo[pixel];
-    float3 normalVector = normal[pixel];
+    int3 normalVector = normal[pixel];
     float3 worldPos = position[pixel].xyz;
     float3 pixelLight = indirect[pixel / 2];
     float2 motionVector = motion[pixel];
@@ -38,7 +37,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float depthValueHalfRes = depthHalfRes[pixel / 2];
     int2 voxelID = voxelIDs[pixel];
     float shadowValue = shadow[pixel];
-    float3 bounceDir = bounceDirections[pixel / 2];
 
     uint slot = hashVoxel(voxelID.x, voxelID.y);
 
@@ -62,7 +60,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     uint hitCount = p.voxel_hashmap_ptr.hitCounts[slot];
     float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(hitCount, 1);
     int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
-    float3 lightBias = p.voxel_hashmap_ptr.lightBias[slot] / max(hitCount, 1);
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -77,14 +74,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
-    if (!shadowValue)
-    {
-        voxelLight += getSunColor(initAtmosphere(normalVector, p.state_ptr.sunDir));
-    }
-
     // Get sun color from atmosphere for lighting
     float3 lightColor = getSunColor(atmosphere);
     float3 baseSkyColor = getBaseSkyColor(atmosphere);
+    float ldot = max(dot(normalVector, sunDir), 0.0);
+
+    if (!shadowValue)
+    {
+        voxelLight += (baseSkyColor + lightColor) * ldot;
+    }
 
     float3 finalColor = voxelLight * albedoColor.rgb;
 
@@ -105,9 +103,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(depthValueHalfRes, depthValueHalfRes, depthValueHalfRes);
     // finalColor = float3(voxelID.x, voxelID.y, 0);
     // finalColor = float3(shadowValue, shadowValue, shadowValue);
-    // finalColor = bounceDir;
     // finalColor = float3(samples, samples, samples);
-    // finalColor = lightBias;
     // finalColor = float3(hitCount, hitCount, hitCount);
 
     // Apply firefly removal after all other processing but before final output

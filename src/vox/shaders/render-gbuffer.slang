@@ -51,7 +51,7 @@ float3 transformBlueNoise(float3 sample, uint frameIndex)
     return frac(sample + shift);
 }
 
-TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, float3 bias, out float3 rayDir)
+TraceResult computeBounce(float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, out float3 rayDir)
 {
     float3 hitPos = origin + normal * EPSILON;
 
@@ -92,10 +92,10 @@ float3 getMaterial(TraceResult trace, bool emission)
         return color * 5;
     }
 
-    // if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 512 < 2)
-    // {
-    //     return float3(1) * 5;
-    // }
+    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 512 < 10)
+    {
+        return emission ? 0 : float3(1.0, 0.2, 0.3);
+    }
 
     return emission ? float3(0.0) : (float3(0.17f, 0.33f, 0.23f) + snoise(trace.absCell / 4.0) * 0.01);
 }
@@ -109,7 +109,16 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
     }
     else
     {
-        return getMaterial(bounceResult, true);
+        float3 mat = getMaterial(bounceResult, true);
+
+        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir));
+
+        if (!bounceShadow.hit)
+        {
+            return mat + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 3;
+        }
+
+        return mat;
     }
 }
 
@@ -232,7 +241,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<float4> blueNoise = RWTexture2D<float4>::get(p.blueNoise);
     RWTexture2D<float> shadowTex = RWTexture2D<float>::get(p.gbuffer.shadow);
-    RWTexture2D<float3> bounceDirections = RWTexture2D<float3>::get(p.gbuffer.bounceDirections);
 
     float halfResDepth = depthHalfRes[pixel / 2];
 
@@ -273,7 +281,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         p.state_ptr.camera.fov * 0.0174532925f,
         p.frame_dim.x);
 
-    int voxelIndex = isVoxelFarLOD ? 0 : (trace.voxelIndex + 2);
+    int voxelIndex = isVoxelFarLOD ? 0 : ((trace.voxelIndex + 1) * 17);
     voxelIndex += (int(trace.normal.x * 127) << 0) + (int(trace.normal.y * 127) << 8) + (int(trace.normal.z * 127) << 16);
 
     if (dot(trace.normal, rayDir) > (1 / trace.distance * 0.4) - 0.1)
@@ -309,24 +317,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float2 dimensions = p.frame_dim / 2;
         float4 blueNoiseSample = blueNoise[halfPixel % 128];
 
-        // get voxel and dir bias
-        uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, globalBrickIndex, voxelIndex);
-        float3 weightedDir = p.past_voxel_hashmap_ptr.lightBias[slot];
-
-        TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, weightedDir, bounceRayDir);
+        TraceResult bounceResult = computeBounce(trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
         float3 rayBounceColor = calculateBounceColor(bounceResult, bounceRayDir);
-
-        bounceDirections[halfPixel] = bounceRayDir;
-
-        if (bounceResult.hit)
-        {
-            TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir));
-
-            if (!bounceShadow.hit)
-            {
-                rayBounceColor += getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 3;
-            }
-        }
 
         // Calculate previous position with subpixel precision
         float2 prevPos = prevPos * 0.5;

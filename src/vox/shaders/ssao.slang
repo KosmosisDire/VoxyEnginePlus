@@ -9,7 +9,7 @@ static const float RADIUS = 0.8;
 static const float BIAS = 0.025;
 static const float MAX_DISTANCE = 2.0;
 static const float FALLOFF = 0.001;
-static const float STRENGTH = 1.0;
+static const float STRENGTH = 1.1;
 
 // Better random vector generation
 float3 hash3(float2 p)

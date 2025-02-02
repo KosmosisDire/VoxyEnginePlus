@@ -8,7 +8,7 @@ uint hashVoxel(uint globalBrickIndex, uint localVoxelIndex)
     return hash % HASH_TABLE_SIZE;
 }
 
-void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxelIndex, float3 lighting, int temporalFrames, float3 lightDirection)
+void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxelIndex, float3 lighting, int temporalFrames)
 {
     uint slot = hashVoxel(brickIndex, voxelIndex);
 
@@ -33,9 +33,6 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxel
             InterlockedAdd(hashtable.indirectLight[slot].x, lighting.x);
             InterlockedAdd(hashtable.indirectLight[slot].y, lighting.y);
             InterlockedAdd(hashtable.indirectLight[slot].z, lighting.z);
-            InterlockedAdd(hashtable.lightBias[slot].x, lightDirection.x);
-            InterlockedAdd(hashtable.lightBias[slot].y, lightDirection.y);
-            InterlockedAdd(hashtable.lightBias[slot].z, lightDirection.z);
             break;
         }
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
