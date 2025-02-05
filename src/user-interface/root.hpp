@@ -5,7 +5,10 @@
 
 void init_root_ui(UIData& data, UIInputs input)
 {
-    
+    static float dtAvg = 0.0f;
+
+    dtAvg = dtAvg * 0.99f + input.deltaTime * 0.01f;
+
     data.pages = {
         {PageID::MENU, false, menu_page},
         {PageID::SETTINGS, true,  settings_page},
@@ -22,7 +25,7 @@ void init_root_ui(UIData& data, UIInputs input)
         .floatingOffset(-10, 10)
         .direction(FlowDirection::TopToBottom))
         {
-            UITEXT(Text(fmt::format("Frame Time: {:.2f}ms", input.deltaTime * 1000.0f)));
+            UITEXT(Text(fmt::format("Frame Time: {:.2f}ms", dtAvg * 1000.0f)));
             UITEXT(Text(fmt::format("Camera Pos: {:.2f}, {:.2f}, {:.2f}", data.renderData->camera.position.x, data.renderData->camera.position.y, data.renderData->camera.position.z)));
         }
 
