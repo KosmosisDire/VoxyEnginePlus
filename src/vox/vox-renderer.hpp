@@ -16,9 +16,13 @@ struct GBufferCPU
     daxa::ImageId color;
     daxa::ImageId normal;
     daxa::ImageId position;
+    daxa::ImageId voxelUVs;
+    daxa::ImageId brickUVs;
     daxa::ImageId indirect;
     daxa::ImageId indirectLast;
     daxa::ImageId indirectDenoised;
+    daxa::ImageId indirectPerVoxelPass1;
+    daxa::ImageId indirectPerVoxelPass2;
     daxa::ImageId motion;
     daxa::ImageId depth;
     daxa::ImageId depthHalfRes;
@@ -29,9 +33,13 @@ struct GBufferCPU
     daxa::TaskImage task_color;
     daxa::TaskImage task_normal;
     daxa::TaskImage task_position;
+    daxa::TaskImage task_voxelUVs;
+    daxa::TaskImage task_brickUVs;
     daxa::TaskImage task_indirect;
     daxa::TaskImage task_indirectLast;
     daxa::TaskImage task_indirectDenoised;
+    daxa::TaskImage task_indirectPerVoxelPass1;
+    daxa::TaskImage task_indirectPerVoxelPass2;
     daxa::TaskImage task_motion;
     daxa::TaskImage task_depth;
     daxa::TaskImage task_depthHalfRes;
@@ -44,9 +52,13 @@ struct GBufferCPU
         color = renderer.CreateRenderImage("color", &task_color, daxa::Format::R16G16B16A16_SFLOAT);
         normal = renderer.CreateRenderImage("normal", &task_normal, daxa::Format::R8G8B8A8_SINT);
         position = renderer.CreateRenderImage("position", &task_position, daxa::Format::R32G32B32A32_SFLOAT);
+        voxelUVs = renderer.CreateRenderImage("voxelUVs", &task_voxelUVs, daxa::Format::R16G16_SFLOAT);
+        brickUVs = renderer.CreateRenderImage("brickUVs", &task_brickUVs, daxa::Format::R16G16_SFLOAT);
         indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         indirectLast = renderer.CreateRenderImage("indirectLast", &task_indirectLast, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         indirectDenoised = renderer.CreateRenderImage("indirectDenoised", &task_indirectDenoised, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
+        indirectPerVoxelPass1 = renderer.CreateRenderImage("indirectPerVoxelPass1", &task_indirectPerVoxelPass1, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
+        indirectPerVoxelPass2 = renderer.CreateRenderImage("indirectPerVoxelPass2", &task_indirectPerVoxelPass2, daxa::Format::R16G16B16A16_SFLOAT, 0.5);
         motion = renderer.CreateRenderImage("motion", &task_motion, daxa::Format::R16G16_SFLOAT);
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1);
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5);
@@ -66,9 +78,13 @@ struct GBufferCPU
         renderer.DestroyImage(color);
         renderer.DestroyImage(normal);
         renderer.DestroyImage(position);
+        renderer.DestroyImage(voxelUVs);
+        renderer.DestroyImage(brickUVs);
         renderer.DestroyImage(indirect);
         renderer.DestroyImage(indirectLast);
         renderer.DestroyImage(indirectDenoised);
+        renderer.DestroyImage(indirectPerVoxelPass1);
+        renderer.DestroyImage(indirectPerVoxelPass2);
         renderer.DestroyImage(motion);
         renderer.DestroyImage(depth);
         renderer.DestroyImage(depthHalfRes);
@@ -82,9 +98,13 @@ struct GBufferCPU
         task_graph.use_persistent_image(task_color);
         task_graph.use_persistent_image(task_normal);
         task_graph.use_persistent_image(task_position);
+        task_graph.use_persistent_image(task_voxelUVs);
+        task_graph.use_persistent_image(task_brickUVs);
         task_graph.use_persistent_image(task_indirect);
         task_graph.use_persistent_image(task_indirectLast);
         task_graph.use_persistent_image(task_indirectDenoised);
+        task_graph.use_persistent_image(task_indirectPerVoxelPass1);
+        task_graph.use_persistent_image(task_indirectPerVoxelPass2);
         task_graph.use_persistent_image(task_motion);
         task_graph.use_persistent_image(task_depth);
         task_graph.use_persistent_image(task_depthHalfRes);
@@ -99,9 +119,13 @@ struct GBufferCPU
             .color = color.default_view(),
             .normal = normal.default_view(),
             .position = position.default_view(),
+            .voxelUVs = voxelUVs.default_view(),
+            .brickUVs = brickUVs.default_view(),
             .indirect = frame % 2 == 0 ? indirect.default_view() : indirectLast.default_view(),
             .indirectLast = frame % 2 == 0 ? indirectLast.default_view() : indirect.default_view(),
             .indirectDenoised = indirectDenoised.default_view(),
+            .indirectPerVoxelPass1 = indirectPerVoxelPass1.default_view(),
+            .indirectPerVoxelPass2 = indirectPerVoxelPass2.default_view(),
             .motion = motion.default_view(),
             .depth = depth.default_view(),
             .depthHalfRes = depthHalfRes.default_view(),
@@ -116,9 +140,13 @@ struct GBufferCPU
         task.AddAttachment(access, task_color);
         task.AddAttachment(access, task_normal);
         task.AddAttachment(access, task_position);
+        task.AddAttachment(access, task_voxelUVs);
+        task.AddAttachment(access, task_brickUVs);
         task.AddAttachment(access, task_indirect);
         task.AddAttachment(access, task_indirectLast);
         task.AddAttachment(access, task_indirectDenoised);
+        task.AddAttachment(access, task_indirectPerVoxelPass1);
+        task.AddAttachment(access, task_indirectPerVoxelPass2);
         task.AddAttachment(access, task_motion);
         task.AddAttachment(access, task_depth);
         task.AddAttachment(access, task_depthHalfRes);
@@ -414,7 +442,11 @@ class VoxelRenderer
         renderer->AddTask(
             InlineTask("combine_gi")
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_indirectDenoised)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_indirectPerVoxelPass1)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_indirectPerVoxelPass2)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelIDs)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelUVs)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_normal)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
@@ -430,8 +462,22 @@ class VoxelRenderer
                             .frame_dim = {renderer->surface_width, renderer->surface_height}};
 
                         ti.recorder.set_pipeline(*combine_gi_compute);
+
+                        push.pass = 1;
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+
+                        push.pass = 2;
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+
+                        push.pass = 3;
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+
+                        push.pass = 4;
+                        ti.recorder.push_constant(push);
+                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
                     }));
 
 

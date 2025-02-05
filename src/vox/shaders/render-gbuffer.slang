@@ -92,9 +92,14 @@ float3 getMaterial(TraceResult trace, bool emission)
         return color * 5;
     }
 
-    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 512 < 10)
+    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 512 < 64)
     {
         return emission ? 0 : float3(1.0, 0.2, 0.3);
+    }
+
+    if (brickGlobalIndex(trace.chunkIndex, trace.brickIndex) % 512 < 156)
+    {
+        return emission ? 0 : float3(1.0);
     }
 
     return emission ? float3(0.0) : (float3(0.17f, 0.33f, 0.23f) + snoise(trace.absCell / 4.0) * 0.01);
@@ -115,7 +120,7 @@ float3 calculateBounceColor(TraceResult bounceResult, float3 rayDir)
 
         if (!bounceShadow.hit)
         {
-            return mat + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 3;
+            return mat + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 5 * getMaterial(bounceResult, false);
         }
 
         return mat;
@@ -233,6 +238,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> albedo = RWTexture2D<float3>::get(p.gbuffer.color);
     RWTexture2D<int3> normal = RWTexture2D<int3>::get(p.gbuffer.normal);
     RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
+    RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
+    RWTexture2D<float2> brickUVs = RWTexture2D<float2>::get(p.gbuffer.brickUVs);
     RWTexture2D<float4> indirect = RWTexture2D<float4>::get(p.gbuffer.indirect);
     RWTexture2D<float4> indirectLast = RWTexture2D<float4>::get(p.gbuffer.indirectLast);
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
@@ -346,10 +353,17 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 albedoColor = getMaterial(trace, false);
 
+    float2 voxelFaceUV = trace.normal.x != 0 ? trace.voxelUv.yz : trace.normal.y != 0 ? trace.voxelUv.xz
+                                                                                      : trace.voxelUv.xy;
+    float2 brickFaceUV = trace.normal.x != 0 ? trace.brickUv.yz : trace.normal.y != 0 ? trace.brickUv.xz
+                                                                                      : trace.brickUv.xy;
+
     // write to the gbuffer
     albedo[pixel] = albedoColor;
     normal[pixel] = int3(normalize(trace.normal));
     position[pixel] = trace.hitPos;
+    voxelUVs[pixel] = voxelFaceUV;
+    brickUVs[pixel] = brickFaceUV;
     depth[pixel] = trace.distance;
     motion[pixel] = trace.hit ? motionPixels : float2(0, 0);
     shadowTex[pixel] = shadow ? 1.0 : 0.0;

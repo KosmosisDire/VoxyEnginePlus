@@ -18,7 +18,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> albedo = RWTexture2D<float3>::get(p.gbuffer.color);
     RWTexture2D<int3> normal = RWTexture2D<int3>::get(p.gbuffer.normal);
     RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
+    RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
+    RWTexture2D<float2> brickUVs = RWTexture2D<float2>::get(p.gbuffer.brickUVs);
     RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
+    RWTexture2D<float3> indirectPerVoxPass = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass1);
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
     RWTexture2D<float> ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
@@ -30,7 +33,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 albedoColor = albedo[pixel];
     int3 normalVector = normal[pixel];
     float3 worldPos = position[pixel].xyz;
+    float2 voxelUV = voxelUVs[pixel];
+    float2 brickUV = brickUVs[pixel];
     float3 pixelLight = indirect[pixel / 2];
+    float3 perVoxAvg = indirectPerVoxPass[pixel / 2];
     float2 motionVector = motion[pixel];
     float ssaoValue = ssao[pixel / 2];
     float depthValue = depth[pixel];
@@ -38,27 +44,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     int2 voxelID = voxelIDs[pixel];
     float shadowValue = shadow[pixel];
 
-    uint slot = hashVoxel(voxelID.x, voxelID.y);
-
-    uint32_t tries = 0;
-    while (tries < 100)
-    {
-        if (p.voxel_hashmap_ptr.brickIndices[slot] == voxelID.x && p.voxel_hashmap_ptr.voxelIndices[slot] == voxelID.y)
-        {
-            break;
-        }
-        if (p.voxel_hashmap_ptr.brickIndices[slot] == EMPTY_KEY && p.voxel_hashmap_ptr.voxelIndices[slot] == EMPTY_KEY)
-        {
-            slot = EMPTY_KEY;
-            break;
-        }
-
-        slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
-        tries++;
-    }
-
+    uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
     uint hitCount = p.voxel_hashmap_ptr.hitCounts[slot];
-    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot] / max(hitCount, 1);
+    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot];
     int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
 
     // Get ray and atmosphere setup
@@ -93,6 +81,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // finalColor = voxelLight;
     // finalColor = pixelLight;
+    // finalColor = perVoxAvg;
     // finalColor = albedoColor.rgb;
     // finalColor = (abs(motionVector.xy) * p.frame_dim * 0.1).xyx;
     // finalColor = pow(finalColor, 5);
@@ -105,6 +94,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(shadowValue, shadowValue, shadowValue);
     // finalColor = float3(samples, samples, samples);
     // finalColor = float3(hitCount, hitCount, hitCount);
+    // finalColor = float3(ssaoValue, ssaoValue, ssaoValue);
+    // finalColor = float3(voxelUV.x, voxelUV.y, 0);
+    // finalColor = float3(brickUV.x, brickUV.y, 0);
 
     // Apply firefly removal after all other processing but before final output
     // finalColor = removeFireflies(finalColor, pixel, render_image);

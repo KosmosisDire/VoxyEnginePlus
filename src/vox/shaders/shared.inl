@@ -69,9 +69,13 @@ struct GBuffer
     daxa_ImageViewId color;
     daxa_ImageViewId normal;
     daxa_ImageViewId position;
+    daxa_ImageViewId voxelUVs;
+    daxa_ImageViewId brickUVs;
     daxa_ImageViewId indirect; // indirect light (global illumination)
     daxa_ImageViewId indirectLast; // indirect light from last frame
-    daxa_ImageViewId indirectDenoised; // indirect light denoised   
+    daxa_ImageViewId indirectDenoised; // indirect light denoised  
+    daxa_ImageViewId indirectPerVoxelPass1;
+    daxa_ImageViewId indirectPerVoxelPass2; 
     daxa_ImageViewId motion;
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;
@@ -91,6 +95,7 @@ struct ComputePush
     daxa_ImageViewId final_image;
     daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
     daxa_u32vec2 frame_dim;
+    daxa_u32 pass;
 };
 
 struct DenoisePush
@@ -101,3 +106,17 @@ struct DenoisePush
     daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 
+
+struct RadixSortPush {
+    daxa_u32 numKeys;         // total number of keys to sort
+    daxa_u32 passShift;       // bit offset for this pass (0,8,16,24)
+    daxa_u32 passMask;        // bit mask (0xFF for 8-bit radix)
+    daxa_u32 numWorkGroups;   // total number of work groups for this dispatch
+    daxa_u32vec2 frame_dim;      // dimensions of input texture
+};
+
+struct RadixScanPush {
+    daxa_u32 numWorkGroups;    // Number of workgroups from count kernel
+    daxa_u32 passShift;        // Current pass (just for debugging)
+    daxa_u32vec2 frame_dim;       // Original dimensions
+};
