@@ -5,11 +5,11 @@ const ComputePush p;
 
 // SSAO settings
 static const int KERNEL_SIZE = 16;
-static const float RADIUS = 0.8;
+static const float RADIUS = 0.4;
 static const float BIAS = 0.025;
-static const float MAX_DISTANCE = 2.0;
+static const float MAX_DISTANCE = 1.0;
 static const float FALLOFF = 0.001;
-static const float STRENGTH = 1.1;
+static const float STRENGTH = 1;
 
 // Better random vector generation
 float3 hash3(float2 p)

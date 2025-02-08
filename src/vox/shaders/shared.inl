@@ -64,6 +64,26 @@ struct ChunkOccupancy
 };
 DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
 
+struct Material
+{
+    daxa_f32vec3 albedo;
+    daxa_f32 roughness;
+    daxa_f32vec3 emission;
+    daxa_f32 metallic;
+};
+
+struct Materials
+{
+    Material materials[TOTAL_MATERIALS];
+};
+DAXA_DECL_BUFFER_PTR(Materials);
+
+struct VoxelMaterials
+{
+    daxa_u32 materials[TOTAL_VOXELS / (32 / BITS_PER_MATERIAL)];
+};
+DAXA_DECL_BUFFER_PTR(VoxelMaterials);
+
 struct GBuffer
 {
     daxa_ImageViewId color;
@@ -80,6 +100,8 @@ struct GBuffer
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
+    daxa_ImageViewId voxelIDsLast; // global brick id and local voxel id from last frame
+    daxa_ImageViewId materialIDs; // material id
     daxa_ImageViewId ssao; // screen space ambient occlusion
     daxa_ImageViewId shadow; // shadow map
 };
@@ -89,6 +111,8 @@ struct ComputePush
     daxa_BufferPtr(GBuffer) gbuffer;
     daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
     daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
+    daxa_BufferPtr(Materials) materials_ptr;
+    daxa_BufferPtr(VoxelMaterials) voxel_materials_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
     daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;

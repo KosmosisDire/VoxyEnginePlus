@@ -11,6 +11,15 @@ static const float kernel3x3[9] = {
     1.0f / 16.0f, 1.0f / 8.0f, 1.0f / 16.0f
 };
 
+// 5x5 kernel with similar Gaussian distribution
+static const float kernel5x5[25] = {
+    1.0f / 64.0f, 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 32.0f, 1.0f / 64.0f,
+    1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 8.0f, 1.0f / 16.0f, 1.0f / 32.0f,
+    1.0f / 16.0f, 1.0f / 8.0f, 1.0f / 4.0f, 1.0f / 8.0f, 1.0f / 16.0f,
+    1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 8.0f, 1.0f / 16.0f, 1.0f / 32.0f,
+    1.0f / 64.0f, 1.0f / 32.0f, 1.0f / 16.0f, 1.0f / 32.0f, 1.0f / 64.0f
+};
+
 float geometry_edge_stopping(float3 pos1, float3 pos2, float3 normal, float sigma)
 {
     float3 pos_diff = pos2 - pos1;
@@ -41,6 +50,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     RWTexture2D<float3> image_indirectDenoise = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
     RWTexture2D<float3> image_indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
+    RWTexture2D<float> image_ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     // image_indirectDenoise[pixel] = image_indirect[pixel];
     // return;
 
@@ -57,23 +67,32 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
+    // read hashmap entry
+    uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
+    uint historyLength = p.voxel_hashmap_ptr.temporalFrames[slot];
+
+    // if (p.pass > image_ssao[pixel] * 5 + 3)
+    // {
+    //     return;
+    // }
+
     float3 center_color = read_texture[pixel];
     float3 center_normal = image_normal[pixel * 2];
     float center_depth = image_depth[pixel];
 
     const float sigma_geom = 0.01f;
     const float sigma_normal = 0.1f;
-    const float sigma_color = 0.1f;
+    const float sigma_color = 0.3f;
 
     // Second pass - apply denoising with firefly removal
     float3 sum_color = float3(0, 0, 0);
     float sum_weights = 0.0f;
 
     [unroll]
-    for (int y = -1; y <= 1; y++)
+    for (int y = -2; y <= 2; y++)
     {
         [unroll]
-        for (int x = -1; x <= 1; x++)
+        for (int x = -2; x <= 2; x++)
         {
             int2 offset_pos = int2(pixel) + int2(x, y) * p.pass;
 
@@ -89,12 +108,17 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             if (all(sample_normal == float3(0, 0, 0)))
                 continue;
 
-            float kernel_weight = kernel3x3[(y + 1) * 3 + (x + 1)];
+            float kernel_weight = kernel5x5[(y + 2) * 5 + (x + 2)];
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
             float normal_weight = normal_edge_stopping(center_normal, sample_normal, sigma_normal);
             float color_weight = color_edge_stopping(center_color, sample_color, sigma_color);
 
             float weight = kernel_weight * geom_weight * normal_weight;
+
+            if (p.pass > 1)
+            {
+                weight *= color_weight;
+            }
 
             sum_color += sample_color * weight;
             sum_weights += weight;
@@ -104,7 +128,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     var final = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
 
     image_indirectDenoise[pixel] = final;
+    image_ssao[pixel] = int(image_ssao[pixel] * 5) / 5;
 
-    if (p.pass <= 3)
-        image_indirect[pixel].xyz = final;
+    // if (p.pass <= 1)
+    //     image_indirect[pixel].xyz = final;
 }

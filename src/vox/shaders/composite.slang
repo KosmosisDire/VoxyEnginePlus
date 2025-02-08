@@ -20,13 +20,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
     RWTexture2D<float2> brickUVs = RWTexture2D<float2>::get(p.gbuffer.brickUVs);
-    RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
+    RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
     RWTexture2D<float3> indirectPerVoxPass = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass1);
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
     RWTexture2D<float> ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
+    RWTexture2D<int2> voxelIDsLast = RWTexture2D<int2>::get(p.gbuffer.voxelIDsLast);
+    RWTexture2D<uint> materialIDs = RWTexture2D<uint>::get(p.gbuffer.materialIDs);
     RWTexture2D<float> shadow = RWTexture2D<float>::get(p.gbuffer.shadow);
 
     // Sample all buffers at current pixel
@@ -41,13 +43,47 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float ssaoValue = ssao[pixel / 2];
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
-    int2 voxelID = voxelIDs[pixel];
+    int2 voxelID = voxelIDs[pixel]; // round to account for half res sampling
+    int2 voxelIDLast = voxelIDsLast[pixel];
+    uint materialID = materialIDs[pixel];
+    materialID = clamp(materialID, 0, TOTAL_MATERIALS - 1);
+    Material material = p.materials_ptr.materials[materialID];
     float shadowValue = shadow[pixel];
 
     uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
-    uint hitCount = p.voxel_hashmap_ptr.hitCounts[slot];
+    int hitCount = p.state_ptr.frame - p.past_voxel_hashmap_ptr.hitCounts[slot];
     float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot];
     int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
+
+    // if slot is empty then sample 4 adjacent pixels and average values from them (as long as they aren't empty)
+    if (slot == EMPTY_KEY)
+    {
+        float3 avgLight = float3(0, 0, 0);
+        int avgSamples = 0;
+
+        for (int y = -1; y <= 1; y++)
+        {
+            for (int x = -1; x <= 1; x++)
+            {
+                int2 offset = int2(pixel) + int2(x, y);
+                if (offset.x < 0 || offset.x >= p.frame_dim.x || offset.y < 0 || offset.y >= p.frame_dim.y)
+                    continue;
+
+                uint offsetSlot = get_hashtable_index(p.voxel_hashmap_ptr, voxelIDs[offset].x, voxelIDs[offset].y);
+                if (offsetSlot != EMPTY_KEY)
+                {
+                    avgLight += p.voxel_hashmap_ptr.indirectLight[offsetSlot];
+                    avgSamples++;
+                }
+            }
+        }
+
+        if (avgSamples > 0)
+        {
+            voxelLight = avgLight / avgSamples;
+            samples = avgSamples;
+        }
+    }
 
     // Get ray and atmosphere setup
     float3 rayOrigin, rayDir;
@@ -62,21 +98,49 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
+    // beveled normal using box filter
+    float3 normalSum = float3(0, 0, 0);
+    int normalCount = 0;
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            int2 offset = int2(pixel) + int2(x, y);
+            if (offset.x < 0 || offset.x >= p.frame_dim.x || offset.y < 0 || offset.y >= p.frame_dim.y)
+                continue;
+
+            int3 offsetNormal = normal[offset];
+            if (any(offsetNormal != int3(0, 0, 0)))
+            {
+                normalSum += float3(offsetNormal);
+                normalCount++;
+            }
+        }
+    }
+
+    float3 bevNormal = normalSum / normalCount;
+
     // Get sun color from atmosphere for lighting
     float3 lightColor = getSunColor(atmosphere);
     float3 baseSkyColor = getBaseSkyColor(atmosphere);
-    float ldot = max(dot(normalVector, sunDir), 0.0);
+    float ldot = max(dot(bevNormal, sunDir), 0.0);
+
+    float3 viewDir = normalize(rayOrigin - worldPos);
+    float3 halfVec = normalize(viewDir + sunDir);
+    float3 specular = pow(max(dot(bevNormal, halfVec), 0.0), 32);
+    specular *= getBaseSkyColor(initAtmosphere(viewDir, sunDir));
+    specular *= 1 - shadowValue;
 
     if (!shadowValue)
     {
-        voxelLight += (baseSkyColor + lightColor) * ldot;
+        voxelLight += lightColor * ldot;
     }
 
-    float3 finalColor = voxelLight * albedoColor.rgb;
+    float3 finalColor = voxelLight * material.albedo + material.emission + specular;
 
     // Fog effect
-    float fogFactor = saturate(depthValue * depthValue * DEPTH_SCALE);
-    finalColor = lerp(finalColor, baseSkyColor, fogFactor);
+    // float fogFactor = saturate(depthValue * depthValue * DEPTH_SCALE);
+    // finalColor = lerp(finalColor, baseSkyColor, fogFactor);
     // finalColor *= ssaoValue;
 
     // finalColor = voxelLight;
@@ -90,13 +154,16 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(ssaoValue, ssaoValue, ssaoValue);
     // finalColor = float3(depthValue, depthValue, depthValue);
     // finalColor = float3(depthValueHalfRes, depthValueHalfRes, depthValueHalfRes);
-    // finalColor = float3(voxelID.x, voxelID.y, 0);
+    // finalColor = float3(voxelID.x, voxelID.y, 0) / 1000.0;
+    // finalColor = float3(0, voxelIDLast.y, 0) / 1000.0;
+    // finalColor = float3(materialID, materialID, materialID) / 16.0;
     // finalColor = float3(shadowValue, shadowValue, shadowValue);
-    // finalColor = float3(samples, samples, samples);
+    // finalColor = float3(samples, samples, samples) / 100.0;
     // finalColor = float3(hitCount, hitCount, hitCount);
     // finalColor = float3(ssaoValue, ssaoValue, ssaoValue);
     // finalColor = float3(voxelUV.x, voxelUV.y, 0);
     // finalColor = float3(brickUV.x, brickUV.y, 0);
+    // finalColor = specular;
 
     // Apply firefly removal after all other processing but before final output
     // finalColor = removeFireflies(finalColor, pixel, render_image);
@@ -106,7 +173,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     // Debug visualization modes
     if ((bool)p.state_ptr.settings.showNormals)
-        finalColor = normalVector;
+        finalColor = bevNormal;
     if ((bool)p.state_ptr.settings.showHitPos)
         finalColor = worldPos / float(GRID_SIZE);
     if ((bool)p.state_ptr.settings.showDepth)

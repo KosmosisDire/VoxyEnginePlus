@@ -1,7 +1,7 @@
 #pragma once
 #include "daxa/daxa.inl"
 
-static const daxa_u32 GRID_SIZE = 100;
+static const daxa_u32 GRID_SIZE = 50;
 static const daxa_u32 GRID_SIZE_SQUARE = GRID_SIZE * GRID_SIZE;
 static const daxa_u32 GRID_SIZE_CUBE = GRID_SIZE * GRID_SIZE * GRID_SIZE;
 
@@ -19,6 +19,9 @@ static const daxa_f32 WORLD_BRICK_SIZE = 1.0 / CHUNK_SIZE;
 static const daxa_u64 TOTAL_CHUNKS = GRID_SIZE_CUBE;
 static const daxa_u64 TOTAL_BRICKS = TOTAL_CHUNKS * CHUNK_SIZE_CUBE;
 static const daxa_u64 TOTAL_VOXELS = TOTAL_BRICKS * BRICK_SIZE_CUBE;
+
+static const daxa_u32 BITS_PER_MATERIAL = 4;
+static const daxa_u32 TOTAL_MATERIALS = 1 << BITS_PER_MATERIAL;
 
 
 static const daxa_u32 BITS_PER_BYTE = 8;

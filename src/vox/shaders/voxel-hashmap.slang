@@ -8,37 +8,30 @@ uint hashVoxel(uint globalBrickIndex, uint localVoxelIndex)
     return hash % HASH_TABLE_SIZE;
 }
 
-void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxelIndex, float3 lighting, int temporalFrames)
+void voxel_hashtable_insert(VoxelHashmap *hashtable, uint brickIndex, uint voxelIndex, float3 lighting, int temporalFrames, uint frameIndex)
 {
     uint slot = hashVoxel(brickIndex, voxelIndex);
 
     uint tries = 0;
     while (tries < 10)
     {
-        uint prev = 0;
+        uint prev = -1;
+        if (frameIndex > hashtable.hitCounts[slot] + 10)
+        {
+            hashtable.brickIndices[slot] = EMPTY_KEY;
+        }
+
         InterlockedCompareExchange(hashtable.brickIndices[slot], EMPTY_KEY, brickIndex, prev);
 
-        if (prev == brickIndex)
-            return;
-
-        if (prev == EMPTY_KEY)
+        if (prev == EMPTY_KEY || (prev == brickIndex && hashtable.voxelIndices[slot] == voxelIndex))
         {
-            // if (prev == EMPTY_KEY)
-            // {
-            //     InterlockedExchange(hashtable.temporalFrames[slot], temporalFrames);
-            //     InterlockedExchange(hashtable.voxelIndices[slot], voxelIndex);
-            // }
-
-            // InterlockedAdd(hashtable.hitCounts[slot], 1);
-            // InterlockedAdd(hashtable.indirectLight[slot].x, lighting.x);
-            // InterlockedAdd(hashtable.indirectLight[slot].y, lighting.y);
-            // InterlockedAdd(hashtable.indirectLight[slot].z, lighting.z);
-
             hashtable.temporalFrames[slot] = temporalFrames;
             hashtable.voxelIndices[slot] = voxelIndex;
             hashtable.indirectLight[slot] = lighting;
+            hashtable.hitCounts[slot] = frameIndex;
             break;
         }
+
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
         tries++;
     }
