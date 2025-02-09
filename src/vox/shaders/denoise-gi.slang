@@ -61,7 +61,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     uint2 voxelID = voxelIDs[pixel * 2];
     float3 center_pos = image_position[pixel * 2];
-    RWTexture2D<float3> read_texture = p.pass == 1 ? image_indirect : image_indirectDenoise;
 
     // Skip denoising for sky pixels
     if (all(center_pos == float3(0, 0, 0)))
@@ -75,7 +74,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // if (p.pass > 2)
     //     return;
 
-    float3 center_color = read_texture[pixel];
+    float3 center_color;
+    if (p.pass <= 1)
+    {
+        center_color = image_indirect[pixel];
+    }
+    else
+    {
+        center_color = image_indirectDenoise[pixel];
+    }
     float3 center_normal = image_normal[pixel * 2];
     float center_depth = image_depth[pixel];
 
@@ -100,7 +107,17 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 continue;
 
             float3 sample_worldpos = image_position[offset_pos * 2];
-            float3 sample_color = read_texture[offset_pos];
+            float3 sample_color;
+
+            if (p.pass <= 1)
+            {
+                sample_color = image_indirect[offset_pos];
+            }
+            else
+            {
+                sample_color = image_indirectDenoise[offset_pos];
+            }
+
             float3 sample_normal = image_normal[offset_pos * 2];
 
             // Skip sky samples
