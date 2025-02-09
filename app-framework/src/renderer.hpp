@@ -228,6 +228,24 @@ class Renderer
 
         // execute a task to copy the image data to the gpu
         auto recorder = device.create_command_recorder({});
+
+        recorder.pipeline_barrier_image_transition({
+            .src_access =
+            {
+                .stages = daxa::PipelineStageFlagBits::NONE,
+                .type = daxa::AccessTypeFlagBits::READ
+            },
+            .dst_access = 
+            {
+                .stages = daxa::PipelineStageFlagBits::TRANSFER,
+                .type = daxa::AccessTypeFlagBits::WRITE
+            },
+            .src_layout = daxa::ImageLayout::UNDEFINED,
+            .dst_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
+            .image_id = id,
+        });
+
+
         recorder.copy_buffer_to_image({
             .buffer = buffer,
             .image = id,
@@ -235,6 +253,22 @@ class Renderer
             .image_slice = {0, 0},
             .image_offset = {0, 0, 0},
             .image_extent = {(unsigned int)image.width(), (unsigned int)image.height(), 1},
+        });
+
+        recorder.pipeline_barrier_image_transition({
+            .src_access =
+            {
+                .stages = daxa::PipelineStageFlagBits::TRANSFER,
+                .type = daxa::AccessTypeFlagBits::WRITE
+            },
+            .dst_access = 
+            {
+                .stages = daxa::PipelineStageFlagBits::NONE,
+                .type = daxa::AccessTypeFlagBits::READ
+            },
+            .src_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
+            .dst_layout = daxa::ImageLayout::READ_ONLY_OPTIMAL,
+            .image_id = id,
         });
         
         auto executable_commands = recorder.complete_current_commands();
