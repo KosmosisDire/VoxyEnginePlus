@@ -4,21 +4,6 @@
 [[vk::push_constant]]
 const ComputePush p;
 
-void getRayFromPixel(float2 pixel, uint2 dimensions, CameraData camera, out float3 rayOrigin, out float3 rayDir)
-{
-    // Convert pixel to NDC space (-1 to 1)
-    float2 uv = (pixel + 0.5f) / float2(dimensions);
-    float2 ndc = uv * 2.0f - 1.0f;
-
-    // Inverse projection to get view space position
-    float4 viewSpace = mul(camera.invViewProj, float4(ndc.x, ndc.y, 1.0f, 1.0f));
-    viewSpace /= viewSpace.w;
-
-    // Get ray direction in world space
-    rayOrigin = camera.position;
-    rayDir = normalize(viewSpace.xyz - camera.position);
-}
-
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
