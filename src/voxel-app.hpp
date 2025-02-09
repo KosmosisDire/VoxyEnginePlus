@@ -57,56 +57,56 @@ struct VoxyApp : public Application
             {
                 .screenWidth = (int)window->GetWidth(),
                 .screenHeight = (int)window->GetHeight(),
-                .pointerX = InputManager::GetMousePosition().x,
-                .pointerY = InputManager::GetMousePosition().y,
-                .pointerDown = InputManager::IsMouseButtonPressed(MouseButton::Left),
-                .scrollDeltaX = InputManager::GetMouseScrollDelta().x,
-                .scrollDeltaY = InputManager::GetMouseScrollDelta().y,
+                .pointerX = Input::GetMousePosition().x,
+                .pointerY = Input::GetMousePosition().y,
+                .pointerDown = Input::IsMouseButtonPressed(MouseButton::Left),
+                .scrollDeltaX = Input::GetMouseScrollDelta().x,
+                .scrollDeltaY = Input::GetMouseScrollDelta().y,
                 .deltaTime = dt,
             };
 
-        if (InputManager::WasKeyPressed(Key::F4))
+        if (Input::WasKeyPressed(Key::F4))
         {
             ClayUI::DebugMode(!ClayUI::GetDebugMode());
         }
 
-        if (InputManager::WasKeyPressed(Key::R))
+        if (Input::WasKeyPressed(Key::R))
         {
             voxelRenderer.dirtyTerrain = true;
         }
 
         // if pressing L, sun dir is locked to camera
-        if (InputManager::IsKeyPressed(Key::L))
+        if (Input::IsKeyPressed(Key::L))
         {
-            renderData.sunDir = to_daxa(-voxelRenderer.camera.getForward());
+            renderData.sunDir = (-voxelRenderer.camera.getForward()).toDaxa();
         }
 
         // mouse capture
-        if (InputManager::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.mouseIsActive)
+        if (Input::WasMouseButtonPressed(MouseButton::Left) && !ImGui::GetIO().WantCaptureMouse && !uiState.mouseIsActive)
         {
-            InputManager::CaptureMouseResetDelta(true);
+            Input::CaptureMouseResetDelta(true);
         }
 
-        if (InputManager::WasKeyPressed(Key::Escape))
+        if (Input::WasKeyPressed(Key::Escape))
         {
-            InputManager::CaptureMouseResetDelta(!InputManager::IsMouseCaptured()); // use escape to toggle mouse capture
+            Input::CaptureMouseResetDelta(!Input::IsMouseCaptured()); // use escape to toggle mouse capture
         }
 
         // if mouse is captured, update camera
-        if (InputManager::IsMouseCaptured())
+        if (Input::IsMouseCaptured())
         {
-            auto delta = InputManager::GetMouseDelta();
+            auto delta = Input::GetMouseDelta();
             voxelRenderer.camera.processMouseMovement(delta, true);
             voxelRenderer.camera.processKeyboard(dt);
         }
 
-        uiState.mouseIsActive = !InputManager::IsMouseCaptured(); // assuming that the mouse is active when it is not captured (so it is visible and can interact with UI)
+        uiState.mouseIsActive = !Input::IsMouseCaptured(); // assuming that the mouse is active when it is not captured (so it is visible and can interact with UI)
         bool menuOpenBefore = uiState.mouseIsActive;
-        ClayUI::Update<UIData>(uiState, input, init_root_ui);
+        ClayUI::Update<UIData>(uiState, input, draw_root_ui);
 
         if (menuOpenBefore && !uiState.mouseIsActive)
         {
-            InputManager::CaptureMouseResetDelta(true);
+            Input::CaptureMouseResetDelta(true);
         }
 
         voxelRenderer.Update();

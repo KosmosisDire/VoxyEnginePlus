@@ -90,21 +90,21 @@ float3 hsv2rgb(float3 hsv)
     return hsv.z * lerp(K.xxx, saturate(p - K.xxx), hsv.y);
 }
 
-uint getMateriaId(int2 voxelID)
-{
-    uint globalVoxelIndex = voxelGlobalIndex(voxelID.x, voxelID.y);
-    return (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
-}
-
 Material getMaterial(uint voxelIndex)
 {
     return p.materials_ptr.materials[voxelIndex];
 }
 
-uint getHashtableVoxelIndex(TraceResult trace)
+uint getMaterialId(int2 voxelID)
+{
+    uint globalVoxelIndex = voxelGlobalIndex(voxelID.x, voxelID.y);
+    return (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
+}
+
+uint getHashtableFaceIndex(TraceResult trace)
 {
     bool isVoxelFarLOD = IsObjectSmallerThanPixel(
-        WORLD_VOXEL_SIZE * 0.25,
+        WORLD_VOXEL_SIZE * 0.2,
         trace.distance,
         p.state_ptr.camera.fov * 0.0174532925f,
         p.frame_dim.x);
@@ -261,6 +261,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
+    RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
     RWTexture2D<uint> materialIDs = RWTexture2D<uint>::get(p.gbuffer.materialIDs);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
     RWTexture2D<float4> blueNoise = RWTexture2D<float4>::get(p.blueNoise);
@@ -298,7 +299,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     }
 
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-    uint voxelMaterialId = getMateriaId(int2(globalBrickIndex, trace.voxelIndex));
+    uint voxelMaterialId = getMaterialId(int2(globalBrickIndex, trace.voxelIndex));
     Material traceMat = getMaterial(voxelMaterialId);
 
     // if (dot(trace.normal, rayDir) > (1 / trace.distance * 0.4) - 0.1)
@@ -335,7 +336,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float4 blueNoiseSample = blueNoise[halfPixel % 128];
 
         TraceResult bounceResult = computeBounce(pixel, trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
-        Material hitMat = getMaterial(getMateriaId(int2(brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), bounceResult.voxelIndex)));
+        Material hitMat = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), bounceResult.voxelIndex)));
         float3 rayBounceColor = calculateBounceColor(bounceResult, hitMat, bounceRayDir);
 
         // Calculate previous position with subpixel precision
@@ -386,10 +387,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     if (trace.hit)
     {
-        voxelIDs[pixel] = int2(globalBrickIndex, getHashtableVoxelIndex(trace));
+        voxelIDs[pixel] = int2(globalBrickIndex, trace.voxelIndex);
+        voxelFaceIDs[pixel] = getHashtableFaceIndex(trace);
     }
     else
     {
         voxelIDs[pixel] = int2(EMPTY_KEY, EMPTY_KEY);
+        voxelFaceIDs[pixel] = EMPTY_KEY;
     }
 }

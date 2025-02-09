@@ -67,10 +67,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    // read hashmap entry
-    uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
-    uint historyLength = p.voxel_hashmap_ptr.temporalFrames[slot];
-
     // if (p.pass > image_ssao[pixel] * 5 + 3)
     // {
     //     return;

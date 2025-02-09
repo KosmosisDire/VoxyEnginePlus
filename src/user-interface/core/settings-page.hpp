@@ -2,7 +2,7 @@
 #include <user-interface/shared/toggle.hpp>
 
 
-void settings_page(UIData& state, UIInputs input) {
+void draw_settings_page(UIData& state, UIInputs input) {
     UI(Element("SettingsPage")
     .width(SizingType::Percent, 30)
     .height(SizingType::Fit)

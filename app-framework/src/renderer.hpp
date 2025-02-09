@@ -49,6 +49,24 @@ struct InlineTask
         return *this;
     }
 
+    InlineTask &AddAllAttachments(daxa::TaskImageAccess access, std::vector<daxa::TaskImage> images)
+    {
+        for (auto image : images)
+        {
+            AddAttachment(access, image);
+        }
+        return *this;
+    }
+
+    InlineTask &AddAllAttachments(daxa::TaskBufferAccess access, std::vector<daxa::TaskBuffer> buffers)
+    {
+        for (auto buffer : buffers)
+        {
+            AddAttachment(access, buffer);
+        }
+        return *this;
+    }
+
   private:
     friend class Renderer;
     daxa::InlineTaskInfo build()
@@ -188,12 +206,12 @@ class Renderer
         return device.create_image(info);
     }
 
-    inline daxa::ImageId CreateImage(std::string name, defect::Image &image)
+    inline daxa::ImageId CreateImage(std::string name, Image &image)
     {
         auto id = CreateImage(daxa::ImageInfo
         {
             .format = daxa::Format::R8G8B8A8_UNORM,
-            .size = {(uint)image.width(), (uint)image.height(), 1},
+            .size = {(unsigned int)image.width(), (unsigned int)image.height(), 1},
             .usage = daxa::ImageUsageFlagBits::TRANSFER_DST | daxa::ImageUsageFlagBits::SHADER_STORAGE,
             .name = name,
         });
@@ -216,7 +234,7 @@ class Renderer
             .image_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
             .image_slice = {0, 0},
             .image_offset = {0, 0, 0},
-            .image_extent = {(uint)image.width(), (uint)image.height(), 1},
+            .image_extent = {(unsigned int)image.width(), (unsigned int)image.height(), 1},
         });
         
         auto executable_commands = recorder.complete_current_commands();

@@ -100,7 +100,7 @@ struct GBuffer
     daxa_ImageViewId depth;
     daxa_ImageViewId depthHalfRes;
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
-    daxa_ImageViewId voxelIDsLast; // global brick id and local voxel id from last frame
+    daxa_ImageViewId voxelFaceIDs; // material id
     daxa_ImageViewId materialIDs; // material id
     daxa_ImageViewId ssao; // screen space ambient occlusion
     daxa_ImageViewId shadow; // shadow map
@@ -130,17 +130,3 @@ struct DenoisePush
     daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 
-
-struct RadixSortPush {
-    daxa_u32 numKeys;         // total number of keys to sort
-    daxa_u32 passShift;       // bit offset for this pass (0,8,16,24)
-    daxa_u32 passMask;        // bit mask (0xFF for 8-bit radix)
-    daxa_u32 numWorkGroups;   // total number of work groups for this dispatch
-    daxa_u32vec2 frame_dim;      // dimensions of input texture
-};
-
-struct RadixScanPush {
-    daxa_u32 numWorkGroups;    // Number of workgroups from count kernel
-    daxa_u32 passShift;        // Current pass (just for debugging)
-    daxa_u32vec2 frame_dim;       // Original dimensions
-};

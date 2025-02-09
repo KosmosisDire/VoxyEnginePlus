@@ -27,7 +27,7 @@ struct GBufferCPU
     daxa::ImageId depth;
     daxa::ImageId depthHalfRes;
     daxa::ImageId voxelIDs;
-    daxa::ImageId voxelIDsLast;
+    daxa::ImageId voxelFaceIDs;
     daxa::ImageId materialIDs;
     daxa::ImageId ssao;
     daxa::ImageId shadow;
@@ -46,10 +46,13 @@ struct GBufferCPU
     daxa::TaskImage task_depth;
     daxa::TaskImage task_depthHalfRes;
     daxa::TaskImage task_voxelIDs;
-    daxa::TaskImage task_voxelIDsLast;
+    daxa::TaskImage task_voxelFaceIDs;
     daxa::TaskImage task_materialIDs;
     daxa::TaskImage task_ssao;
     daxa::TaskImage task_shadow;
+
+    std::vector<daxa::ImageId> images;
+    std::vector<daxa::TaskImage> task_images;
 
     inline void CreateImages(Renderer &renderer)
     {
@@ -67,10 +70,13 @@ struct GBufferCPU
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1);
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5);
         voxelIDs = renderer.CreateRenderImage("voxelIDs", &task_voxelIDs, daxa::Format::R32G32_UINT, 1.0);
-        voxelIDsLast = renderer.CreateRenderImage("voxelIDsLast", &task_voxelIDsLast, daxa::Format::R32G32_UINT, 1.0);
+        voxelFaceIDs = renderer.CreateRenderImage("voxelFaceIDs", &task_voxelFaceIDs, daxa::Format::R32_UINT, 1.0);
         materialIDs = renderer.CreateRenderImage("materialIDs", &task_materialIDs, daxa::Format::R32_UINT, 1.0);
         ssao = renderer.CreateRenderImage("ssao", &task_ssao, daxa::Format::R32_SFLOAT, 0.5);
         shadow = renderer.CreateRenderImage("shadow", &task_shadow, daxa::Format::R32_SFLOAT, 1.0);
+
+        images = {color, normal, position, voxelUVs, brickUVs, indirect, indirectLast, indirectDenoised, indirectPerVoxelPass1, indirectPerVoxelPass2, motion, depth, depthHalfRes, voxelIDs, materialIDs, voxelFaceIDs, ssao, shadow};
+        task_images = {task_color, task_normal, task_position, task_voxelUVs, task_brickUVs, task_indirect, task_indirectLast, task_indirectDenoised, task_indirectPerVoxelPass1, task_indirectPerVoxelPass2, task_motion, task_depth, task_depthHalfRes, task_voxelIDs, task_voxelFaceIDs, task_materialIDs, task_ssao, task_shadow};
     }
 
     inline void ResizeImages(Renderer &renderer)
@@ -81,46 +87,18 @@ struct GBufferCPU
 
     inline void DestroyImages(Renderer &renderer)
     {
-        renderer.DestroyImage(color);
-        renderer.DestroyImage(normal);
-        renderer.DestroyImage(position);
-        renderer.DestroyImage(voxelUVs);
-        renderer.DestroyImage(brickUVs);
-        renderer.DestroyImage(indirect);
-        renderer.DestroyImage(indirectLast);
-        renderer.DestroyImage(indirectDenoised);
-        renderer.DestroyImage(indirectPerVoxelPass1);
-        renderer.DestroyImage(indirectPerVoxelPass2);
-        renderer.DestroyImage(motion);
-        renderer.DestroyImage(depth);
-        renderer.DestroyImage(depthHalfRes);
-        renderer.DestroyImage(voxelIDs);
-        renderer.DestroyImage(voxelIDsLast);
-        renderer.DestroyImage(materialIDs);
-        renderer.DestroyImage(ssao);
-        renderer.DestroyImage(shadow);
+        for (auto image : images)
+        {
+            renderer.DestroyImage(image);
+        }
     }
 
     inline void UseImages(daxa::TaskGraph &task_graph)
     {
-        task_graph.use_persistent_image(task_color);
-        task_graph.use_persistent_image(task_normal);
-        task_graph.use_persistent_image(task_position);
-        task_graph.use_persistent_image(task_voxelUVs);
-        task_graph.use_persistent_image(task_brickUVs);
-        task_graph.use_persistent_image(task_indirect);
-        task_graph.use_persistent_image(task_indirectLast);
-        task_graph.use_persistent_image(task_indirectDenoised);
-        task_graph.use_persistent_image(task_indirectPerVoxelPass1);
-        task_graph.use_persistent_image(task_indirectPerVoxelPass2);
-        task_graph.use_persistent_image(task_motion);
-        task_graph.use_persistent_image(task_depth);
-        task_graph.use_persistent_image(task_depthHalfRes);
-        task_graph.use_persistent_image(task_voxelIDs);
-        task_graph.use_persistent_image(task_voxelIDsLast);
-        task_graph.use_persistent_image(task_materialIDs);
-        task_graph.use_persistent_image(task_ssao);
-        task_graph.use_persistent_image(task_shadow);
+        for (auto &task_image : task_images)
+        {
+            task_graph.use_persistent_image(task_image);
+        }
     }
 
     inline GBuffer GetGPUBuffer(int frame)
@@ -139,8 +117,8 @@ struct GBufferCPU
             .motion = motion.default_view(),
             .depth = depth.default_view(),
             .depthHalfRes = depthHalfRes.default_view(),
-            .voxelIDs = frame % 2 == 0 ? voxelIDs.default_view() : voxelIDsLast.default_view(),
-            .voxelIDsLast = frame % 2 == 0 ? voxelIDsLast.default_view() : voxelIDs.default_view(),
+            .voxelIDs = voxelIDs.default_view(),
+            .voxelFaceIDs = voxelFaceIDs.default_view(),
             .materialIDs = materialIDs.default_view(),
             .ssao = ssao.default_view(),
             .shadow = shadow.default_view(),
@@ -149,24 +127,10 @@ struct GBufferCPU
 
     inline void TaskAddAll(InlineTask &task, daxa::TaskImageAccess access)
     {
-        task.AddAttachment(access, task_color);
-        task.AddAttachment(access, task_normal);
-        task.AddAttachment(access, task_position);
-        task.AddAttachment(access, task_voxelUVs);
-        task.AddAttachment(access, task_brickUVs);
-        task.AddAttachment(access, task_indirect);
-        task.AddAttachment(access, task_indirectLast);
-        task.AddAttachment(access, task_indirectDenoised);
-        task.AddAttachment(access, task_indirectPerVoxelPass1);
-        task.AddAttachment(access, task_indirectPerVoxelPass2);
-        task.AddAttachment(access, task_motion);
-        task.AddAttachment(access, task_depth);
-        task.AddAttachment(access, task_depthHalfRes);
-        task.AddAttachment(access, task_voxelIDs);
-        task.AddAttachment(access, task_voxelIDsLast);
-        task.AddAttachment(access, task_materialIDs);
-        task.AddAttachment(access, task_ssao);
-        task.AddAttachment(access, task_shadow);
+        for (auto &task_image : task_images)
+        {
+            task.AddAttachment(access, task_image);
+        }
     }
 };
 
@@ -204,7 +168,7 @@ class VoxelRenderer
     daxa::BufferId past_voxel_hashmap_buffer; // from last frame
     daxa::TaskBuffer task_past_voxel_hashmap_buffer; // from last frame
 
-    std::unique_ptr<defect::Image> blue_noise_images_data[64];
+    std::unique_ptr<Image> blue_noise_images_data[64];
     daxa::ImageId blue_noise_images[64];
     daxa::TaskImage task_blue_noise_image;
 
@@ -255,7 +219,7 @@ class VoxelRenderer
         for (int i = 0; i < 64; i++)
         {
             auto filename = std::to_string(i) + ".png";
-            auto image = std::make_unique<defect::Image>("resources/textures/noise/vec3/" + filename);
+            auto image = std::make_unique<Image>("resources/textures/noise/vec3/" + filename);
             blue_noise_images[i] = renderer->CreateImage(filename, *image);
             blue_noise_images_data[i] = std::move(image);
         }
@@ -372,12 +336,12 @@ class VoxelRenderer
         task_graph.use_persistent_buffer(task_gbufferGPU); 
         gbufferCPU.UseImages(task_graph);
 
-        auto setup_gbuffer_task =
-            InlineTask("setup_gbuffer")
+        renderer->AddTask(InlineTask("setup_gbuffer")
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_state_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_gbufferGPU)
+                .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_images)
                 .SetTask(
                     [this](daxa::TaskInterface ti)
                     {
@@ -386,15 +350,7 @@ class VoxelRenderer
                         stateData.lastCamera = stateData.camera;
                         stateData.camera = camera.getCameraData();
                         renderer->CopyToBuffer<RenderData>(ti, stateData, ti.get(task_state_buffer), 0);
-
-                        auto temp = task_voxel_hashmap_buffer;
-                        task_voxel_hashmap_buffer = task_past_voxel_hashmap_buffer; 
-                        task_past_voxel_hashmap_buffer = temp;
-
-                        // renderer->ClearBuffer(ti, task_voxel_hashmap_buffer, 0);
-                    });
-        gbufferCPU.TaskAddAll(setup_gbuffer_task, daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT);
-        renderer->AddTask(setup_gbuffer_task);
+                    }));
 
         renderer->AddTask(
             InlineTask("terrain_gen")
@@ -453,7 +409,7 @@ class VoxelRenderer
                     }));
 
         
-        auto main_render_gbuffer_task = InlineTask("main_render_gbuffer") 
+        renderer->AddTask(InlineTask("main_render_gbuffer") 
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_voxel_materials_buffer)
@@ -463,6 +419,7 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_state_buffer)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
+                .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, gbufferCPU.task_images)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {
@@ -482,9 +439,7 @@ class VoxelRenderer
                         ti.recorder.set_pipeline(*render_gbuffer_compute);
                         ti.recorder.push_constant(push);
                         ti.recorder.dispatch({(renderer->surface_width + 15) / 16, (renderer->surface_height + 15) / 16});
-                    });
-        gbufferCPU.TaskAddAll(main_render_gbuffer_task, daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT);
-        renderer->AddTask(main_render_gbuffer_task);
+                    }));
 
         // SSAO pass
         renderer->AddTask(
@@ -552,8 +507,8 @@ class VoxelRenderer
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_indirectPerVoxelPass1)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_indirectPerVoxelPass2)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelIDs)
-                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelIDsLast)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelUVs)
+                .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_voxelFaceIDs)
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_normal)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_past_voxel_hashmap_buffer)
@@ -582,20 +537,16 @@ class VoxelRenderer
                         push.pass = 3;
                         ti.recorder.push_constant(push);
                         ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
-
-                        push.pass = 4;
-                        ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
                     }));
 
-
-        auto composite_render_task = InlineTask("composite_render")
+        renderer->AddTask(InlineTask("composite_render")
                 .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, *task_render_image)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_materials_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_past_voxel_hashmap_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_state_buffer)
                 .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
+                .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_images)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
                     {
@@ -611,9 +562,7 @@ class VoxelRenderer
                         ti.recorder.set_pipeline(*render_composite_compute);
                         ti.recorder.push_constant(push);
                         ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
-                    });
-        gbufferCPU.TaskAddAll(composite_render_task, daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY);
-        renderer->AddTask(composite_render_task);
+                    }));
 
         // create task to blit render image to swapchain
         renderer->AddTask(renderer->CreateSwapchainBlitTask(*task_render_image));

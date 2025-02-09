@@ -6,9 +6,6 @@
 #include <string>
 #include <stdexcept>
 
-namespace defect
-{
-
 class Image {
 public:
     // Constructor - loads image from file
@@ -101,5 +98,3 @@ private:
     int height_;
     int channels_;
 };
-
-} // namespace defect

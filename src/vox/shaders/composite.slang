@@ -21,13 +21,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
     RWTexture2D<float2> brickUVs = RWTexture2D<float2>::get(p.gbuffer.brickUVs);
     RWTexture2D<float3> indirect = RWTexture2D<float3>::get(p.gbuffer.indirect);
-    RWTexture2D<float3> indirectPerVoxPass = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass1);
+    RWTexture2D<float3> indirectPerVoxPass = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass2);
     RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
     RWTexture2D<float> ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<float> depthHalfRes = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
-    RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
-    RWTexture2D<int2> voxelIDsLast = RWTexture2D<int2>::get(p.gbuffer.voxelIDsLast);
+    RWTexture2D<uint2> voxelIDs = RWTexture2D<uint2>::get(p.gbuffer.voxelIDs);
+    RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
     RWTexture2D<uint> materialIDs = RWTexture2D<uint>::get(p.gbuffer.materialIDs);
     RWTexture2D<float> shadow = RWTexture2D<float>::get(p.gbuffer.shadow);
 
@@ -43,17 +43,19 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float ssaoValue = ssao[pixel / 2];
     float depthValue = depth[pixel];
     float depthValueHalfRes = depthHalfRes[pixel / 2];
-    int2 voxelID = voxelIDs[pixel]; // round to account for half res sampling
-    int2 voxelIDLast = voxelIDsLast[pixel];
+    uint2 voxelID = voxelIDs[pixel]; // round to account for half res sampling
+    uint voxelFaceID = voxelFaceIDs[pixel];
     uint materialID = materialIDs[pixel];
     materialID = clamp(materialID, 0, TOTAL_MATERIALS - 1);
     Material material = p.materials_ptr.materials[materialID];
     float shadowValue = shadow[pixel];
 
-    uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelID.y);
-    int hitCount = p.state_ptr.frame - p.past_voxel_hashmap_ptr.hitCounts[slot];
-    float3 voxelLight = p.voxel_hashmap_ptr.indirectLight[slot];
-    int samples = p.voxel_hashmap_ptr.temporalFrames[slot];
+    float hashtableCollisionFactor = get_hashtable_collision_factor(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID) / 10.0;
+
+    uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID);
+    var entry = p.voxel_hashmap_ptr.entries[slot];
+    float3 voxelLight = entry.lighting;
+    int samples = entry.historyCount;
 
     // if slot is empty then sample 4 adjacent pixels and average values from them (as long as they aren't empty)
     if (slot == EMPTY_KEY)
@@ -69,10 +71,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 if (offset.x < 0 || offset.x >= p.frame_dim.x || offset.y < 0 || offset.y >= p.frame_dim.y)
                     continue;
 
-                uint offsetSlot = get_hashtable_index(p.voxel_hashmap_ptr, voxelIDs[offset].x, voxelIDs[offset].y);
+                uint offsetSlot = get_hashtable_index(p.voxel_hashmap_ptr, voxelIDs[offset].x, voxelFaceIDs[offset]);
                 if (offsetSlot != EMPTY_KEY)
                 {
-                    avgLight += p.voxel_hashmap_ptr.indirectLight[offsetSlot];
+                    avgLight += p.voxel_hashmap_ptr.entries[offsetSlot].lighting;
                     avgSamples++;
                 }
             }
@@ -131,7 +133,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     specular *= getBaseSkyColor(initAtmosphere(viewDir, sunDir));
     specular *= 1 - shadowValue;
 
-    if (!shadowValue)
+    if (shadowValue == 0)
     {
         voxelLight += lightColor * ldot;
     }
@@ -155,6 +157,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(depthValue, depthValue, depthValue);
     // finalColor = float3(depthValueHalfRes, depthValueHalfRes, depthValueHalfRes);
     // finalColor = float3(voxelID.x, voxelID.y, 0) / 1000.0;
+    // finalColor = float3(voxelFaceID, voxelFaceID, voxelFaceID) / 1000.0;
     // finalColor = float3(0, voxelIDLast.y, 0) / 1000.0;
     // finalColor = float3(materialID, materialID, materialID) / 16.0;
     // finalColor = float3(shadowValue, shadowValue, shadowValue);
@@ -164,6 +167,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(voxelUV.x, voxelUV.y, 0);
     // finalColor = float3(brickUV.x, brickUV.y, 0);
     // finalColor = specular;
+    // finalColor = float3(hashtableCollisionFactor);
 
     // Apply firefly removal after all other processing but before final output
     // finalColor = removeFireflies(finalColor, pixel, render_image);

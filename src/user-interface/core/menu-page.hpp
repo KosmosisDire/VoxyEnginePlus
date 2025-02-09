@@ -1,7 +1,7 @@
 #include "core.hpp"
 
 
-void menu_page(UIData& state, UIInputs input) {
+void draw_menu_page(UIData& state, UIInputs input) {
     UI(Element("MenuPage")
     .size(SizingType::Percent, 100, 100)
     .color(ThemeColor::WindowBg)

@@ -15,9 +15,9 @@ class VoxCamera : public Camera
         // Combine view and projection
         auto viewProj = proj * view;
 
-        data.viewProj = to_daxa(viewProj);
-        data.invViewProj = to_daxa(inverse(viewProj));
-        data.position = to_daxa(getPosition());
+        data.viewProj = viewProj.toDaxa();
+        data.invViewProj = viewProj.inverse().toDaxa();
+        data.position = getPosition().toDaxa();
         data.near = getNearPlane();
         data.far = getFarPlane();
         data.fov = getFOV();

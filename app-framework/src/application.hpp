@@ -40,7 +40,7 @@ struct Application
             OnStart();
         }
 
-        InputManager::Update();
+        Input::Update();
         window->Update();
 
         if (window->ShouldClose())
@@ -74,7 +74,7 @@ struct Application
     virtual void OnStart() {};
 
   private:
-    InputManager inputManager;
+    Input inputManager;
     Clock::time_point start, prev_time = Clock::now();
     f32 time = 0.0f;
     f32 delta_time = 1.0f;

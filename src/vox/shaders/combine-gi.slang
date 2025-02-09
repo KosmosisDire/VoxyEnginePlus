@@ -59,7 +59,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> image_ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     RWTexture2D<float3> color = RWTexture2D<float3>::get(p.gbuffer.color);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
-    RWTexture2D<int2> voxelIDsLast = RWTexture2D<int2>::get(p.gbuffer.voxelIDsLast);
+    RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
     RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
     RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
@@ -69,39 +69,32 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // find boundaries from adjacent pixels based on voxelids
     uint2 pixel = pixel_i.xy;
     int2 voxelID = voxelIDs[pixel * 2];
+    uint voxelFaceID = voxelFaceIDs[pixel * 2];
     float2 voxelUV = voxelUVs[pixel * 2];
     float depthValue = depth[pixel];
     int3 normal = normals[pixel * 2];
     float3 pos = position[pixel * 2];
     float2 motionVector = motion[pixel * 2];
 
-    // image_ssao[pixel] = 0.0;
-    // int2 offsetVoxID = voxelIDs[(pixel + int2(-1, 0)) * 2];
-    // if (offsetVoxID.x != voxelID.x || offsetVoxID.y != voxelID.y)
-    // {
-    //     image_ssao[pixel] = 1.0;
-    // }
-
-    int2 jitter = int2(p.state_ptr.frame % 2, (p.state_ptr.frame + 1) % 2);
-
     if (p.pass == 1)
     {
         float3 avgColor = indirect[pixel];
-        // avgColor = lerp(avgColor * image_ssao[pixel], avgColor, clamp(dot(avgColor, float3(0.2126, 0.7152, 0.0722)) * 0.5, 0, 1));
 
         int avgCount = 1;
-        int2 offsetVoxID = voxelIDs[(pixel + int2(-1, 0)) * 2];
-        if (offsetVoxID.x != voxelID.x || offsetVoxID.y != voxelID.y)
+        int2 offsetVoxelID = voxelIDs[(pixel + int2(-1, 0)) * 2];
+        uint offsetFaceID = voxelFaceIDs[(pixel + int2(-1, 0)) * 2];
+        if (any(offsetVoxelID != voxelID) || offsetFaceID != voxelFaceID)
         {
-            offsetVoxID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
-            while (offsetVoxID.x == voxelID.x && offsetVoxID.y == voxelID.y && avgCount < 1000)
+            offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
+            offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * 2];
+            while (all(offsetVoxelID == voxelID) && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
                 float3 sampleColor = indirect[(pixel + int2(avgCount, 0))];
-                // sampleColor = lerp(sampleColor * image_ssao[pixel], sampleColor, clamp(dot(sampleColor, float3(0.2126, 0.7152, 0.0722)) * 0.5, 0, 1));
                 avgColor += sampleColor;
 
                 avgCount++;
-                offsetVoxID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
+                offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
+                offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * 2];
             }
 
             for (int i = 0; i < avgCount; i++)
@@ -114,17 +107,22 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (p.pass == 2)
     {
         float3 avgColor = indirectPerVoxPass1[pixel];
+
         int avgCount = 1;
-        int2 offsetVoxID = voxelIDs[(pixel + int2(0, -1)) * 2];
-        if (offsetVoxID.x != voxelID.x || offsetVoxID.y != voxelID.y)
+        int2 offsetVoxelID = voxelIDs[(pixel + int2(0, -1)) * 2];
+        uint offsetFaceID = voxelFaceIDs[(pixel + int2(0, -1)) * 2];
+        if (any(offsetVoxelID != voxelID) || offsetFaceID != voxelFaceID)
         {
-            offsetVoxID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
-            while (offsetVoxID.x == voxelID.x && offsetVoxID.y == voxelID.y && avgCount < 1000)
+            offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
+            offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * 2];
+            while (all(offsetVoxelID == voxelID) && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
-                avgColor += indirectPerVoxPass1[(pixel + int2(0, avgCount))];
+                float3 sampleColor = indirectPerVoxPass1[(pixel + int2(0, avgCount))];
+                avgColor += sampleColor;
 
                 avgCount++;
-                offsetVoxID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
+                offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
+                offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * 2];
             }
 
             for (int i = 0; i < avgCount; i++)
@@ -134,60 +132,37 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         }
     }
 
-    // if (p.pass == 3)
-    // {
-    //     float3 avgColor = indirectPerVoxPass2[pixel];
-
-    //     int avgCount = 1;
-    //     int2 offsetVoxID = voxelIDs[(pixel + int2(-1, 0)) * 2];
-    //     if (offsetVoxID.x != voxelID.x || offsetVoxID.y != voxelID.y)
-    //     {
-    //         offsetVoxID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
-    //         while (offsetVoxID.x == voxelID.x && offsetVoxID.y == voxelID.y && avgCount < 1000)
-    //         {
-    //             float3 sampleColor = indirectPerVoxPass2[(pixel + int2(avgCount, 0))];
-    //             avgColor += sampleColor;
-
-    //             avgCount++;
-    //             offsetVoxID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
-    //         }
-
-    //         for (int i = 0; i < avgCount; i++)
-    //         {
-    //             indirectPerVoxPass1[(pixel + int2(i, 0))] = avgColor / avgCount;
-    //         }
-    //     }
-    // }
-
-    if (p.pass == 4)
+    if (p.pass == 3)
     {
-        int2 offsetVoxID = voxelIDs[(pixel + int2(-1, -1) * jitter) * 2];
+        int2 offsetVoxID = voxelIDs[(pixel + int2(-1, -1)) * 2];
         int2 offsetVoxID2 = voxelIDs[(pixel + int2(1, 1)) * 2];
+        int offsetFaceID = voxelFaceIDs[(pixel + int2(-1, -1)) * 2];
+        int offsetFaceID2 = voxelFaceIDs[(pixel + int2(1, 1)) * 2];
 
         float3 rayOrigin, rayDir;
         getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
         float roughArea = depthValue * 0.03 * (dot(normal, rayDir * 0.5 + 0.5) + 2);
 
-        if (offsetVoxID.x != voxelID.x || offsetVoxID.y != voxelID.y || offsetVoxID2.x != voxelID.x || offsetVoxID2.y != voxelID.y)
+        if (any(offsetVoxID != voxelID) || any(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
         {
             float3 finalColor = indirectPerVoxPass2[pixel];
 
-            uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, voxelID.x, voxelID.y);
+            uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID);
             uint lastTempFrames = 0;
             float3 lastColor = float3(0, 0, 0);
 
-            // if last slot is empty then we need to try and find a reprojection of the last frame using a different voxel id (like the one from the previous frame)
             if (slot != EMPTY_KEY)
             {
-                lastTempFrames = p.past_voxel_hashmap_ptr.temporalFrames[slot];
-                lastColor = p.past_voxel_hashmap_ptr.indirectLight[slot];
+                var entry = p.voxel_hashmap_ptr.entries[slot];
+                lastTempFrames = entry.historyCount;
+                lastColor = entry.lighting;
             }
 
             float blendFactor = 1.0 / (lastTempFrames + 1);
             blendFactor = clamp(blendFactor, 0.01, 0.99);
             finalColor = lastColor * (1 - blendFactor) + finalColor * (blendFactor);
 
-            voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelID.y, finalColor, lastTempFrames + 1, p.state_ptr.frame);
+            voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, finalColor, lastTempFrames + 1, p.state_ptr.frame);
         }
     }
 }

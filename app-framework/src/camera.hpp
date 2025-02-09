@@ -1,12 +1,8 @@
 #pragma once
 #include "input.hpp"
-#include "math.hpp"
-#include <GLFW/glfw3.h>
-
-using namespace glm;
-
-// Add this at the top of your file or in your build system:
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include "math/vector3.hpp"
+#include "math/mat4x4.hpp"
+#include "math/math.hpp"
 
 using namespace daxa::types;
 
@@ -17,8 +13,8 @@ class Camera
     float sensitivity = 0.1f;
 
     Camera(
-        vec3 position = vec3(0.0f, 0.0f, 0.0f),
-        vec3 up = vec3(0.0f, 1.0f, 0.0f),
+        Vector3 position = Vector3(0.0f, 0.0f, 0.0f),
+        Vector3 up = Vector3(0.0f, 1.0f, 0.0f),
         float yaw = -90.0f,
         float pitch = 0.0f,
         uint32_t initialWidth = 800,
@@ -77,44 +73,44 @@ class Camera
         validateAndUpdatePlanes(nearPlane, farPlane);
     }
 
-    mat4x4 getProjectionMatrix() const
+    Matrix4x4 getProjectionMatrix() const
     {
-        auto proj = perspective(radians(fov), getAspectRatio(), near, far);
-        proj[1][1] *= -1; // Flip Y coordinate for Vulkan convention
+        auto proj = Matrix4x4::perspective(fov, getAspectRatio(), near, far);
+        proj(1,1) *= -1; // Flip Y coordinate for Vulkan convention
         return proj;
     }
 
-    mat4x4 getViewMatrix() const
+    Matrix4x4 getViewMatrix() const
     {
-        return lookAt(position, position + front, up);
+        return Matrix4x4::lookAt(position, position + front, up);
     }
 
     float getNearPlane() const { return near; }
     float getFarPlane() const { return far; }
-    vec3 getForward() const { return front; }
-    vec3 getRight() const { return right; }
-    vec3 getUp() const { return up; }
-    vec3 getPosition() const { return position; }
+    Vector3 getForward() const { return front; }
+    Vector3 getRight() const { return right; }
+    Vector3 getUp() const { return up; }
+    Vector3 getPosition() const { return position; }
 
     void processKeyboard(float deltaTime)
     {
         float velocity = speed * deltaTime;
 
-        if (InputManager::IsKeyPressed(Key::W))
+        if (Input::IsKeyPressed(Key::W))
             position += front * velocity;
-        if (InputManager::IsKeyPressed(Key::S))
+        if (Input::IsKeyPressed(Key::S))
             position -= front * velocity;
-        if (InputManager::IsKeyPressed(Key::A))
+        if (Input::IsKeyPressed(Key::A))
             position -= right * velocity;
-        if (InputManager::IsKeyPressed(Key::D))
+        if (Input::IsKeyPressed(Key::D))
             position += right * velocity;
-        if (InputManager::IsKeyPressed(Key::Space))
+        if (Input::IsKeyPressed(Key::Space))
             position += up * velocity;
-        if (InputManager::IsKeyPressed(Key::LeftShift))
+        if (Input::IsKeyPressed(Key::LeftShift))
             position -= up * velocity;
     }
 
-    void processMouseMovement(vec2 mouseDelta, bool constrainPitch = true)
+    void processMouseMovement(Vector2 mouseDelta, bool constrainPitch = true)
     {
         float xoffset = mouseDelta.x;
         float yoffset = mouseDelta.y;
@@ -136,11 +132,11 @@ class Camera
     }
 
   private:
-    vec3 position;
-    vec3 front;
-    vec3 up;
-    vec3 right;
-    vec3 worldUp;
+    Vector3 position;
+    Vector3 front;
+    Vector3 up;
+    Vector3 right;
+    Vector3 worldUp;
 
     float yaw;
     float pitch;
@@ -174,14 +170,14 @@ class Camera
 
     void updateCameraVectors()
     {
-        vec3 newFront;
+        Vector3 newFront;
         // Adjust the calculations for Vulkan's coordinate system
-        newFront.x = -cos(radians(yaw)) * cos(radians(pitch));
-        newFront.y = -sin(radians(pitch)); // Flip Y since Vulkan Y points down
-        newFront.z = -sin(radians(yaw)) * cos(radians(pitch));
-        front = normalize(newFront);
+        newFront.x = -Math::cos(Math::radians(yaw)) * Math::cos(Math::radians(pitch));
+        newFront.y = -Math::sin(Math::radians(pitch)); // Flip Y since Vulkan Y points down
+        newFront.z = -Math::sin(Math::radians(yaw)) * Math::cos(Math::radians(pitch));
+        front = newFront.normalized();
         // Keep right-handed coordinate system
-        right = normalize(cross(front, worldUp));
-        up = normalize(cross(right, front));
+        right = front.cross(worldUp).normalized();
+        up = right.cross(front).normalized();
     }
 };

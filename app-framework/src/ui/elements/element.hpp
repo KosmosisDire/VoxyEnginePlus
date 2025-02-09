@@ -105,12 +105,9 @@ struct Element
     Element &floatingZIndex(int zIndex);
     Element &floatingParent(std::string parentId);
     Element &floatingParent(int parentId);
-    Element &floatingAttachPointSelf(AttachPointType attachX, AttachPointType attachY);
-    Element &floatingAttachPointSelfX(AttachPointType attachX);
-    Element &floatingAttachPointSelfY(AttachPointType attachY);
-    Element &floatingAttachPointParent(AttachPointType attachX, AttachPointType attachY);
-    Element &floatingAttachPointParentX(AttachPointType attachX);
-    Element &floatingAttachPointParentY(AttachPointType attachY);
+    Element &floatingAttachPoint(AttachPointType attach);
+    Element &floatingAttachPointSelf(AttachPointType attach);
+    Element &floatingAttachPointParent(AttachPointType attach);
     Element &floatingPointerMode(PointerEventMode pointerMode);
 
     // @brief Gets the computed properties of an element.

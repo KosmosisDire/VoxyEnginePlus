@@ -358,46 +358,25 @@ Element &Element::floatingParent(int parentId)
     return *this;
 }
 
-Element &Element::floatingAttachPointSelf(AttachPointType attachX, AttachPointType attachY)
+Element &Element::floatingAttachPoint(AttachPointType attach)
 {
-    props.clay.floating.attachment.element = ToClay(attachX);
-    props.clay.floating.attachment.element = ToClay(attachY);
+    props.clay.floating.attachment.element = ToClay(attach);
+    props.clay.floating.attachment.parent = ToClay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingAttachPointSelfX(AttachPointType attachX)
+Element &Element::floatingAttachPointSelf(AttachPointType attach)
 {
-    props.clay.floating.attachment.element = ToClay(attachX);
+    props.clay.floating.attachment.element = ToClay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingAttachPointSelfY(AttachPointType attachY)
-{
-    props.clay.floating.attachment.element = ToClay(attachY);
-    props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
-    return *this;
-}
 
-Element &Element::floatingAttachPointParent(AttachPointType attachX, AttachPointType attachY)
+Element &Element::floatingAttachPointParent(AttachPointType attach)
 {
-    props.clay.floating.attachment.parent = ToClay(attachX);
-    props.clay.floating.attachment.parent = ToClay(attachY);
-    props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
-    return *this;
-}
-
-Element &Element::floatingAttachPointParentX(AttachPointType attachX)
-{
-    props.clay.floating.attachment.parent = ToClay(attachX);
-    props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
-    return *this;
-}
-
-Element &Element::floatingAttachPointParentY(AttachPointType attachY)
-{
-    props.clay.floating.attachment.parent = ToClay(attachY);
+    props.clay.floating.attachment.parent = ToClay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
