@@ -234,6 +234,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float3 finalColor = voxelLight * material.albedo + material.emission + specular;
 
+    // finalColor *= ssao;
+
     // Fog effect
     // float fogFactor = saturate(depthValue * depthValue * DEPTH_SCALE);
     // finalColor = lerp(finalColor, baseSkyColor, fogFactor);
@@ -257,7 +259,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // finalColor = float3(shadowValue, shadowValue, shadowValue);
     // finalColor = float3(samples, samples, samples) / 100.0;
     // finalColor = float3(hitCount, hitCount, hitCount);
-    // finalColor = float3(ssaoValue, ssaoValue, ssaoValue);
+    // finalColor = float3(ssao, ssao, ssao);
     // finalColor = float3(voxelUV.x, voxelUV.y, 0);
     // finalColor = float3(brickUV.x, brickUV.y, 0);
     // finalColor = specular;

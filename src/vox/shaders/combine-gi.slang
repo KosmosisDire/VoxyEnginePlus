@@ -19,36 +19,6 @@ void getRayFromPixel(float2 pixel, uint2 dimensions, CameraData camera, out floa
     rayDir = normalize(viewSpace.xyz - camera.position);
 }
 
-void getBilinearWeights(float2 pos, out int2 baseCoord, out float2 weights)
-{
-    baseCoord = int2(floor(pos));
-    weights = frac(pos);
-}
-
-float3 sampleBilinear(RWTexture2D<float3> img, float2 pos, float2 dimensions)
-{
-    int2 baseCoord;
-    float2 weights;
-    getBilinearWeights(pos, baseCoord, weights);
-
-    // Clamp coordinates to texture bounds
-    int2 c00 = clamp(baseCoord, int2(0, 0), int2(dimensions) - 1);
-    int2 c10 = clamp(int2(baseCoord.x + 1, baseCoord.y), int2(0, 0), int2(dimensions) - 1);
-    int2 c01 = clamp(int2(baseCoord.x, baseCoord.y + 1), int2(0, 0), int2(dimensions) - 1);
-    int2 c11 = clamp(baseCoord + int2(1, 1), int2(0, 0), int2(dimensions) - 1);
-
-    // Sample four nearest pixels
-    float3 s00 = img[c00];
-    float3 s10 = img[c10];
-    float3 s01 = img[c01];
-    float3 s11 = img[c11];
-
-    // Bilinear blend
-    float3 s0 = lerp(s00, s10, weights.x);
-    float3 s1 = lerp(s01, s11, weights.x);
-    return lerp(s0, s1, weights.y);
-}
-
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
@@ -138,10 +108,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         int2 offsetVoxID2 = voxelIDs[(pixel + int2(1, 1)) * 2];
         int offsetFaceID = voxelFaceIDs[(pixel + int2(-1, -1)) * 2];
         int offsetFaceID2 = voxelFaceIDs[(pixel + int2(1, 1)) * 2];
-
-        float3 rayOrigin, rayDir;
-        getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
-        float roughArea = depthValue * 0.03 * (dot(normal, rayDir * 0.5 + 0.5) + 2);
 
         if (any(offsetVoxID != voxelID) || any(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
         {
