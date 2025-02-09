@@ -127,7 +127,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     var final = sum_weights > 1e-6f ? sum_color / sum_weights : center_color;
 
     image_indirectDenoise[pixel] = final;
-    image_ssao[pixel] = int(image_ssao[pixel] * 5) / 5;
 
     // if (p.pass <= 1)
     //     image_indirect[pixel].xyz = final;
