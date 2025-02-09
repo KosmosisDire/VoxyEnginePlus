@@ -11,25 +11,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> indirectPerVoxPass1 = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass1);
     RWTexture2D<float3> indirectPerVoxPass2 = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass2);
 
-    RWTexture2D<float> image_ssao = RWTexture2D<float>::get(p.gbuffer.ssao);
     RWTexture2D<float3> color = RWTexture2D<float3>::get(p.gbuffer.color);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
     RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
-    RWTexture2D<float2> voxelUVs = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
-    RWTexture2D<float3> position = RWTexture2D<float3>::get(p.gbuffer.position);
-    RWTexture2D<float> depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
-    RWTexture2D<int3> normals = RWTexture2D<int3>::get(p.gbuffer.normal);
-    RWTexture2D<float2> motion = RWTexture2D<float2>::get(p.gbuffer.motion);
 
-    // find boundaries from adjacent pixels based on voxelids
     uint2 pixel = pixel_i.xy;
     int2 voxelID = voxelIDs[pixel * 2];
     uint voxelFaceID = voxelFaceIDs[pixel * 2];
-    float2 voxelUV = voxelUVs[pixel * 2];
-    float depthValue = depth[pixel];
-    int3 normal = normals[pixel * 2];
-    float3 pos = position[pixel * 2];
-    float2 motionVector = motion[pixel * 2];
 
     if (p.pass == 1)
     {
