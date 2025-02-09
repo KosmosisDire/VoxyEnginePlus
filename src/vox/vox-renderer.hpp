@@ -204,7 +204,7 @@ class VoxelRenderer
         // Initialize occupancy buffer
         renderer->CreateBuffer<ChunkOccupancy>("chunk_occupancy", chunk_occupancy_buffer, task_chunk_occupancy_buffer);
         renderer->CreateBuffer<BrickOccupancy>("brick_occupancy", brick_occupancy_buffer, task_brick_occupancy_buffer);
-        renderer->CreateBuffer<Materials>("materials buffer", materials_buffer, task_materials_buffer);
+        renderer->CreateBuffer<Materials>("materials buffer", materials_buffer, task_materials_buffer, daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE);
         renderer->CreateBuffer<VoxelMaterials>("voxel materials buffer", voxel_materials_buffer, task_voxel_materials_buffer);
         renderer->CreateBuffer<RenderData>("state buffer", state_buffer, task_state_buffer);
         renderer->CreateBuffer<VoxelHashmap>("voxel hashmap buffer", voxel_hashmap_buffer, task_voxel_hashmap_buffer);

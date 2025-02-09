@@ -351,20 +351,20 @@ class Renderer
             .value();
     }
 
-    inline void CreateBuffer(std::string name, usize bytes, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer)
+    inline void CreateBuffer(std::string name, usize bytes, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
     {
         out_buffer = device.create_buffer({
             .size = bytes,
-            .allocate_info = daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE,
+            .allocate_info = flags,
         });
 
         out_task_buffer = daxa::TaskBuffer({.initial_buffers = {.buffers = std::array{out_buffer}}, .name = ("task_" + name).c_str()});
     }
 
     template <typename T>
-    inline void CreateBuffer(std::string name, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer)
+    inline void CreateBuffer(std::string name, daxa::BufferId &out_buffer, daxa::TaskBuffer &out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
     {
-        CreateBuffer(name, sizeof(T), out_buffer, out_task_buffer);
+        CreateBuffer(name, sizeof(T), out_buffer, out_task_buffer, flags);
     }
 
     template <typename T>
