@@ -66,19 +66,19 @@ TraceResult computeBounce(int2 pixel, float3 origin, float3 normal, float3 blueN
 {
     float3 hitPos = origin + normal * EPSILON;
     float3x3 basis = CreateRotationFromNormal3x3(normal);
-    // float3 blue = blueNoiseSample;
-    // blue = transformBlueNoise(blue, p.state_ptr.frame + uint(pixel.x * p.frame_dim.y + pixel.y));
-    // blue = blue * 2 - 1;
-    // blue.y = abs(blue.y);
-    // blue = mul(basis, blue);
-    // // blue += normal * 0.05;
-    // rayDir = normalize(blue);
+    float3 blue = blueNoiseSample;
+    blue = transformBlueNoise(blue, p.state_ptr.frame + uint(pixel.x * p.frame_dim.y + pixel.y));
+    blue = blue * 2 - 1;
+    blue.y = abs(blue.y);
+    blue = mul(basis, blue);
+    // blue += normal * 0.05;
+    rayDir = normalize(blue);
 
-    const int num = 1024;
-    rayDir = sphericalFibonacci((frameIndex + blueNoiseSample.x * blueNoiseSample.y * num * 17) % num, num);
-    // rayDir = transformBlueNoise(rayDir, frameIndex + uint(pixel.x * p.frame_dim.y + pixel.y)) * 2.0 - 1.0;
-    rayDir.y = abs(rayDir.y);
-    rayDir = mul(basis, rayDir);
+    // const int num = 1024;
+    // rayDir = sphericalFibonacci((frameIndex + blueNoiseSample.x * blueNoiseSample.y * num * 17) % num, num);
+    // // rayDir = transformBlueNoise(rayDir, frameIndex + uint(pixel.x * p.frame_dim.y + pixel.y)) * 2.0 - 1.0;
+    // rayDir.y = abs(rayDir.y);
+    // rayDir = mul(basis, rayDir);
 
     return traceVoxelRay(hitPos, rayDir, 0, 512);
 }
@@ -120,23 +120,27 @@ float3 calculateBounceColor(TraceResult bounceResult, Material hitMat, float3 ra
     if (!bounceResult.hit)
     {
         AtmosphereParams atmosphere = initAtmosphere(rayDir, p.state_ptr.sunDir);
-        return getBaseSkyColor(atmosphere) * 3;
+        return getBaseSkyColor(atmosphere) * 4;
     }
     else
     {
-        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, normalize(p.state_ptr.sunDir));
+        TraceResult bounceShadow = traceVoxelRay(bounceResult.hitPos + bounceResult.normal * EPSILON, p.state_ptr.sunDir);
 
         // get the hashmap entry for the hit voxel and add the light from it if it exists
         float3 passiveBounce = float3(0, 0, 0);
-        // uint slot = get_hashtable_index(p.past_voxel_hashmap_ptr, brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), getHashtableVoxelIndex(bounceResult));
+        // uint slot = get_hashtable_index(p.voxel_hashmap_ptr, brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), getHashtableFaceIndex(bounceResult));
         // if (slot != EMPTY_KEY)
         // {
-        //     passiveBounce = p.past_voxel_hashmap_ptr.indirectLight[slot] * clamp(1 / p.past_voxel_hashmap_ptr.temporalFrames[slot], 0.1, 1) * 10;
+        //     var entry = p.voxel_hashmap_ptr.entries[slot];
+        //     if (entry.historyCount > 4)
+        //     {
+        //         passiveBounce = entry.lighting * 0.9;
+        //     }
         // }
 
         if (!bounceShadow.hit)
         {
-            return hitMat.albedo + passiveBounce + hitMat.emission + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 5 * hitMat.albedo;
+            return hitMat.emission + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 5 * hitMat.albedo;
         }
 
         return hitMat.emission + passiveBounce;
@@ -324,20 +328,28 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     //            debugMotion.x, debugMotion.y);
     // }
 
-    float3 bounceRayDir;
-    bool shadow = false;
+    float shadow = 1;
     TraceResult bounceShadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir));
-    shadow = bounceShadow.hit;
+    shadow = bounceShadow.hit ? 1 : 0;
 
     if (all(pixel % 2 == 0))
     {
         float2 halfPixel = pixel / 2;
         float2 dimensions = p.frame_dim / 2;
-        float4 blueNoiseSample = blueNoise[halfPixel % 128];
 
+        float4 blueNoiseSample = blueNoise[halfPixel % 128];
+        float3 bounceRayDir;
         TraceResult bounceResult = computeBounce(pixel, trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
         Material hitMat = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), bounceResult.voxelIndex)));
         float3 rayBounceColor = calculateBounceColor(bounceResult, hitMat, bounceRayDir);
+
+        if (bounceResult.hit && all(pixel % 4 == 0))
+        {
+            float4 blueNoiseSample2 = blueNoise[(halfPixel + 17) % 128];
+            TraceResult bounceResult2 = computeBounce(pixel, bounceResult.hitPos, bounceResult.normal, blueNoiseSample2.xyz, p.state_ptr.frame, bounceRayDir);
+            Material hitMat2 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult2.chunkIndex, bounceResult2.brickIndex), bounceResult2.voxelIndex)));
+            rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult2, hitMat2, bounceRayDir) * 4, 0.5);
+        }
 
         // Calculate previous position with subpixel precision
         float2 prevPos = prevPos * 0.5;
@@ -352,11 +364,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // Sample lastFrame with bilinear interpolation
         float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
-        last = clamp(last, float4(0), float4(1000));
+        last = clamp(last, float4(0), float4(10000));
 
         if (!valid)
         {
-            last.w = 2;
+            last.w = 0;
+        }
+
+        // do extra bounces for new pixels
+        if (last.w < 2)
+        {
+            float4 blueNoiseSample3 = blueNoise[(halfPixel + 46) % 128];
+            TraceResult bounceResult3 = computeBounce(pixel, trace.hitPos, trace.normal, blueNoiseSample3.xyz, p.state_ptr.frame, bounceRayDir);
+            Material hitMat3 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult3.chunkIndex, bounceResult3.brickIndex), bounceResult3.voxelIndex)));
+            rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult3, hitMat3, bounceRayDir), 0.5);
         }
 
         float blendFactor = (1 / (last.w + 1));
@@ -382,7 +403,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     brickUVs[pixel] = brickFaceUV;
     depth[pixel] = trace.distance;
     motion[pixel] = trace.hit ? motionPixels : float2(0, 0);
-    shadowTex[pixel] = shadow ? 1.0 : 0.0;
+    shadowTex[pixel] = 1 - shadow;
     materialIDs[pixel] = voxelMaterialId;
 
     if (trace.hit)

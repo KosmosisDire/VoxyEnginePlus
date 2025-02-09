@@ -67,10 +67,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    // if (p.pass > image_ssao[pixel] * 5 + 3)
-    // {
+    if (p.pass > image_ssao[pixel] * 5 + 3)
+    {
+        return;
+    }
+
+    // if (p.pass > 2)
     //     return;
-    // }
 
     float3 center_color = read_texture[pixel];
     float3 center_normal = image_normal[pixel * 2];

@@ -383,7 +383,8 @@ bool hasWorldVoxel(int3 worldPos)
     if (!indices.isValid)
         return false;
 
-    return getBit(p.brick_occupancy_ptr.occupancy[indices.brickIndex], indices.voxelIndex);
+    BrickBitmask occupancy = p.brick_occupancy_ptr.occupancy[indices.brickIndex];
+    return getBit(occupancy, indices.voxelIndex);
 }
 
 // Generate a flower at any world position
@@ -478,6 +479,252 @@ void generateBush(int3 baseBrickCoord)
     }
 }
 
+// Vine generation parameters
+static const int maxVineLength = 2000;
+static const float branchChance = 0.15;
+static const float flowerChance = 0.1;
+static const float hangingChance = 0.95;
+
+// Direction vectors for checking adjacent blocks
+static const int3 directions[6] = {
+    int3(0, 1, 0),  // up
+    int3(0, -1, 0), // down
+    int3(1, 0, 0),  // right
+    int3(-1, 0, 0), // left
+    int3(0, 0, 1),  // forward
+    int3(0, 0, -1)  // back
+};
+
+// Helper to check if a position has a valid non-vine block to attach to
+bool hasValidAttachment(int3 pos)
+{
+    for (int i = 0; i < 6; i++)
+    {
+        int3 adjPos = pos + directions[i];
+        VoxelIndices indices = getVoxelIndices(adjPos);
+        if (!indices.isValid)
+            continue;
+
+        uint globalVoxelIndex = voxelGlobalIndex(indices.brickIndex, indices.voxelIndex);
+        uint material = (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
+
+        if (hasWorldVoxel(adjPos) && material != 4)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Get next position for hanging vine with sine wave motion
+int3 getHangingVinePosition(int3 startPos, int3 currentPos, int dropDistance)
+{
+    // Pick a consistent axis for the vine to wave along based on start position
+    float axisNoise = random(startPos * 1.234);
+    bool useXAxis = axisNoise > 0.5;
+
+    // Get noise-based frequency variation
+    float freqNoise = (snoise(float3(startPos) * 0.05) + 1.0) * 0.5;
+    float frequency = 0.2 + freqNoise * 0.3; // Range of 0.2 to 0.5
+
+    // Calculate offset from center based on drop distance
+    float wave = sin(dropDistance * frequency) * 1.2;
+    int offset = int(round(wave));
+
+    // Apply offset to chosen axis while keeping centered around start position
+    int3 nextPos;
+    if (useXAxis)
+    {
+        nextPos = int3(startPos.x + offset, currentPos.y - 1, startPos.z);
+    }
+    else
+    {
+        nextPos = int3(startPos.x, currentPos.y - 1, startPos.z + offset);
+    }
+
+    return nextPos;
+}
+
+void generateVine(int3 startPos)
+{
+    if (!hasValidAttachment(startPos))
+        return;
+
+    // Queue for branches
+    int3 branchPoints[8];
+    int branchCount = 0;
+
+    // Current growth point
+    int3 currentPos = startPos;
+
+    // Track if we're in a hanging section
+    bool isHanging = false;
+    int hangingStartHeight = 0;
+    int3 hangingStartPos = int3(0, 0, 0);
+
+    // Main vine
+    for (int i = 0; i < maxVineLength; i++)
+    {
+        // Place vine segment
+        setWorldVoxel(currentPos, 4);
+
+        // Maybe place flower
+        if (random(currentPos * 1.234) < flowerChance)
+        {
+            for (int j = 0; j < 6; j++)
+            {
+                int3 flowerPos = currentPos + directions[j];
+                if (!hasWorldVoxel(flowerPos))
+                {
+                    setWorldVoxel(flowerPos, 6);
+                    break;
+                }
+            }
+        }
+
+        // Maybe create branch point (only if not hanging)
+        if (!isHanging && random(currentPos * 2.345) < branchChance && branchCount < 8)
+        {
+            branchPoints[branchCount] = currentPos;
+            branchCount++;
+        }
+
+        int3 nextPos;
+        if (!isHanging)
+        {
+            // Try to find a valid surface position
+            bool foundNext = false;
+            float bestScore = -1;
+
+            for (int x = -1; x <= 1; x++)
+            {
+                for (int y = -1; y <= 1; y++)
+                {
+                    for (int z = -1; z <= 1; z++)
+                    {
+                        if (x == 0 && y == 0 && z == 0)
+                            continue;
+
+                        int3 testPos = currentPos + int3(x, y, z);
+                        if (hasWorldVoxel(testPos))
+                            continue;
+
+                        if (hasValidAttachment(testPos))
+                        {
+                            float score = random(testPos * 3.456);
+                            if (score > bestScore)
+                            {
+                                bestScore = score;
+                                nextPos = testPos;
+                                foundNext = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If no valid surface position, consider starting a hanging section
+            if (!foundNext && random(currentPos * 1.123) < hangingChance)
+            {
+                isHanging = true;
+                hangingStartPos = currentPos;
+                hangingStartHeight = currentPos.y;
+                nextPos = getHangingVinePosition(currentPos, currentPos, 0);
+            }
+            else if (!foundNext)
+            {
+                break;
+            }
+        }
+        else
+        {
+            // Continue hanging growth pattern
+            int dropDistance = hangingStartHeight - currentPos.y;
+            nextPos = getHangingVinePosition(hangingStartPos, currentPos, dropDistance);
+
+            // Check if we hit something
+            if (hasWorldVoxel(nextPos))
+            {
+                // Try to attach to the surface we hit
+                if (hasValidAttachment(currentPos))
+                {
+                    isHanging = false;
+                    continue;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        // Update position
+        currentPos = nextPos;
+    }
+
+    // Process branches (similar to main vine but never start hanging sections)
+    for (int b = 0; b < branchCount; b++)
+    {
+        int3 branchPos = branchPoints[b];
+
+        for (int i = 0; i < 8; i++)
+        {
+            setWorldVoxel(branchPos, 4);
+
+            if (random(branchPos * 4.567) < flowerChance)
+            {
+                for (int j = 0; j < 6; j++)
+                {
+                    int3 flowerPos = branchPos + directions[j];
+                    if (!hasWorldVoxel(flowerPos))
+                    {
+                        setWorldVoxel(flowerPos, 6);
+                        break;
+                    }
+                }
+            }
+
+            // Find next valid surface position for branch
+            bool foundNext = false;
+            float bestScore = -1;
+            int3 nextPos;
+
+            for (int x = -1; x <= 1; x++)
+            {
+                for (int y = -1; y <= 1; y++)
+                {
+                    for (int z = -1; z <= 1; z++)
+                    {
+                        if (x == 0 && y == 0 && z == 0)
+                            continue;
+
+                        int3 testPos = branchPos + int3(x, y, z);
+                        if (hasWorldVoxel(testPos))
+                            continue;
+
+                        if (hasValidAttachment(testPos))
+                        {
+                            float score = random(testPos * 5.678);
+                            if (score > bestScore)
+                            {
+                                bestScore = score;
+                                nextPos = testPos;
+                                foundNext = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!foundNext)
+                break;
+            branchPos = nextPos;
+        }
+    }
+
+    generateBush(startPos / BRICK_SIZE);
+}
+
 [numthreads(4, 4, 4)]
 void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_GroupThreadID)
 {
@@ -545,6 +792,7 @@ void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_Group
     {
         bool isSolid = calculateSolid(brickCoord * BRICK_SIZE);
         bool isSolidBelow = calculateSolid(brickCoord * BRICK_SIZE - int3(0, BRICK_SIZE, 0));
+        bool isSolidAbove = calculateSolid(brickCoord * BRICK_SIZE + int3(0, BRICK_SIZE, 0));
 
         // Different noise samples for each vegetation type
         float flowerNoise = snoise(brickCoord / 100.0);
@@ -572,7 +820,7 @@ void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_Group
         }
 
         // Generate bushes
-        if (bushNoise > 0.85f && !isSolid && isSolidBelow)
+        if (bushNoise > 0.9f && !isSolid && isSolidBelow)
         {
             generateBush(brickCoord);
         }
@@ -581,6 +829,15 @@ void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_Group
         if (treeNoise > 0.93f && !isSolid && isSolidBelow)
         {
             generateTree(brickCoord);
+        }
+
+        // Generate vines
+        float vineNoise = snoise(brickCoord * 1.9f);
+        if (treeNoise > 0.9f &&
+            !isSolid &&
+            ((!isSolidBelow && isSolidAbove)))
+        {
+            generateVine(brickCoord * BRICK_SIZE);
         }
     }
 }

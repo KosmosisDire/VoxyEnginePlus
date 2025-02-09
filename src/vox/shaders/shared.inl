@@ -114,7 +114,6 @@ struct ComputePush
     daxa_BufferPtr(Materials) materials_ptr;
     daxa_BufferPtr(VoxelMaterials) voxel_materials_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
-    daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
     daxa_ImageViewId final_image;
     daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
@@ -126,7 +125,6 @@ struct DenoisePush
 {
     daxa_BufferPtr(GBuffer) gbuffer;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
-    daxa_BufferPtr(VoxelHashmap) past_voxel_hashmap_ptr;
     daxa_u32 pass;
     daxa_u32vec2 frame_dim;
 }; 
