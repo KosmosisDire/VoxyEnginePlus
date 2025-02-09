@@ -83,11 +83,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         int avgCount = 1;
         int2 offsetVoxelID = voxelIDs[(pixel + int2(-1, 0)) * 2];
         uint offsetFaceID = voxelFaceIDs[(pixel + int2(-1, 0)) * 2];
-        if (any(offsetVoxelID != voxelID) || offsetFaceID != voxelFaceID)
+        if (offsetVoxelID.x != voxelID.x || offsetFaceID != voxelFaceID)
         {
             offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
             offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * 2];
-            while (all(offsetVoxelID == voxelID) && offsetFaceID == voxelFaceID && avgCount < 1000)
+            while (offsetVoxelID.x == voxelID.x && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
                 float3 sampleColor = indirect[(pixel + int2(avgCount, 0))];
                 avgColor += sampleColor;
@@ -111,11 +111,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         int avgCount = 1;
         int2 offsetVoxelID = voxelIDs[(pixel + int2(0, -1)) * 2];
         uint offsetFaceID = voxelFaceIDs[(pixel + int2(0, -1)) * 2];
-        if (any(offsetVoxelID != voxelID) || offsetFaceID != voxelFaceID)
+        if (offsetVoxelID.x != voxelID.x || offsetFaceID != voxelFaceID)
         {
             offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
             offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * 2];
-            while (all(offsetVoxelID == voxelID) && offsetFaceID == voxelFaceID && avgCount < 1000)
+            while (offsetVoxelID.x == voxelID.x && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
                 float3 sampleColor = indirectPerVoxPass1[(pixel + int2(0, avgCount))];
                 avgColor += sampleColor;

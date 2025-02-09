@@ -58,8 +58,8 @@ void setVoxelMaterial(uint globalVoxelIndex, uint material)
 uint selectMaterial(int3 brickPos, int3 voxelPos)
 {
     float noise = snoise(voxelPos * 0.01f + snoise(voxelPos) * 0.03);
-    var isSolidAbove = calculateSolid(brickPos * BRICK_SIZE + int3(0, BRICK_SIZE, 0));
-    var isSolidAboveFar = calculateSolid(brickPos * BRICK_SIZE + int3(0, BRICK_SIZE * 4, 0));
+    var isSolidAbove = calculateSolid(brickPos * blockSize + int3(0, blockSize, 0));
+    var isSolidAboveFar = calculateSolid(brickPos * blockSize + int3(0, blockSize * 4, 0));
 
     if (!isSolidAbove)
     {
