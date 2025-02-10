@@ -56,20 +56,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<int3> image_normal = RWTexture2D<int3>::get(p.gbuffer.normal);
-    RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depthHalfRes);
+    RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<uint2> voxelIDs = RWTexture2D<uint2>::get(p.gbuffer.voxelIDs);
 
-    uint2 voxelID = voxelIDs[pixel * 2];
-    float3 center_pos = image_position[pixel * 2];
+    uint2 voxelID = voxelIDs[pixel * LIGHTING_DOWNSAMPLE];
+    float3 center_pos = image_position[pixel * LIGHTING_DOWNSAMPLE];
 
     // Skip denoising for sky pixels
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    if (p.pass > image_ssao[pixel] * 5 + 3)
-    {
-        return;
-    }
+    // if (p.pass > image_ssao[pixel] * 5 + 3)
+    // {
+    //     return;
+    // }
 
     // if (p.pass > 2)
     //     return;
@@ -83,8 +83,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     {
         center_color = image_indirectDenoise[pixel];
     }
-    float3 center_normal = image_normal[pixel * 2];
-    float center_depth = image_depth[pixel];
+    float3 center_normal = image_normal[pixel * LIGHTING_DOWNSAMPLE];
+    float center_depth = image_depth[pixel * LIGHTING_DOWNSAMPLE];
 
     const float sigma_geom = 0.01f;
     const float sigma_normal = 0.1f;
@@ -106,7 +106,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 offset_pos.y < 0 || offset_pos.y >= p.frame_dim.y)
                 continue;
 
-            float3 sample_worldpos = image_position[offset_pos * 2];
+            float3 sample_worldpos = image_position[offset_pos * LIGHTING_DOWNSAMPLE];
             float3 sample_color;
 
             if (p.pass <= 1)
@@ -118,7 +118,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                 sample_color = image_indirectDenoise[offset_pos];
             }
 
-            float3 sample_normal = image_normal[offset_pos * 2];
+            float3 sample_normal = image_normal[offset_pos * LIGHTING_DOWNSAMPLE];
 
             // Skip sky samples
             if (all(sample_normal == float3(0, 0, 0)))
@@ -131,10 +131,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
             float weight = kernel_weight * geom_weight * normal_weight;
 
-            if (p.pass > 1)
-            {
-                weight *= color_weight;
-            }
+            // if (p.pass > 1)
+            // {
+            //     weight *= color_weight;
+            // }
 
             sum_color += sample_color * weight;
             sum_weights += weight;

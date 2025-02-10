@@ -6,7 +6,7 @@
 static const float3 UP_VECTOR = float3(0, 1, 0);
 static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
-static const float TEMPORAL_MIN_ALPHA = 0.5;    // Lower = smoother but more ghosting (try 0.01 to 0.1)
+static const float TEMPORAL_MIN_ALPHA = 0.4;    // Lower = smoother but more ghosting (try 0.01 to 0.1)
 static const float TEMPORAL_MOTION_SCALE = 0.5; // Higher = more responsive to motion (try 0.2 to 1.0)
 static const float TEMPORAL_CLAMP_SCALE = 0.5;  // Higher = less clamping, more history (try 0.3 to 0.8)
 
@@ -104,7 +104,7 @@ uint getMaterialId(int2 voxelID)
 uint getHashtableFaceIndex(TraceResult trace)
 {
     bool isVoxelFarLOD = IsObjectSmallerThanPixel(
-        WORLD_VOXEL_SIZE * 0.2,
+        WORLD_VOXEL_SIZE * pow(LIGHTING_UPSAMPLE, 2),
         trace.distance,
         p.state_ptr.camera.fov * 0.0174532925f,
         p.frame_dim.x);
@@ -247,7 +247,7 @@ void getNeighborhoodBounds(RWTexture2D<float3> currentFrame, int2 pixel, float2 
     maxColor += delta;
 }
 
-[numthreads(16, 16, 1)]
+[numthreads(32, 32, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     uint2 pixel = pixel_i.xy;
@@ -273,9 +273,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float halfResDepth = depthHalfRes[pixel / 2];
 
+    // get ray direction
     float3 rayOrigin, rayDir;
     getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
 
+    // beam optimization (use half res depth prepass as start depth)
     float startDepth = 0.0;
     if ((bool)p.state_ptr.settings.beamOptimization)
     {
@@ -294,6 +296,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         }
     }
 
+    // trace main ray
     TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
     if (!trace.hit)
     {
@@ -302,15 +305,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         return;
     }
 
+    // get hit material
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
     uint voxelMaterialId = getMaterialId(int2(globalBrickIndex, trace.voxelIndex));
     Material traceMat = getMaterial(voxelMaterialId);
 
-    // if (dot(trace.normal, rayDir) > (1 / trace.distance * 0.4) - 0.1)
-    // {
-    //     voxelIndex = 0;
-    // }
-
+    // get motion vectors
     float2 motionClip = calculateMotionClip(trace.hitPos, p.state_ptr.camera.viewProj, p.state_ptr.lastCamera.viewProj);
     float2 motionPixels = motionClip * (p.frame_dim * 0.5);
     if (length(motionPixels) < 0.0001 || isnan(motionPixels.x) || isnan(motionPixels.y))
@@ -319,46 +319,39 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     }
     float2 prevPos = float2(pixel) + motionPixels;
 
-    // float2 debugMotion = motionPixels;
-    // if (pixel.x < 10 && pixel.y < 10)
-    // {
-    //     // Print debug info for top-left pixels
-    //     printf("Pixel: %d,%d Motion: %f,%f\n",
-    //            pixel.x, pixel.y,
-    //            debugMotion.x, debugMotion.y);
-    // }
-
+    // trace hard shadow ray
     float shadow = 1;
     TraceResult bounceShadow = traceVoxelRay(trace.hitPos + trace.normal * EPSILON, normalize(p.state_ptr.sunDir));
     shadow = bounceShadow.hit ? 1 : 0;
 
-    if (all(pixel % 2 == 0))
+    // do a downsampled path traced indirect lighting
+    if (all(pixel % LIGHTING_DOWNSAMPLE == 0))
     {
-        float2 halfPixel = pixel / 2;
-        float2 dimensions = p.frame_dim / 2;
+        float2 samplePixel = pixel / LIGHTING_DOWNSAMPLE;
+        float2 dimensions = p.frame_dim / LIGHTING_DOWNSAMPLE;
 
-        float4 blueNoiseSample = blueNoise[halfPixel % 128];
+        float4 blueNoiseSample = blueNoise[samplePixel % 128];
         float3 bounceRayDir;
         TraceResult bounceResult = computeBounce(pixel, trace.hitPos, trace.normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
         Material hitMat = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), bounceResult.voxelIndex)));
         float3 rayBounceColor = calculateBounceColor(bounceResult, hitMat, bounceRayDir);
 
-        if (bounceResult.hit && all(pixel % 4 == 0))
+        if (bounceResult.hit && all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0))
         {
-            float4 blueNoiseSample2 = blueNoise[(halfPixel + 17) % 128];
+            float4 blueNoiseSample2 = blueNoise[(samplePixel + 17) % 128];
             TraceResult bounceResult2 = computeBounce(pixel, bounceResult.hitPos, bounceResult.normal, blueNoiseSample2.xyz, p.state_ptr.frame, bounceRayDir);
             Material hitMat2 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult2.chunkIndex, bounceResult2.brickIndex), bounceResult2.voxelIndex)));
-            rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult2, hitMat2, bounceRayDir) * 4, 0.5);
+            rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult2, hitMat2, bounceRayDir) * pow(LIGHTING_DOWNSAMPLE, 2), 0.5);
         }
 
         // Calculate previous position with subpixel precision
-        float2 prevPos = prevPos * 0.5;
+        float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
         // Get previous brick ID from the position
         int2 prevPixel = int2(prevPos);
-        int2 prevVoxelData = voxelIDs[prevPixel * 2]; // Multiply by 2 since we're in half-res
+        int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
         int prevBrickId = prevVoxelData.x;
         // Validate history
-        float valid = validateReprojection(position[pixel].xyz, position[prevPixel * 2].xyz);
+        float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
 
         prevPos = clamp(prevPos, float2(0), dimensions - 1);
 
@@ -374,7 +367,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // do extra bounces for new pixels
         if (last.w < 2)
         {
-            float4 blueNoiseSample3 = blueNoise[(halfPixel + 46) % 128];
+            float4 blueNoiseSample3 = blueNoise[(samplePixel + 46) % 128];
             TraceResult bounceResult3 = computeBounce(pixel, trace.hitPos, trace.normal, blueNoiseSample3.xyz, p.state_ptr.frame, bounceRayDir);
             Material hitMat3 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult3.chunkIndex, bounceResult3.brickIndex), bounceResult3.voxelIndex)));
             rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult3, hitMat3, bounceRayDir), 0.5);
@@ -385,7 +378,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // Final blend
         float3 blended = lerp(last.rgb, rayBounceColor, blendFactor);
-        indirect[halfPixel] = float4(blended, last.w + 1);
+        indirect[samplePixel] = float4(blended, last.w + 1);
     }
 
     float3 albedoColor = traceMat.albedo + traceMat.emission;

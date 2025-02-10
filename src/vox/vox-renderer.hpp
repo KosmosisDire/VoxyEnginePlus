@@ -61,11 +61,11 @@ struct GBufferCPU
         position = renderer.CreateRenderImage("position", &task_position, daxa::Format::R32G32B32A32_SFLOAT);
         voxelUVs = renderer.CreateRenderImage("voxelUVs", &task_voxelUVs, daxa::Format::R16G16_SFLOAT);
         brickUVs = renderer.CreateRenderImage("brickUVs", &task_brickUVs, daxa::Format::R16G16_SFLOAT);
-        indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
-        indirectLast = renderer.CreateRenderImage("indirectLast", &task_indirectLast, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
-        indirectDenoised = renderer.CreateRenderImage("indirectDenoised", &task_indirectDenoised, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
-        indirectPerVoxelPass1 = renderer.CreateRenderImage("indirectPerVoxelPass1", &task_indirectPerVoxelPass1, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
-        indirectPerVoxelPass2 = renderer.CreateRenderImage("indirectPerVoxelPass2", &task_indirectPerVoxelPass2, daxa::Format::R32G32B32A32_SFLOAT, 0.5);
+        indirect = renderer.CreateRenderImage("indirect", &task_indirect, daxa::Format::R32G32B32A32_SFLOAT, LIGHTING_UPSAMPLE);
+        indirectLast = renderer.CreateRenderImage("indirectLast", &task_indirectLast, daxa::Format::R32G32B32A32_SFLOAT, LIGHTING_UPSAMPLE);
+        indirectDenoised = renderer.CreateRenderImage("indirectDenoised", &task_indirectDenoised, daxa::Format::R32G32B32A32_SFLOAT, LIGHTING_UPSAMPLE);
+        indirectPerVoxelPass1 = renderer.CreateRenderImage("indirectPerVoxelPass1", &task_indirectPerVoxelPass1, daxa::Format::R32G32B32A32_SFLOAT, LIGHTING_UPSAMPLE);
+        indirectPerVoxelPass2 = renderer.CreateRenderImage("indirectPerVoxelPass2", &task_indirectPerVoxelPass2, daxa::Format::R32G32B32A32_SFLOAT, LIGHTING_UPSAMPLE);
         motion = renderer.CreateRenderImage("motion", &task_motion, daxa::Format::R32G32_SFLOAT);
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1);
         depthHalfRes = renderer.CreateRenderImage("depthHalfRes", &task_depthHalfRes, daxa::Format::R32_SFLOAT, 0.5);
@@ -448,7 +448,7 @@ class VoxelRenderer
 
                         ti.recorder.set_pipeline(*render_gbuffer_compute);
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width + 15) / 16, (renderer->surface_height + 15) / 16});
+                        ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
                     }));
 
         // SSAO pass
@@ -504,7 +504,7 @@ class VoxelRenderer
                         {
                             push.pass = i;
                             ti.recorder.push_constant(push);
-                            ti.recorder.dispatch({(renderer->surface_width / 2 + 15) / 16, (renderer->surface_height / 2 + 15) / 16});
+                            ti.recorder.dispatch({(renderer->surface_width / LIGHTING_DOWNSAMPLE + 15) / 16, (renderer->surface_height / LIGHTING_DOWNSAMPLE + 15) / 16});
                         }
                     }));
 
@@ -532,15 +532,15 @@ class VoxelRenderer
 
                         push.pass = 1;
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width / LIGHTING_DOWNSAMPLE + 7) / 8, (renderer->surface_height / LIGHTING_DOWNSAMPLE + 7) / 8});
 
                         push.pass = 2;
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width / LIGHTING_DOWNSAMPLE + 7) / 8, (renderer->surface_height / LIGHTING_DOWNSAMPLE + 7) / 8});
 
                         push.pass = 3;
                         ti.recorder.push_constant(push);
-                        ti.recorder.dispatch({(renderer->surface_width / 2 + 7) / 8, (renderer->surface_height / 2 + 7) / 8});
+                        ti.recorder.dispatch({(renderer->surface_width / LIGHTING_DOWNSAMPLE + 7) / 8, (renderer->surface_height / LIGHTING_DOWNSAMPLE + 7) / 8});
                     }));
 
         renderer->AddTask(InlineTask("composite_render")

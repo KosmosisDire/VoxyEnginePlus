@@ -16,28 +16,28 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
 
     uint2 pixel = pixel_i.xy;
-    int2 voxelID = voxelIDs[pixel * 2];
-    uint voxelFaceID = voxelFaceIDs[pixel * 2];
+    int2 voxelID = voxelIDs[pixel * LIGHTING_DOWNSAMPLE];
+    uint voxelFaceID = voxelFaceIDs[pixel * LIGHTING_DOWNSAMPLE];
 
     if (p.pass == 1)
     {
         float3 avgColor = indirect[pixel];
 
         int avgCount = 1;
-        int2 offsetVoxelID = voxelIDs[(pixel + int2(-1, 0)) * 2];
-        uint offsetFaceID = voxelFaceIDs[(pixel + int2(-1, 0)) * 2];
+        int2 offsetVoxelID = voxelIDs[(pixel + int2(-1, 0)) * LIGHTING_DOWNSAMPLE];
+        uint offsetFaceID = voxelFaceIDs[(pixel + int2(-1, 0)) * LIGHTING_DOWNSAMPLE];
         if (offsetVoxelID.x != voxelID.x || offsetFaceID != voxelFaceID)
         {
-            offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
-            offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * 2];
+            offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * LIGHTING_DOWNSAMPLE];
+            offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * LIGHTING_DOWNSAMPLE];
             while (offsetVoxelID.x == voxelID.x && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
                 float3 sampleColor = indirect[(pixel + int2(avgCount, 0))];
                 avgColor += sampleColor;
 
                 avgCount++;
-                offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * 2];
-                offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * 2];
+                offsetVoxelID = voxelIDs[(pixel + int2(avgCount, 0)) * LIGHTING_DOWNSAMPLE];
+                offsetFaceID = voxelFaceIDs[(pixel + int2(avgCount, 0)) * LIGHTING_DOWNSAMPLE];
             }
 
             for (int i = 0; i < avgCount; i++)
@@ -52,20 +52,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float3 avgColor = indirectPerVoxPass1[pixel];
 
         int avgCount = 1;
-        int2 offsetVoxelID = voxelIDs[(pixel + int2(0, -1)) * 2];
-        uint offsetFaceID = voxelFaceIDs[(pixel + int2(0, -1)) * 2];
+        int2 offsetVoxelID = voxelIDs[(pixel + int2(0, -1)) * LIGHTING_DOWNSAMPLE];
+        uint offsetFaceID = voxelFaceIDs[(pixel + int2(0, -1)) * LIGHTING_DOWNSAMPLE];
         if (offsetVoxelID.x != voxelID.x || offsetFaceID != voxelFaceID)
         {
-            offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
-            offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * 2];
+            offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * LIGHTING_DOWNSAMPLE];
+            offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * LIGHTING_DOWNSAMPLE];
             while (offsetVoxelID.x == voxelID.x && offsetFaceID == voxelFaceID && avgCount < 1000)
             {
                 float3 sampleColor = indirectPerVoxPass1[(pixel + int2(0, avgCount))];
                 avgColor += sampleColor;
 
                 avgCount++;
-                offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * 2];
-                offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * 2];
+                offsetVoxelID = voxelIDs[(pixel + int2(0, avgCount)) * LIGHTING_DOWNSAMPLE];
+                offsetFaceID = voxelFaceIDs[(pixel + int2(0, avgCount)) * LIGHTING_DOWNSAMPLE];
             }
 
             for (int i = 0; i < avgCount; i++)
@@ -77,10 +77,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     if (p.pass == 3)
     {
-        int2 offsetVoxID = voxelIDs[(pixel + int2(-1, -1)) * 2];
-        int2 offsetVoxID2 = voxelIDs[(pixel + int2(1, 1)) * 2];
-        int offsetFaceID = voxelFaceIDs[(pixel + int2(-1, -1)) * 2];
-        int offsetFaceID2 = voxelFaceIDs[(pixel + int2(1, 1)) * 2];
+        int2 offsetVoxID = voxelIDs[(pixel + int2(-1, -1)) * LIGHTING_DOWNSAMPLE];
+        int2 offsetVoxID2 = voxelIDs[(pixel + int2(1, 1)) * LIGHTING_DOWNSAMPLE];
+        int offsetFaceID = voxelFaceIDs[(pixel + int2(-1, -1)) * LIGHTING_DOWNSAMPLE];
+        int offsetFaceID2 = voxelFaceIDs[(pixel + int2(1, 1)) * LIGHTING_DOWNSAMPLE];
 
         if (any(offsetVoxID != voxelID) || any(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
         {

@@ -109,7 +109,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> positionTex = RWTexture2D<float3>::get(p.gbuffer.position);
     RWTexture2D<float2> voxelUVsTex = RWTexture2D<float2>::get(p.gbuffer.voxelUVs);
     RWTexture2D<float2> brickUVsTex = RWTexture2D<float2>::get(p.gbuffer.brickUVs);
-    RWTexture2D<float3> indirectTex = RWTexture2D<float3>::get(p.gbuffer.indirect);
+    RWTexture2D<float3> indirectTex = RWTexture2D<float3>::get(p.gbuffer.indirectDenoised);
     RWTexture2D<float3> indirectPerVoxPassTex = RWTexture2D<float3>::get(p.gbuffer.indirectPerVoxelPass2);
     RWTexture2D<float2> motionTex = RWTexture2D<float2>::get(p.gbuffer.motion);
     RWTexture2D<float> ssaoTex = RWTexture2D<float>::get(p.gbuffer.ssao);
@@ -127,8 +127,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 position = positionTex[pixel].xyz;
     float2 voxelUV = voxelUVsTex[pixel];
     float2 brickUV = brickUVsTex[pixel];
-    float3 pixelLight = indirectTex[pixel / 2];
-    float3 perVoxAvg = indirectPerVoxPassTex[pixel / 2];
+    float3 pixelLight = indirectTex[pixel / LIGHTING_DOWNSAMPLE];
+    float3 perVoxAvg = indirectPerVoxPassTex[pixel / LIGHTING_DOWNSAMPLE];
     float2 motion = motionTex[pixel];
     float ssao = ssaoTex[pixel / 2];
     float depth = depthTex[pixel];

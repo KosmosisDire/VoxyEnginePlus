@@ -31,3 +31,6 @@ static const daxa_u32 MAX_UINT32 = 0xFFFFFFFF;
 static const daxa_u64 MAX_UINT64 = 0xFFFFFFFFFFFFFFFF;
 static const daxa_f32 MAX_FLOAT = 3.402823466e+38f;
 static const daxa_f32 MIN_FLOAT = -3.402823466e+38f;
+
+static const daxa_u32 LIGHTING_DOWNSAMPLE = 2;
+static const daxa_f32 LIGHTING_UPSAMPLE = 1.0 / LIGHTING_DOWNSAMPLE;
