@@ -51,6 +51,7 @@ float getOpticalDepth(float height, float H)
     float Chapman = sqrt(PI * H / 2.0f) * exp(-h / H);
     return density * Chapman;
 }
+
 // Initialize atmospheric parameters
 AtmosphereParams initAtmosphere(float3 dir, float3 sunDir)
 {
@@ -103,7 +104,6 @@ float3 getBaseSkyColor(AtmosphereParams params)
     float height = max(params.normalizedDir.y, 0.0f);
     float heightFactor = pow(1.0f - height, 4.0f);
 
-    // Adjusted colors to match reference image
     float3 zenithColor = float3(0.2f, 0.4f, 1.0f);
     float3 horizonColor = float3(0.8f, 0.9f, 1.0f);
     float3 groundColor = float3(0.8f, 0.9f, 1.0f) * 0.2;
@@ -116,7 +116,6 @@ float3 getBaseSkyColor(AtmosphereParams params)
     float3 nightHorizonColor = float3(0.1f, 0.1f, 0.1f) * 0.005;
     float3 nightGroundColor = float3(0.1f, 0.1f, 0.2f) * 0.005;
 
-    // Calculate sun influence with below-horizon bloom
     float3 sunDir = params.normalizedSunDir;
     float3 viewDir = params.normalizedDir;
     float sunDist = length(viewDir - sunDir);
@@ -234,7 +233,4 @@ float3 getAtmosphereColor(AtmosphereParams params, float time)
     float3 stars = getStarEffect(params, time);
 
     return sky + sun + stars;
-
-    // for debugging return day and night factor for every point of the screen
-    // return float3(smoothstep(-0.05f, 0.15f, params.normalizedDir.y), smoothstep(0.0f, 0.4f, params.normalizedDir.y), 0);
 }

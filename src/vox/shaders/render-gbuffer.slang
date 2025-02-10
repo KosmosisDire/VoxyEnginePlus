@@ -6,9 +6,9 @@
 static const float3 UP_VECTOR = float3(0, 1, 0);
 static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
-static const float TEMPORAL_MIN_ALPHA = 0.4;    // Lower = smoother but more ghosting (try 0.01 to 0.1)
-static const float TEMPORAL_MOTION_SCALE = 0.5; // Higher = more responsive to motion (try 0.2 to 1.0)
-static const float TEMPORAL_CLAMP_SCALE = 0.5;  // Higher = less clamping, more history (try 0.3 to 0.8)
+static const float TEMPORAL_MIN_ALPHA = 0.4;
+static const float TEMPORAL_MOTION_SCALE = 0.5;
+static const float TEMPORAL_CLAMP_SCALE = 0.5;
 
 // Creates a 3x3 rotation matrix that rotates from up vector to the given normal
 float3x3 CreateRotationFromNormal3x3(float3 normal)
@@ -51,17 +51,6 @@ float3 transformBlueNoise(float3 sample, uint frameIndex)
     return frac(sample + shift);
 }
 
-float3 sphericalFibonacci(float i, float n)
-{
-    const float PHI = sqrt(5) * 0.5f + 0.5f;
-    float fraction = (i * (PHI - 1)) - floor(i * (PHI - 1));
-    float phi = 2.f * PI * fraction;
-    float cosTheta = 1.f - (2.f * i + 1.f) * (1.f / n);
-    float sinTheta = sqrt(saturate(1.f - cosTheta * cosTheta));
-
-    return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-}
-
 TraceResult computeBounce(int2 pixel, float3 origin, float3 normal, float3 blueNoiseSample, uint frameIndex, out float3 rayDir)
 {
     float3 hitPos = origin + normal * EPSILON;
@@ -71,14 +60,7 @@ TraceResult computeBounce(int2 pixel, float3 origin, float3 normal, float3 blueN
     blue = blue * 2 - 1;
     blue.y = abs(blue.y);
     blue = mul(basis, blue);
-    // blue += normal * 0.05;
     rayDir = normalize(blue);
-
-    // const int num = 1024;
-    // rayDir = sphericalFibonacci((frameIndex + blueNoiseSample.x * blueNoiseSample.y * num * 17) % num, num);
-    // // rayDir = transformBlueNoise(rayDir, frameIndex + uint(pixel.x * p.frame_dim.y + pixel.y)) * 2.0 - 1.0;
-    // rayDir.y = abs(rayDir.y);
-    // rayDir = mul(basis, rayDir);
 
     return traceVoxelRay(hitPos, rayDir, 0, 512);
 }
@@ -111,7 +93,7 @@ uint getHashtableFaceIndex(TraceResult trace)
 
     uint voxelIndex = isVoxelFarLOD ? -1 : ((trace.voxelIndex + 1));
     uint normalIndex = (trace.normal.x != 0 ? 1 : 0) + (trace.normal.y != 0 ? 2 : 0) + (trace.normal.z != 0 ? 4 : 0);
-    voxelIndex += 216 * normalIndex;
+    // voxelIndex += 216 * normalIndex;
     return voxelIndex;
 }
 
@@ -128,19 +110,19 @@ float3 calculateBounceColor(TraceResult bounceResult, Material hitMat, float3 ra
 
         // get the hashmap entry for the hit voxel and add the light from it if it exists
         float3 passiveBounce = float3(0, 0, 0);
-        // uint slot = get_hashtable_index(p.voxel_hashmap_ptr, brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), getHashtableFaceIndex(bounceResult));
-        // if (slot != EMPTY_KEY)
-        // {
-        //     var entry = p.voxel_hashmap_ptr.entries[slot];
-        //     if (entry.historyCount > 4)
-        //     {
-        //         passiveBounce = entry.lighting * 0.9;
-        //     }
-        // }
+        uint slot = get_hashtable_index(p.voxel_hashmap_ptr, brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), getHashtableFaceIndex(bounceResult));
+        if (slot != EMPTY_KEY)
+        {
+            var entry = p.voxel_hashmap_ptr.entries[slot];
+            if (entry.historyCount > 4)
+            {
+                passiveBounce = entry.lighting * 0.5;
+            }
+        }
 
         if (!bounceShadow.hit)
         {
-            return hitMat.emission + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 5 * hitMat.albedo;
+            return hitMat.emission + passiveBounce + getSunColor(initAtmosphere(bounceShadow.normal, p.state_ptr.sunDir)) * 5 * hitMat.albedo;
         }
 
         return hitMat.emission + passiveBounce;
@@ -183,14 +165,12 @@ float2 calculateMotionClip(float3 worldPos, float4x4 viewProj, float4x4 lastView
     return previousPos - currentPos;
 }
 
-// Get sample position and bilinear weights
 void getBilinearWeights(float2 pos, out int2 baseCoord, out float2 weights)
 {
     baseCoord = int2(floor(pos));
     weights = frac(pos);
 }
 
-// Sample with bilinear interpolation
 float4 sampleHistoryBilinear(RWTexture2D<float4> history, float2 pos, float2 dimensions)
 {
     int2 baseCoord;
@@ -213,38 +193,6 @@ float4 sampleHistoryBilinear(RWTexture2D<float4> history, float2 pos, float2 dim
     float4 s0 = lerp(s00, s10, weights.x);
     float4 s1 = lerp(s01, s11, weights.x);
     return lerp(s0, s1, weights.y);
-}
-
-// Get neighborhood bounds for clamping
-void getNeighborhoodBounds(RWTexture2D<float3> currentFrame, int2 pixel, float2 dimensions,
-                           out float3 minColor, out float3 maxColor, out float3 avgColor)
-{
-    minColor = float3(1e6, 1e6, 1e6);
-    maxColor = float3(-1e6, -1e6, -1e6);
-    avgColor = float3(0, 0, 0);
-    float samples = 0;
-
-    // Sample 3x3 neighborhood
-    for (int y = -1; y <= 1; y++)
-    {
-        for (int x = -1; x <= 1; x++)
-        {
-            int2 samplePos = clamp(pixel + int2(x, y), int2(0, 0), int2(dimensions) - 1);
-            float3 sample = currentFrame[samplePos];
-
-            minColor = min(minColor, sample);
-            maxColor = max(maxColor, sample);
-            avgColor += sample;
-            samples += 1.0;
-        }
-    }
-
-    avgColor /= samples;
-
-    // Add some headroom to the bounds
-    float3 delta = (maxColor - minColor) * 0.5;
-    minColor -= delta;
-    maxColor += delta;
 }
 
 [numthreads(32, 32, 1)]
