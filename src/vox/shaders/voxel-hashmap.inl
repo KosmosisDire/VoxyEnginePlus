@@ -8,10 +8,10 @@ static const daxa_u32 EMPTY_KEY = 0;
 
 struct VoxelHashmapEntry
 {
+    daxa_f32vec3 lighting;
     daxa_u32 historyCount;
     daxa_u32 lastContributionFrame;
     daxa_u32 uniqueFaceID;
-    daxa_f32vec3 lighting;
 };
 
 struct VoxelHashmap

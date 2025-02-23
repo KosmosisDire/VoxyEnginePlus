@@ -4,6 +4,8 @@ uint hashVoxel(uint globalBrickIndex, uint uniqueFaceID)
 {
     uint hash = globalBrickIndex * 2654435761u + uniqueFaceID * 967;
     hash = (hash ^ (hash >> 16)) * 2246822519u;
+    hash = (hash ^ (hash >> 13)) * 3266489917u;
+    hash = hash ^ (hash >> 16);
     return hash % HASH_TABLE_SIZE;
 }
 
@@ -16,7 +18,7 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint globalBrickIndex, uint
     {
         var entry = hashtable.entries[slot];
         uint prev = -1;
-        if (frameIndex > entry.lastContributionFrame + 5)
+        if (tries > 2 && frameIndex > entry.lastContributionFrame + 5)
         {
             hashtable.brickIndices[slot] = EMPTY_KEY;
         }
@@ -40,7 +42,7 @@ void voxel_hashtable_insert(VoxelHashmap *hashtable, uint globalBrickIndex, uint
     }
 }
 
-uint get_hashtable_index(VoxelHashmap *hashtable, uint globalBrickIndex, uint uniqueFaceID)
+VoxelHashmapEntry get_hashtable_entry(VoxelHashmap *hashtable, uint globalBrickIndex, uint uniqueFaceID, uint frame)
 {
     uint slot = hashVoxel(globalBrickIndex, uniqueFaceID);
 
@@ -53,11 +55,13 @@ uint get_hashtable_index(VoxelHashmap *hashtable, uint globalBrickIndex, uint un
 
         if (brickIdx == globalBrickIndex && voxelFaceIdx == uniqueFaceID)
         {
-            return slot;
+            // make sure frame is updated since it was accessed
+            hashtable.entries[slot].lastContributionFrame = frame;
+            return entry;
         }
         if (brickIdx == EMPTY_KEY && voxelFaceIdx == EMPTY_KEY)
         {
-            return EMPTY_KEY;
+            return (VoxelHashmapEntry)0;
         }
 
         slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
@@ -65,7 +69,7 @@ uint get_hashtable_index(VoxelHashmap *hashtable, uint globalBrickIndex, uint un
         tries++;
     }
 
-    return EMPTY_KEY;
+    return (VoxelHashmapEntry)0;
 }
 
 uint get_hashtable_collision_factor(VoxelHashmap *hashtable, uint globalBrickIndex, uint uniqueFaceID)

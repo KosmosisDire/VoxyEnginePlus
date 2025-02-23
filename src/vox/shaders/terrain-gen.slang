@@ -69,6 +69,10 @@ uint selectMaterial(int3 brickPos, int3 voxelPos)
     {
         return 5;
     }
+    else if (noise < -0.5)
+    {
+        return 10;
+    }
     else
     {
         return 2;
@@ -770,7 +774,18 @@ void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_Group
                     }
                     else
                     {
-                        clearBit(brickOccupancy, voxelIndex);
+                        if (absVoxel.y <= 400) // water
+                        {
+                            uint globalVoxelIndex = voxelGlobalIndex(brickIndex, voxelIndex);
+                            setVoxelMaterial(globalVoxelIndex, 9);
+                            setBit(brickOccupancy, voxelIndex);
+
+                            hasVoxel = true;
+                        }
+                        else
+                        {
+                            clearBit(brickOccupancy, voxelIndex);
+                        }
                     }
                 }
             }

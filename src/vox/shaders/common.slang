@@ -320,3 +320,19 @@ void clearBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
 {
     InterlockedAnd(occupancy.occupancy[chunkIndex][brickIndex / 32], ~(1 << (brickIndex % 32)));
 }
+
+Material getMaterial(uint materialID)
+{
+    if (materialID < 0 || materialID >= TOTAL_MATERIALS)
+    {
+        materialID = 0;
+    }
+
+    return p.materials_ptr.materials[materialID];
+}
+
+uint getMaterialId(int2 voxelID)
+{
+    uint globalVoxelIndex = voxelGlobalIndex(voxelID.x, voxelID.y);
+    return (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
+}

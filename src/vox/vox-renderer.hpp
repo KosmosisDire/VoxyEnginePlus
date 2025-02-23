@@ -5,6 +5,7 @@
 #include <daxa/utils/task_graph.hpp>
 #include <daxa/utils/task_graph_types.hpp>
 #include <math.hpp>
+#include <math/daxa_math.hpp>
 #include <renderer.hpp>
 #include <image.hpp>
 
@@ -16,8 +17,12 @@ struct GBufferCPU
     daxa::ImageId color;
     daxa::ImageId normal;
     daxa::ImageId position;
+    daxa::ImageId voxelIDs;
+    daxa::ImageId voxelFaceIDs;
+    daxa::ImageId materialIDs;
     daxa::ImageId voxelUVs;
     daxa::ImageId brickUVs;
+
     daxa::ImageId indirect;
     daxa::ImageId indirectLast;
     daxa::ImageId indirectDenoised;
@@ -26,17 +31,18 @@ struct GBufferCPU
     daxa::ImageId motion;
     daxa::ImageId depth;
     daxa::ImageId depthHalfRes;
-    daxa::ImageId voxelIDs;
-    daxa::ImageId voxelFaceIDs;
-    daxa::ImageId materialIDs;
     daxa::ImageId ssao;
     daxa::ImageId shadow;
 
     daxa::TaskImage task_color;
     daxa::TaskImage task_normal;
     daxa::TaskImage task_position;
+    daxa::TaskImage task_voxelIDs;
+    daxa::TaskImage task_voxelFaceIDs;
+    daxa::TaskImage task_materialIDs;
     daxa::TaskImage task_voxelUVs;
     daxa::TaskImage task_brickUVs;
+
     daxa::TaskImage task_indirect;
     daxa::TaskImage task_indirectLast;
     daxa::TaskImage task_indirectDenoised;
@@ -45,9 +51,7 @@ struct GBufferCPU
     daxa::TaskImage task_motion;
     daxa::TaskImage task_depth;
     daxa::TaskImage task_depthHalfRes;
-    daxa::TaskImage task_voxelIDs;
-    daxa::TaskImage task_voxelFaceIDs;
-    daxa::TaskImage task_materialIDs;
+
     daxa::TaskImage task_ssao;
     daxa::TaskImage task_shadow;
 
@@ -57,7 +61,7 @@ struct GBufferCPU
     inline void CreateImages(Renderer &renderer)
     {
         color = renderer.CreateRenderImage("color", &task_color, daxa::Format::R32G32B32A32_SFLOAT);
-        normal = renderer.CreateRenderImage("normal", &task_normal, daxa::Format::R8G8B8A8_SINT);
+        normal = renderer.CreateRenderImage("normal", &task_normal, daxa::Format::R16G16B16A16_SFLOAT);
         position = renderer.CreateRenderImage("position", &task_position, daxa::Format::R32G32B32A32_SFLOAT);
         voxelUVs = renderer.CreateRenderImage("voxelUVs", &task_voxelUVs, daxa::Format::R16G16_SFLOAT);
         brickUVs = renderer.CreateRenderImage("brickUVs", &task_brickUVs, daxa::Format::R16G16_SFLOAT);
@@ -231,65 +235,80 @@ class VoxelRenderer
         materials_ptr->materials[0] = Material
         {
             .albedo = {1.0, 0, 1.0},
-            .roughness = 1,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 1,
         };
         materials_ptr->materials[1] = Material // grass
         {
             .albedo = {0.17f, 0.33f, 0.23f},
-            .roughness = 0.5f,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[2] = Material // stone
         {
             .albedo = {0.5, 0.5, 0.5},
-            .roughness = 0.5f,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[3] = Material // dirt
         {
             .albedo = {0.14f, 0.09f, 0.02f},
-            .roughness = 0.5f,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[4] = Material // leaves
         {
             .albedo = {0.08f, 0.17f, 0.03f},
-            .roughness = 0.5f,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[5] = Material // wood
         {
             .albedo = {0.17f, 0.09f, 0.03f},
-            .roughness = 0.5f,
             .emission = {0.0f, 0.0f, 0.0f},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[6] = Material // purple glow
         {
             .albedo = {0.8, 0.3, 1},
-            .roughness = 0.5f,
             .emission = {0.8f * glowStrength, 0.3f * glowStrength, 1 * glowStrength},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[7] = Material // rblue glow
         {
             .albedo = {0.29f, 0.62f, 1},
-            .roughness = 0.5f,
             .emission = {0.29f * glowStrength, 0.62f * glowStrength, 1 * glowStrength},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
         };
         materials_ptr->materials[8] = Material
         {
             .albedo = {0.3f, 0.79f, 0.69f},
-            .roughness = 0.5f,
             .emission = {0.3f * glowStrength, 1.0f * glowStrength, 0.69f * glowStrength},
-            .metallic = 0.0f,
+            .transparency = 0.0f,
+            .roughness = 0.5f,
+        };
+        materials_ptr->materials[9] = Material // water
+        {
+            .albedo = {0.3f, 0.79f, 0.69f},
+            .emission = {0,0,0},
+            .volumetricAbsorbtion = {0.35, 0.062, 0.018},
+            .transparency = 0.5f,
+            .reflectivity = 0.2f,
+        };
+        materials_ptr->materials[10] = Material // mirror
+        {
+            .albedo = {0.9,1,0.9},
+            .emission = {0,0,0},
+            .transparency = 0.0f,
+            .reflectivity = 0.9f,
         };
 
 

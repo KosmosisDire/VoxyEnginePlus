@@ -160,6 +160,12 @@ float3 getBaseSkyColor(AtmosphereParams params)
     return sky;
 }
 
+float3 getBaseSkyColor(float3 dir, float3 sunDir)
+{
+    AtmosphereParams params = initAtmosphere(dir, sunDir);
+    return getBaseSkyColor(params);
+}
+
 float3 getSunEffect(AtmosphereParams params)
 {
     float3 currentSunColor = getSunColor(params);

@@ -82,26 +82,23 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         int offsetFaceID = voxelFaceIDs[(pixel + int2(-1, -1)) * LIGHTING_DOWNSAMPLE];
         int offsetFaceID2 = voxelFaceIDs[(pixel + int2(1, 1)) * LIGHTING_DOWNSAMPLE];
 
-        if (any(offsetVoxID != voxelID) || any(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
+        if (all(offsetVoxID != voxelID) || all(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
         {
+            indirectPerVoxPass1[pixel] = float3(1);
             float3 finalColor = indirectPerVoxPass2[pixel];
-
-            uint slot = get_hashtable_index(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID);
-            uint lastTempFrames = 0;
-            float3 lastColor = float3(0, 0, 0);
-
-            if (slot != EMPTY_KEY)
-            {
-                var entry = p.voxel_hashmap_ptr.entries[slot];
-                lastTempFrames = entry.historyCount;
-                lastColor = entry.lighting;
-            }
+            var entry = get_hashtable_entry(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, p.state_ptr.frame);
+            float lastTempFrames = entry.historyCount;
+            float3 lastColor = entry.lighting;
 
             float blendFactor = 1.0 / (lastTempFrames + 1);
-            blendFactor = clamp(blendFactor, 0.01, 0.99);
+            blendFactor = clamp(blendFactor, 0.001, 0.99);
             finalColor = lastColor * (1 - blendFactor) + finalColor * (blendFactor);
 
             voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, finalColor, lastTempFrames + 1, p.state_ptr.frame);
+        }
+        else
+        {
+            // indirectPerVoxPass1[pixel] = float3(0);
         }
     }
 }

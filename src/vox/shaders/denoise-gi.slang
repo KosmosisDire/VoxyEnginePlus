@@ -55,7 +55,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // return;
 
     RWTexture2D<float3> image_position = RWTexture2D<float3>::get(p.gbuffer.position);
-    RWTexture2D<int3> image_normal = RWTexture2D<int3>::get(p.gbuffer.normal);
+    RWTexture2D<float3> image_normal = RWTexture2D<float3>::get(p.gbuffer.normal);
     RWTexture2D<float> image_depth = RWTexture2D<float>::get(p.gbuffer.depth);
     RWTexture2D<uint2> voxelIDs = RWTexture2D<uint2>::get(p.gbuffer.voxelIDs);
 
@@ -66,12 +66,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    // if (p.pass > image_ssao[pixel] * 5 + 3)
+    // if (p.pass > image_ssao[pixel] * 5 + 2)
     // {
     //     return;
     // }
 
-    // if (p.pass > 2)
+    // if (p.pass > 1)
     //     return;
 
     float3 center_color;
@@ -146,5 +146,5 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     image_indirectDenoise[pixel] = final;
 
     // if (p.pass <= 1)
-    //     image_indirect[pixel].xyz = final;
+    // image_indirect[pixel].xyz = final;
 }
