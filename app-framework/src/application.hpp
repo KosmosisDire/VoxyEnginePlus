@@ -18,7 +18,7 @@ struct Application
 {
   public:
     Application(std::string name, std::vector<std::filesystem::path> shaderDirectories)
-        : window(std::make_shared<Window>(name, 1920, 1080)), inputManager(window), renderer(std::make_shared<Renderer>(window, shaderDirectories))
+        : window(std::make_shared<GameWindow>(name, 1920, 1080)), inputManager(window), renderer(std::make_shared<Renderer>(window, shaderDirectories))
     {
         start = Clock::now();
         window->SetResizeCallback([this](u32 sx, u32 sy)
@@ -66,7 +66,7 @@ struct Application
     float GetTime() const { return time; }
 
   protected:
-    std::shared_ptr<Window> window;
+    std::shared_ptr<GameWindow> window;
     std::shared_ptr<Renderer> renderer;
 
     virtual void OnResize(u32 sx, u32 sy) {};

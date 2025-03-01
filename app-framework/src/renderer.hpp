@@ -1,6 +1,7 @@
 #pragma once
 #include <daxa/daxa.hpp>
 using namespace daxa::types;
+#include "image.hpp"
 #include "terminal-colors.hpp"
 #include "window.hpp"
 #include <daxa/utils/imgui.hpp>
@@ -11,7 +12,6 @@ using namespace daxa::types;
 #include <imgui_impl_glfw.h>
 #include <string>
 #include <vector>
-#include "image.hpp"
 
 struct InlineTask
 {
@@ -92,7 +92,7 @@ class Renderer
     /// @brief The renderer sets up a simple render loop which can be extended by adding tasks to the pipeline.
     /// @param window
     /// @param shaderDirectories Directories containing shaders. Those shaders can then be referenced via a relative path from the shader directory.
-    Renderer(std::shared_ptr<Window> window, std::vector<std::filesystem::path> shaderDirectories)
+    Renderer(std::shared_ptr<GameWindow> window, std::vector<std::filesystem::path> shaderDirectories)
         : window(window)
     {
         daxa_instance = daxa::create_instance({});
@@ -208,8 +208,7 @@ class Renderer
 
     inline daxa::ImageId CreateImage(std::string name, Image &image)
     {
-        auto id = CreateImage(daxa::ImageInfo
-        {
+        auto id = CreateImage(daxa::ImageInfo{
             .format = daxa::Format::R8G8B8A8_UNORM,
             .size = {(unsigned int)image.width(), (unsigned int)image.height(), 1},
             .usage = daxa::ImageUsageFlagBits::TRANSFER_DST | daxa::ImageUsageFlagBits::SHADER_STORAGE,
@@ -223,7 +222,7 @@ class Renderer
         });
 
         // copy image data to buffer
-        auto data = device.get_host_address_as<std::byte>(buffer).value();
+        auto data = device.buffer_host_address_as<std::byte>(buffer).value();
         std::memcpy(data, image.data(), image.size());
 
         // execute a task to copy the image data to the gpu
@@ -231,20 +230,17 @@ class Renderer
 
         recorder.pipeline_barrier_image_transition({
             .src_access =
-            {
-                .stages = daxa::PipelineStageFlagBits::NONE,
-                .type = daxa::AccessTypeFlagBits::READ
-            },
-            .dst_access = 
-            {
-                .stages = daxa::PipelineStageFlagBits::TRANSFER,
-                .type = daxa::AccessTypeFlagBits::WRITE
-            },
+                {
+                    .stages = daxa::PipelineStageFlagBits::NONE,
+                    .type = daxa::AccessTypeFlagBits::READ},
+            .dst_access =
+                {
+                    .stages = daxa::PipelineStageFlagBits::TRANSFER,
+                    .type = daxa::AccessTypeFlagBits::WRITE},
             .src_layout = daxa::ImageLayout::UNDEFINED,
             .dst_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
             .image_id = id,
         });
-
 
         recorder.copy_buffer_to_image({
             .buffer = buffer,
@@ -257,20 +253,18 @@ class Renderer
 
         recorder.pipeline_barrier_image_transition({
             .src_access =
-            {
-                .stages = daxa::PipelineStageFlagBits::TRANSFER,
-                .type = daxa::AccessTypeFlagBits::WRITE
-            },
-            .dst_access = 
-            {
-                .stages = daxa::PipelineStageFlagBits::NONE,
-                .type = daxa::AccessTypeFlagBits::READ
-            },
+                {
+                    .stages = daxa::PipelineStageFlagBits::TRANSFER,
+                    .type = daxa::AccessTypeFlagBits::WRITE},
+            .dst_access =
+                {
+                    .stages = daxa::PipelineStageFlagBits::NONE,
+                    .type = daxa::AccessTypeFlagBits::READ},
             .src_layout = daxa::ImageLayout::TRANSFER_DST_OPTIMAL,
             .dst_layout = daxa::ImageLayout::READ_ONLY_OPTIMAL,
             .image_id = id,
         });
-        
+
         auto executable_commands = recorder.complete_current_commands();
         recorder.~CommandRecorder();
         device.submit_commands({.command_lists = std::array{executable_commands}});
@@ -325,7 +319,6 @@ class Renderer
         return id;
     }
 
-
     inline daxa::ImageId CreateImage(daxa::ImageInfo info, daxa::TaskImage *out_task_image)
     {
         auto id = CreateImage(info);
@@ -370,7 +363,7 @@ class Renderer
     template <typename T>
     inline T *MapBufferAs(daxa::BufferId buffer)
     {
-        return device.get_host_address_as<T>(buffer).value();
+        return device.buffer_host_address_as<T>(buffer).value();
     }
 
     inline daxa::InlineTaskInfo CreateBlitTask(daxa::TaskImage src, daxa::TaskImage dst)
@@ -401,7 +394,7 @@ class Renderer
     }
 
   private:
-    std::shared_ptr<Window> window;
+    std::shared_ptr<GameWindow> window;
 
     void InitializeGraph()
     {
@@ -458,12 +451,10 @@ class Renderer
     static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBufferAttachmentInfo buffer, u32 value = 0)
     {
         ti.recorder.clear_buffer(
-            {
-                .buffer = buffer.ids[0],
-                .offset = 0,
-                .size = ti.device.buffer_info(buffer.ids[0]).value().size,
-                .clear_value = value
-            });
+            {.buffer = buffer.ids[0],
+             .offset = 0,
+             .size = ti.device.buffer_info(buffer.ids[0]).value().size,
+             .clear_value = value});
     }
 
     static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBuffer buffer, u32 value = 0)
@@ -473,10 +464,8 @@ class Renderer
 
     static inline void CopyImage(daxa::TaskInterface ti, daxa::TaskImage src, daxa::TaskImage dst)
     {
-        ti.recorder.copy_image_to_image({
-            .src_image = ti.get(src).ids[0],
-            .dst_image = ti.get(dst).ids[0]
-        });
+        ti.recorder.copy_image_to_image({.src_image = ti.get(src).ids[0],
+                                         .dst_image = ti.get(dst).ids[0]});
     }
 
     static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex = 0)
@@ -484,16 +473,26 @@ class Renderer
         return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
     }
 
-    static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, std::shared_ptr<Window> window, std::string name)
+    static inline daxa::Swapchain CreateSwapchain(daxa::Device &device, std::shared_ptr<GameWindow> window, std::string name)
     {
-        return device.create_swapchain(
-            {
-                .native_window = window->GetNativeHandle(), 
-                .native_window_platform = window->GetNativePlatform(), 
-                .present_mode = daxa::PresentMode::FIFO, 
-                .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST, 
-                .name = name
-            });
+        auto native_handle = window->GetNativeHandle();
+        auto platform = window->GetNativePlatform();
+
+        std::cout << "Creating swapchain with:" << std::endl;
+        std::cout << "  Platform: " << static_cast<int>(platform) << std::endl;
+        std::cout << "  Handle: " << native_handle << std::endl;
+
+        // Ensure we're not getting a null handle
+        if (native_handle == nullptr)
+        {
+            throw std::runtime_error("Failed to get native window handle for swapchain creation");
+        }
+
+        return device.create_swapchain({.native_window = native_handle,
+                                        .native_window_platform = platform,
+                                        .present_mode = daxa::PresentMode::FIFO,
+                                        .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST,
+                                        .name = name});
     }
 
     static inline daxa::TaskImage CreateSwapchainImage(daxa::Swapchain &swapchain, std::string name)

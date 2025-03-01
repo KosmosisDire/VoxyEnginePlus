@@ -3,3 +3,4 @@ vcpkg_installed/*
 lib/*
 imgui.ini
 .aider*
+out/

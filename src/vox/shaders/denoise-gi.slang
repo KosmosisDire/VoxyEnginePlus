@@ -62,18 +62,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     uint2 voxelID = voxelIDs[pixel * LIGHTING_DOWNSAMPLE];
     float3 center_pos = image_position[pixel * LIGHTING_DOWNSAMPLE];
 
-    // Skip denoising for sky pixels
-    if (all(center_pos == float3(0, 0, 0)))
-        return;
-
-    // if (p.pass > image_ssao[pixel] * 5 + 2)
-    // {
-    //     return;
-    // }
-
-    // if (p.pass > 1)
-    //     return;
-
     float3 center_color;
     if (p.pass <= 1)
     {
@@ -86,9 +74,21 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float3 center_normal = image_normal[pixel * LIGHTING_DOWNSAMPLE];
     float center_depth = image_depth[pixel * LIGHTING_DOWNSAMPLE];
 
+    // Skip denoising for sky pixels
+    if (all(center_normal == float3(0, 0, 0)))
+        return;
+
+    // if (p.pass > image_ssao[pixel] * 5 + 2)
+    // {
+    //     return;
+    // }
+
+    // if (p.pass > 3)
+    //     return;
+
     const float sigma_geom = 0.01f;
     const float sigma_normal = 0.1f;
-    const float sigma_color = 0.3f;
+    const float sigma_color = 0.05f;
 
     // Second pass - apply denoising with firefly removal
     float3 sum_color = float3(0, 0, 0);

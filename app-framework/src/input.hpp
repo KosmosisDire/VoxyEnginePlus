@@ -1,12 +1,11 @@
 #pragma once
 
+#include "math/vector2.hpp"
 #include "window.hpp"
 #include <GLFW/glfw3.h>
 #include <functional>
 #include <unordered_map>
 #include <vector>
-#include "math/vector2.hpp"
-
 
 enum class Key
 {
@@ -121,7 +120,7 @@ using MouseScrollCallbackFn = std::function<void(float xoffset, float yoffset)>;
 class Input
 {
   public:
-    Input(std::shared_ptr<Window> window);
+    Input(std::shared_ptr<GameWindow> window);
     ~Input();
 
     // Key state queries
@@ -161,7 +160,7 @@ class Input
     static void MouseMoveCallback(GLFWwindow *glfwWindow, float xpos, float ypos);
     static void ScrollCallback(GLFWwindow *glfwWindow, float xoffset, float yoffset);
     static GLFWwindow *GetGlfwWindow() { return instance->glfwWindow; }
-    static std::shared_ptr<Window> GetWindow() { return instance->window; }
+    static std::shared_ptr<GameWindow> GetWindow() { return instance->window; }
 
     // Static state storage
     static Input *instance;
@@ -176,7 +175,7 @@ class Input
 
     // Instance members
     GLFWwindow *glfwWindow;
-    std::shared_ptr<Window> window;
+    std::shared_ptr<GameWindow> window;
     std::vector<KeyCallbackFn> keyCallbacks;
     std::vector<MouseButtonCallbackFn> mouseButtonCallbacks;
     std::vector<MouseMoveCallbackFn> mouseMoveCallbacks;
@@ -197,7 +196,7 @@ float Input::scrollDeltaX = 0.0;
 float Input::scrollDeltaY = 0.0;
 bool Input::mouseCaptured = false;
 
-Input::Input(std::shared_ptr<Window> window)
+Input::Input(std::shared_ptr<GameWindow> window)
     : glfwWindow(window->GetGlfwWindow()), window(window)
 {
     if (instance != nullptr)

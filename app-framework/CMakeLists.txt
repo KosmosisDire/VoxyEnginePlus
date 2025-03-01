@@ -1,3 +1,4 @@
+# app-framework/CMakeLists.txt
 file(GLOB_RECURSE ENGINE_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
@@ -29,6 +30,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
+# Link dependencies
 target_link_libraries(voxy_engine 
     PUBLIC 
         glfw
@@ -38,7 +40,8 @@ target_link_libraries(voxy_engine
         imgui::imgui
 )
 
-# Create resources directories if they don't exist
+# Create resources directories
 add_custom_command(TARGET voxy_engine PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders"
+    COMMENT "Creating engine resource directories"
 )

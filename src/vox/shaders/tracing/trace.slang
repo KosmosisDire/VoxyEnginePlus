@@ -1,4 +1,5 @@
 #include "common.slang"
+#pragma once
 
 Ray getRayFromPixel(uint2 pixel, uint2 dimensions, CameraData camera)
 {
@@ -116,13 +117,15 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
 
                             result.hit = true;
                             result.position = hitPos;
-                            result.normal = normal;
+                            result.normal = calculateVoxelNormal(brickIdxGlobal, voxelIdx, p.brick_occupancy_ptr);
                             result.distance = length(hitPos - startPos);
                             result.cell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
                             result.chunkIndex = chunkIdx;
                             result.brickIndex = brickIdx;
                             result.voxelIndex = voxelIdx;
                             result.materialId = materialId;
+                            result.voxelUVW = voxelUv;
+                            result.brickUVW = brickUv;
 
                             return result;
                         }
@@ -144,41 +147,6 @@ SceneHitInfo traceAllRays(Ray primaryRay)
 
     // Trace primary ray
     hits.solid = traceScene(primaryRay, 0, false);
-
-    if (!hits.solid.hit)
-    {
-        return hits;
-    }
-
-    Material primaryMat = getMaterial(hits.solid.materialId);
-
-    // Trace transmission ray if material is transparent
-    if (primaryMat.transparency > EPSILON)
-    {
-        hits.transparent = hits.solid;
-        hits.solid = traceScene(primaryRay, hits.solid.distance, true);
-
-        if (primaryMat.reflectivity > EPSILON)
-        {
-            Ray reflRay;
-            reflRay.origin = hits.transparent.position + hits.transparent.normal * EPSILON;
-            reflRay.direction = reflect(primaryRay.direction, hits.transparent.normal);
-            reflRay.maxDist = MAX_TRACE_DISTANCE;
-
-            hits.reflection = traceScene(reflRay, 0, false);
-        }
-    }
-
-    // Trace reflection ray if material is reflective
-    else if (primaryMat.reflectivity > EPSILON)
-    {
-        Ray reflRay;
-        reflRay.origin = hits.solid.position + hits.solid.normal * EPSILON;
-        reflRay.direction = reflect(primaryRay.direction, hits.solid.normal);
-        reflRay.maxDist = MAX_TRACE_DISTANCE;
-
-        hits.reflection = traceScene(reflRay, 0, false);
-    }
 
     return hits;
 }

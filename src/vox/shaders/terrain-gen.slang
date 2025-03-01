@@ -69,9 +69,9 @@ uint selectMaterial(int3 brickPos, int3 voxelPos)
     {
         return 5;
     }
-    else if (noise < -0.5)
+    else if (noise < -0.7)
     {
-        return 10;
+        return 6;
     }
     else
     {

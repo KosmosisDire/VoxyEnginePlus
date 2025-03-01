@@ -2,25 +2,68 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Ensure Build Directory",
+            "type": "shell",
+            "windows": {
+                "command": "powershell",
+                "args": [
+                    "-Command",
+                    "if (!(Test-Path -Path '${workspaceFolder}/build/Debug')) { New-Item -ItemType Directory -Force -Path '${workspaceFolder}/build/Debug'; cd '${workspaceFolder}/build/Debug'; cmake '${workspaceFolder}' -DCMAKE_BUILD_TYPE=Debug }"
+                ]
+            },
+            "linux": {
+                "command": "bash",
+                "args": [
+                    "-c",
+                    "mkdir -p '${workspaceFolder}/build/Debug' && if [ ! -f '${workspaceFolder}/build/Debug/CMakeCache.txt' ]; then cd '${workspaceFolder}/build/Debug' && cmake '${workspaceFolder}' -DCMAKE_BUILD_TYPE=Debug; fi"
+                ]
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Build VoxyEngine",
             "type": "shell",
-            "command": "C:\\Program Files\\CMake\\bin\\cmake.exe",
-            "args": [
-                "--build",
-                "${workspaceFolder}/build/Debug",
-                "--config",
-                "Debug",
-                "--parallel",
-                "22",
-                "--target",
-                "VoxyEngine"
-            ],
+            "windows": {
+                "command": "cmake",
+                "options": {
+                    "env": {
+                        "PATH": "${env:PATH};C:\\Program Files\\CMake\\bin"
+                    }
+                },
+                "args": [
+                    "--build",
+                    "${workspaceFolder}/build/Debug",
+                    "--config",
+                    "Debug",
+                    "--parallel",
+                    "22",
+                    "--target",
+                    "VoxyEngine"
+                ]
+            },
+            "linux": {
+                "command": "cd",
+                "args": [
+                    "${workspaceFolder}/build/Debug",
+                    "&&",
+                    "make",
+                    "-j22",
+                    "VoxyEngine"
+                ]
+            },
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
+            "dependsOn": [
+                "Ensure Build Directory"
+            ],
             "problemMatcher": [
-                "$msCompile"
+                "$gcc"
             ],
             "presentation": {
                 "echo": true,

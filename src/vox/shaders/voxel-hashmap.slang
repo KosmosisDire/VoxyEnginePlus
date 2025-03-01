@@ -99,3 +99,4 @@ uint get_hashtable_collision_factor(VoxelHashmap *hashtable, uint globalBrickInd
 
     return tries;
 }
+

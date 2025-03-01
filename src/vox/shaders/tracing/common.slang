@@ -22,14 +22,14 @@ struct TraceResult
     int chunkIndex;  // Index in chunk array
     int brickIndex;  // Index in brick array
     int voxelIndex;  // Index in voxel array
+    float3 voxelUVW; // UVW coordinates in voxel
+    float3 brickUVW; // UVW coordinates in brick
 };
 
 // Combined results from all traced rays
 struct SceneHitInfo
 {
     TraceResult solid;
-    TraceResult transparent;
-    TraceResult reflection;
 };
 
 // Final output per pixel
@@ -39,7 +39,6 @@ struct PixelResult
     float3 normal;     // Final surface normal
     float depth;       // Closest hit depth
     float3 position;   // World space position
-    bool hitAnything;  // Whether any ray hit
     uint hashmapIndex; // Index into lighting hashmap
     int2 voxelId;
 };

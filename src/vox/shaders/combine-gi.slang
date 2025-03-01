@@ -14,6 +14,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float3> color = RWTexture2D<float3>::get(p.gbuffer.color);
     RWTexture2D<int2> voxelIDs = RWTexture2D<int2>::get(p.gbuffer.voxelIDs);
     RWTexture2D<uint> voxelFaceIDs = RWTexture2D<uint>::get(p.gbuffer.voxelFaceIDs);
+    RWTexture2D<int3> normalTex = RWTexture2D<int3>::get(p.gbuffer.normal);
 
     uint2 pixel = pixel_i.xy;
     int2 voxelID = voxelIDs[pixel * LIGHTING_DOWNSAMPLE];
@@ -84,21 +85,16 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         if (all(offsetVoxID != voxelID) || all(offsetVoxID2 != voxelID) || offsetFaceID != voxelFaceID || offsetFaceID2 != voxelFaceID)
         {
-            indirectPerVoxPass1[pixel] = float3(1);
             float3 finalColor = indirectPerVoxPass2[pixel];
             var entry = get_hashtable_entry(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, p.state_ptr.frame);
             float lastTempFrames = entry.historyCount;
             float3 lastColor = entry.lighting;
 
-            float blendFactor = 1.0 / (lastTempFrames + 1);
+            float blendFactor = 1.0 / (lastTempFrames);
             blendFactor = clamp(blendFactor, 0.001, 0.99);
             finalColor = lastColor * (1 - blendFactor) + finalColor * (blendFactor);
 
             voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, finalColor, lastTempFrames + 1, p.state_ptr.frame);
-        }
-        else
-        {
-            // indirectPerVoxPass1[pixel] = float3(0);
         }
     }
 }

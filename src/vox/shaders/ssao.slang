@@ -6,10 +6,10 @@ const ComputePush p;
 // SSAO settings
 static const int KERNEL_SIZE = 16;
 static const float RADIUS = 0.35;
-static const float BIAS = 0.025;
-static const float MAX_DISTANCE = 0.3;
-static const float FALLOFF = 0.001;
-static const float STRENGTH = 1;
+static const float BIAS = 0.0005;
+static const float MAX_DISTANCE = 0.2;
+static const float FALLOFF = 0.0001;
+static const float STRENGTH = 1.4;
 
 // Better random vector generation
 float3 hash3(float2 p)
@@ -63,9 +63,9 @@ void main(uint3 DTid: SV_DispatchThreadID)
     for (int i = 0; i < KERNEL_SIZE; i++)
     {
         // Use blue noise for sample distribution
-        float2 noiseOffset = blueNoise.xy * 2.0 - 1.0;
+        float2 noiseOffset = randomVec.xy;
         float r = float(i) / float(KERNEL_SIZE);
-        float phi = (r + noiseOffset.x * 0.1) * (PI * 2.0) * 0.618034;
+        float phi = frac((r + noiseOffset.x) * (PI * 2.0) * 0.618034);
 
         float cosTheta = 1.0 - (r + noiseOffset.y * 0.1);
         float sinTheta = sqrt(1.0 - cosTheta * cosTheta);

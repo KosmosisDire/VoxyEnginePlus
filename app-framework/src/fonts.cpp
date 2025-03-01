@@ -1,6 +1,5 @@
 #include "fonts.hpp"
 #include "engine_config.hpp.in"
-#include <crtdbg.h>
 #include <stdio.h>
 
 // Define the static member variable

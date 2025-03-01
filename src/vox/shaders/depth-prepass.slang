@@ -1,5 +1,5 @@
 #include "atmosphere.slang"
-#include "raycast.slang"
+// #include "raycast.slang"
 
 [numthreads(8, 8, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)

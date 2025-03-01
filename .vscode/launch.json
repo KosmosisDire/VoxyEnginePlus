@@ -2,17 +2,46 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug VoxyEngine",
+            "name": "Debug VoxyEngine (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/Debug/src/Debug/VoxyEngine.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/Debug/src/Debug/",
+            "cwd": "${workspaceFolder}/build/Debug/src/Debug",
             "environment": [],
             "externalConsole": false,
             "preLaunchTask": "Build VoxyEngine",
-            "internalConsoleOptions": "openOnSessionStart"
+            "internalConsoleOptions": "openOnSessionStart",
+            "windows": {
+                "program": "${workspaceFolder}/build/Debug/src/Debug/VoxyEngine.exe",
+                "cwd": "${workspaceFolder}/build/Debug/src/Debug"
+            }
+        },
+        {
+            "name": "Debug VoxyEngine (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/src/VoxyEngine",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/Debug/src/",
+            "environment": [],
+            "externalConsole": false,
+            "preLaunchTask": "Build VoxyEngine",
+            "internalConsoleOptions": "openOnSessionStart",
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "linux": {
+                "program": "${workspaceFolder}/build/Debug/src/VoxyEngine",
+                "cwd": "${workspaceFolder}/build/Debug/src/"
+            }
         }
     ]
 }

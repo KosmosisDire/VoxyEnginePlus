@@ -220,7 +220,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     var faceID = getFaceID(shaded.normal, shaded.voxelId.y);
 
     var primaryMaterial = getMaterial(sceneInfo.solid.materialId);
-    var transMaterial = getMaterial(sceneInfo.transparent.materialId);
 
     float shadow = 1;
     if (sceneInfo.solid.hit)
@@ -237,87 +236,107 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     }
 
     float2 prevPos = float2(pixel) + motionPixels;
-
-    if (all(pixel % LIGHTING_DOWNSAMPLE == 0) == 0)
+    var entry = getHashmapEntry(sceneInfo.solid);
+    if (all(pixel % LIGHTING_DOWNSAMPLE == 0))
     {
         float2 samplePixel = pixel / LIGHTING_DOWNSAMPLE;
         float2 dimensions = p.frame_dim / LIGHTING_DOWNSAMPLE;
-
-        float4 blueNoiseSample = blueNoise[samplePixel % 128];
-
-        // shoot ray in random dir and add value to hashmap
-        var diffuseRay = getDiffuseRay(pixel, shaded.position, shaded.normal, blueNoiseSample.xyz, p.state_ptr.frame);
-        var diffuseInfo = traceScene(diffuseRay, 0, true);
-
         var lightingColor = float3(0, 0, 0);
 
-        if (diffuseInfo.hit)
+        int NUM_PRIMARY_BOUNCES = 1;
+
+        // First bounce loop
+
+        [unroll]
+        for (int bounce = 0; bounce < NUM_PRIMARY_BOUNCES; bounce++)
         {
-            var diffuseMat = getMaterial(diffuseInfo.materialId);
-            lightingColor = diffuseMat.emission;
+            float4 blueNoiseSample = blueNoise[(samplePixel + bounce) % 128];
+            var diffuseRay = getDiffuseRay(pixel, shaded.position, shaded.normal, blueNoiseSample.xyz, p.state_ptr.frame + bounce);
+            var diffuseInfo = traceScene(diffuseRay, 0, false);
 
-            // cast second bounce
-            if (all(((pixel) % (LIGHTING_DOWNSAMPLE * 2)) / 2 == (p.state_ptr.frame % 2)))
+            if (diffuseInfo.hit)
             {
-                var downsamplePixel = pixel / (LIGHTING_DOWNSAMPLE * 2);
-                var blueNoiseSample2 = blueNoise[(downsamplePixel + 24) % 128];
-                var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame);
-                var bounceInfo = traceScene(bounceRay, 0, false);
+                var diffuseMat = getMaterial(diffuseInfo.materialId);
+                lightingColor += diffuseMat.emission / NUM_PRIMARY_BOUNCES;
 
-                if (bounceInfo.hit)
+                // see if position is visible to the sun
+                var shadowRay = Ray(diffuseInfo.position + diffuseInfo.normal * EPSILON, p.state_ptr.sunDir);
+                var shadowInfo = traceScene(shadowRay, 0, false);
+
+                if (!shadowInfo.hit)
                 {
-                    var bounceMat = getMaterial(bounceInfo.materialId);
-                    lightingColor = lerp(lightingColor, bounceMat.emission * 4, 0.5);
+                    lightingColor += getSunColor(initAtmosphere(shadowRay.direction, p.state_ptr.sunDir)) * 4 * diffuseMat.albedo / NUM_PRIMARY_BOUNCES;
                 }
-                else
+
+                // second bounce at half res
+                if (all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0))
                 {
-                    lightingColor = lerp(lightingColor, getBaseSkyColor(bounceRay.direction, p.state_ptr.sunDir) * 4 * 4, 0.5);
+                    float4 blueNoiseSample2 = blueNoise[(samplePixel + 1) % 128];
+                    var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame + bounce);
+                    var bounceInfo = traceScene(bounceRay, 0, false);
+
+                    if (bounceInfo.hit)
+                    {
+                        var bounceMat = getMaterial(bounceInfo.materialId);
+                        lightingColor += bounceMat.emission * 0.5 * diffuseMat.albedo / NUM_PRIMARY_BOUNCES;
+                    }
                 }
             }
-        }
-        else
-        {
-            lightingColor = getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 4;
-        }
-
-        var entry = getHashmapEntry(sceneInfo.solid);
-
-        // Calculate previous position with subpixel precision
-        float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
-        // Get previous brick ID from the position
-        int2 prevPixel = int2(prevPos);
-        int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
-        int prevBrickId = prevVoxelData.x;
-        // Validate history
-        float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
-
-        prevPos = clamp(prevPos, float2(0), dimensions - 1);
-
-        // Sample lastFrame with bilinear interpolation
-        float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
-        last = clamp(last, float4(0), float4(10000));
-
-        if (!valid)
-        {
-            last.w = 0;
+            else
+            {
+                lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 4 / NUM_PRIMARY_BOUNCES;
+            }
         }
 
-        float blendFactor = (1 / (last.w));
-        blendFactor = clamp(blendFactor, 0.001, 1.0);
+        // // Calculate previous position with subpixel precision
+        // float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
+        // // Get previous brick ID from the position
+        // int2 prevPixel = int2(prevPos);
+        // int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
+        // int prevBrickId = prevVoxelData.x;
+        // // Validate history
+        // float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
 
-        // Final blend
-        lightingColor = lerp(last.rgb, lightingColor, blendFactor);
+        // prevPos = clamp(prevPos, float2(0), dimensions - 1);
 
-        indirect[samplePixel] = float4(lightingColor, last.w + 1);
+        // // Sample lastFrame with bilinear interpolation
+        // float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
+        // last = clamp(last, float4(0), float4(10000));
+
+        // if (!valid)
+        // {
+        //     last.w = 0;
+        // }
+
+        // float blendFactor = (1 / (last.w));
+        // blendFactor = clamp(blendFactor, 1.0, 1.0);
+
+        // // Final blend
+        // lightingColor = lerp(last.rgb, lightingColor, blendFactor);
+
+        // half and half with lighting entry
+        // lightingColor += entry.lighting * 0.2;
+
+        indirect[samplePixel] = float4(lightingColor, 0);
     }
 
-    var entry = getHashmapEntry(sceneInfo.solid);
+    var normal = shaded.normal;
+    var voxelUVW = sceneInfo.solid.voxelUVW;
+    var brickUVW = sceneInfo.solid.brickUVW;
+
+    float2 voxelFaceUV = normal.x != 0 ? voxelUVW.yz : normal.y != 0 ? voxelUVW.xz
+                                                                     : voxelUVW.xy;
+    float2 brickFaceUV = normal.x != 0 ? brickUVW.yz : normal.y != 0 ? brickUVW.xz
+                                                                     : brickUVW.xy;
 
     albedo[pixel] = color;
     voxelIDs[pixel] = voxelID;
     voxelFaceIDs[pixel] = faceID;
     depth[pixel] = shaded.depth;
     normalTex[pixel] = shaded.normal;
+    materialIDs[pixel] = sceneInfo.solid.materialId;
+    voxelUVs[pixel] = voxelFaceUV;
+    brickUVs[pixel] = brickFaceUV;
     position[pixel] = shaded.position;
     shadowTex[pixel] = shadow;
 

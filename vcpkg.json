@@ -13,7 +13,9 @@
         "utils-task-graph"
       ]
     },
-    "glfw3",
+    {
+      "name": "glfw3"
+    },
     "glm",
     "fmt",
     {

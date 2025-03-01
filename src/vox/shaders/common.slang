@@ -135,79 +135,69 @@ inline int brickGlobalIndex(int chunkIndex, int localBrickIndex)
     return chunkIndex * CHUNK_SIZE_CUBE + localBrickIndex;
 }
 
-inline float3 brickWorldPos(int brickIndex)
-{
-    int chunkIndex = brickIndex / CHUNK_SIZE_CUBE;
-    int localBrickIndex = brickIndex % CHUNK_SIZE_CUBE;
-
-    int3 chunkPos = int3(
-        chunkIndex % GRID_SIZE,
-        (chunkIndex / GRID_SIZE) % GRID_SIZE,
-        chunkIndex / (GRID_SIZE * GRID_SIZE));
-
-    int3 localBrickPos = int3(
-        localBrickIndex % CHUNK_SIZE,
-        (localBrickIndex / CHUNK_SIZE) % CHUNK_SIZE,
-        localBrickIndex / CHUNK_SIZE_SQUARE);
-
-    return float3(chunkPos + localBrickPos * WORLD_BRICK_SIZE);
-}
-
-inline int3 getVoxelCoord(int globalBrickIndex, int localVoxelIndex)
-{
-    int3 localVoxelPos = int3(
-        localVoxelIndex % BRICK_SIZE,
-        (localVoxelIndex / BRICK_SIZE) % BRICK_SIZE,
-        localVoxelIndex / BRICK_SIZE_SQUARE);
-
-    int3 brickPos = int3(
-        globalBrickIndex % GRID_SIZE,
-        (globalBrickIndex / GRID_SIZE) % GRID_SIZE,
-        globalBrickIndex / (GRID_SIZE * GRID_SIZE));
-
-    return brickPos * BRICK_SIZE + localVoxelPos;
-}
-
-int2 getIndicesFromVoxelCoord(int3 coord)
-{
-    // Get brick position by integer division
-    int3 brickPos = int3(
-        coord.x / BRICK_SIZE,
-        coord.y / BRICK_SIZE,
-        coord.z / BRICK_SIZE);
-
-    // Get local position within brick using remainder
-    int3 localPos = int3(
-        coord.x % BRICK_SIZE,
-        coord.y % BRICK_SIZE,
-        coord.z % BRICK_SIZE);
-
-    int2 indices;
-    // Convert brick position to global index
-    indices.x =
-        brickPos.x +
-        brickPos.y * GRID_SIZE +
-        brickPos.z * (GRID_SIZE * GRID_SIZE);
-
-    // Convert local position to voxel index
-    indices.y =
-        localPos.x +
-        localPos.y * BRICK_SIZE +
-        localPos.z * BRICK_SIZE_SQUARE;
-
-    return indices;
-}
-
 // Get adjacent brick index in normal direction
-uint getAdjacentBrickIndex(uint brickIndex, float3 normal)
+uint getAdjacentBrickIndex(uint brickIndex, int3 normal)
 {
-    int3 offset = int3(round(normal));
-    int3 basePos = int3(brickWorldPos(brickIndex) / WORLD_BRICK_SIZE);
-    int3 neighborPos = basePos + offset;
+    // Get chunk index and local brick index
+    uint chunkIdx = brickIndex / CHUNK_SIZE_CUBE;
+    uint localBrickIdx = brickIndex % CHUNK_SIZE_CUBE;
 
-    uint neighborChunkIndex = chunkIndex(neighborPos / CHUNK_SIZE);
-    uint neighborLocalIndex = brickLocalIndex(neighborPos % CHUNK_SIZE);
-    return brickGlobalIndex(neighborChunkIndex, neighborLocalIndex);
+    // Convert local brick index to 3D coordinates
+    int3 localBrickPos;
+    localBrickPos.x = int(localBrickIdx % CHUNK_SIZE);
+    localBrickPos.y = int((localBrickIdx / CHUNK_SIZE) % CHUNK_SIZE);
+    localBrickPos.z = int(localBrickIdx / CHUNK_SIZE_SQUARE);
+
+    // Convert chunk index to 3D coordinates
+    int3 chunkPos;
+    chunkPos.x = int(chunkIdx % GRID_SIZE);
+    chunkPos.y = int((chunkIdx / GRID_SIZE) % GRID_SIZE);
+    chunkPos.z = int(chunkIdx / (GRID_SIZE * GRID_SIZE));
+
+    // Calculate global brick position
+    int3 globalBrickPos = chunkPos * CHUNK_SIZE + localBrickPos;
+
+    // Add normal to get adjacent brick position
+    // Convert normal to direction vector with integer components
+    int3 adjacentGlobalBrickPos = globalBrickPos + normal;
+
+    // Calculate new chunk position (handle negative coordinates correctly)
+    int3 newChunkPos;
+
+    // For negative coordinates, we need a different division formula
+    // to ensure rounding towards negative infinity
+    newChunkPos.x = adjacentGlobalBrickPos.x < 0
+                        ? (adjacentGlobalBrickPos.x - CHUNK_SIZE + 1) / CHUNK_SIZE
+                        : adjacentGlobalBrickPos.x / CHUNK_SIZE;
+
+    newChunkPos.y = adjacentGlobalBrickPos.y < 0
+                        ? (adjacentGlobalBrickPos.y - CHUNK_SIZE + 1) / CHUNK_SIZE
+                        : adjacentGlobalBrickPos.y / CHUNK_SIZE;
+
+    newChunkPos.z = adjacentGlobalBrickPos.z < 0
+                        ? (adjacentGlobalBrickPos.z - CHUNK_SIZE + 1) / CHUNK_SIZE
+                        : adjacentGlobalBrickPos.z / CHUNK_SIZE;
+
+    // Check if the new position is out of bounds
+    if (newChunkPos.x < 0 || newChunkPos.y < 0 || newChunkPos.z < 0 ||
+        !isInBounds(newChunkPos, int3(GRID_SIZE)))
+    {
+        // Return invalid index if out of bounds
+        return 0xFFFFFFFF; // Sentinel value for invalid index
+    }
+
+    // Calculate new local brick position (handle negative coordinates correctly)
+    int3 newLocalBrickPos;
+    newLocalBrickPos.x = (adjacentGlobalBrickPos.x % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
+    newLocalBrickPos.y = (adjacentGlobalBrickPos.y % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
+    newLocalBrickPos.z = (adjacentGlobalBrickPos.z % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
+
+    // Calculate new chunk index and local brick index
+    int newChunkIdx = chunkIndex(newChunkPos);
+    int newLocalBrickIdx = brickLocalIndex(newLocalBrickPos);
+
+    // Return global brick index
+    return brickGlobalIndex(newChunkIdx, newLocalBrickIdx);
 }
 
 bool brickBitmaskEmpty(BrickBitmask mask)
@@ -335,4 +325,182 @@ uint getMaterialId(int2 voxelID)
 {
     uint globalVoxelIndex = voxelGlobalIndex(voxelID.x, voxelID.y);
     return (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
+}
+
+// Calculate per-voxel normal based on surrounding voxel occupancy
+float3 calculateVoxelNormal(int brickIndex, int localVoxelIndex, Ptr<BrickOccupancy> occupancy)
+{
+    // Define the 6 neighbor directions (positive and negative for each axis)
+    const int3 neighbors[6] = {
+        int3(1, 0, 0), int3(-1, 0, 0), // x-axis neighbors
+        int3(0, 1, 0), int3(0, -1, 0), // y-axis neighbors
+        int3(0, 0, 1), int3(0, 0, -1)  // z-axis neighbors
+    };
+
+    // Convert local voxel index to 3D position within brick
+    int3 localVoxelPos;
+    localVoxelPos.x = localVoxelIndex % BRICK_SIZE;
+    localVoxelPos.y = (localVoxelIndex / BRICK_SIZE) % BRICK_SIZE;
+    localVoxelPos.z = localVoxelIndex / BRICK_SIZE_SQUARE;
+
+    // Initialize normal as zero vector
+    float3 normal = float3(0.0, 0.0, 0.0);
+
+    // Check each neighbor
+    for (int i = 0; i < 6; i++)
+    {
+        int3 neighborPos = localVoxelPos + neighbors[i];
+
+        // Check if neighbor is outside of current brick
+        if (any(neighborPos < 0) || any(neighborPos >= BRICK_SIZE))
+        {
+            // Calculate which brick this neighbor belongs to
+            int3 direction = sign(neighborPos - (BRICK_SIZE - 1) / 2);
+
+            // Only interested in directions where we're out of bounds
+            direction.x = (neighborPos.x < 0 || neighborPos.x >= BRICK_SIZE) ? direction.x : 0;
+            direction.y = (neighborPos.y < 0 || neighborPos.y >= BRICK_SIZE) ? direction.y : 0;
+            direction.z = (neighborPos.z < 0 || neighborPos.z >= BRICK_SIZE) ? direction.z : 0;
+
+            // Get the adjacent brick index
+            uint adjacentBrickIndex = getAdjacentBrickIndex(brickIndex, direction);
+
+            // If adjacent brick is invalid, treat as empty space
+            if (adjacentBrickIndex == 0xFFFFFFFF)
+            {
+                // Add contribution to normal (weighted by direction vector)
+                normal -= float3(neighbors[i]);
+                continue;
+            }
+
+            // Wrap around neighbor position to adjacent brick
+            neighborPos = (neighborPos + BRICK_SIZE) % BRICK_SIZE;
+
+            // Get local voxel index in the adjacent brick
+            int neighborVoxelIndex = voxelLocalIndex(neighborPos);
+
+            // Check if neighbor voxel is empty
+            if (!getBit(occupancy.occupancy[adjacentBrickIndex], neighborVoxelIndex))
+            {
+                // Add contribution to normal (weighted by direction vector)
+                normal -= float3(neighbors[i]);
+            }
+        }
+        else
+        {
+            // Neighbor is in the same brick
+            int neighborVoxelIndex = voxelLocalIndex(neighborPos);
+
+            // Check if neighbor voxel is empty
+            if (!getBit(occupancy.occupancy[brickIndex], neighborVoxelIndex))
+            {
+                // Add contribution to normal (weighted by direction vector)
+                normal -= float3(neighbors[i]);
+            }
+        }
+    }
+
+    // Normalize the result (if not zero vector)
+    return -normalize(normal + float3(EPSILON));
+}
+
+// Alternate version using extended 26-neighbor sampling for smoother normals
+float3 calculateVoxelNormalSmooth(int brickIndex, int localVoxelIndex, Ptr<BrickOccupancy> occupancy)
+{
+    // Define weighted neighbor directions for smoother normal calculation
+    // We'll use 26 neighbors (8 corners, 12 edges, 6 faces)
+
+    // Convert local voxel index to 3D position within brick
+    int3 localVoxelPos;
+    localVoxelPos.x = localVoxelIndex % BRICK_SIZE;
+    localVoxelPos.y = (localVoxelIndex / BRICK_SIZE) % BRICK_SIZE;
+    localVoxelPos.z = localVoxelIndex / BRICK_SIZE_SQUARE;
+
+    // Initialize normal as zero vector
+    float3 normal = float3(0.0, 0.0, 0.0);
+
+    // Weights for different types of neighbors
+    const float FACE_WEIGHT = 1.0;
+    const float EDGE_WEIGHT = 0.7071;   // 1/sqrt(2)
+    const float CORNER_WEIGHT = 0.5774; // 1/sqrt(3)
+
+    // Sample all 26 neighbors
+    for (int z = -1; z <= 1; z++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            for (int x = -1; x <= 1; x++)
+            {
+                // Skip the center voxel
+                if (x == 0 && y == 0 && z == 0)
+                    continue;
+
+                int3 offset = int3(x, y, z);
+                int3 neighborPos = localVoxelPos + offset;
+
+                // Determine weight based on neighbor type
+                float weight;
+                if (abs(x) + abs(y) + abs(z) == 1)
+                    weight = FACE_WEIGHT;
+                else if (abs(x) + abs(y) + abs(z) == 2)
+                    weight = EDGE_WEIGHT;
+                else
+                    weight = CORNER_WEIGHT;
+
+                // Apply direction-weighted contribution
+                float3 contribution = float3(offset) * weight;
+
+                // Check if neighbor is outside of current brick
+                if (any(neighborPos < 0) || any(neighborPos >= BRICK_SIZE))
+                {
+                    // Calculate which brick this neighbor belongs to
+                    int3 direction = sign(neighborPos - (BRICK_SIZE - 1) / 2);
+
+                    // Only interested in directions where we're out of bounds
+                    direction.x = (neighborPos.x < 0 || neighborPos.x >= BRICK_SIZE) ? direction.x : 0;
+                    direction.y = (neighborPos.y < 0 || neighborPos.y >= BRICK_SIZE) ? direction.y : 0;
+                    direction.z = (neighborPos.z < 0 || neighborPos.z >= BRICK_SIZE) ? direction.z : 0;
+
+                    // Get the adjacent brick index
+                    uint adjacentBrickIndex = getAdjacentBrickIndex(brickIndex, direction);
+
+                    // If adjacent brick is invalid, treat as empty space
+                    if (adjacentBrickIndex == 0xFFFFFFFF)
+                    {
+                        // Add contribution to normal
+                        normal -= contribution;
+                        continue;
+                    }
+
+                    // Wrap around neighbor position to adjacent brick
+                    neighborPos = (neighborPos + BRICK_SIZE) % BRICK_SIZE;
+
+                    // Get local voxel index in the adjacent brick
+                    int neighborVoxelIndex = voxelLocalIndex(neighborPos);
+
+                    // Check if neighbor voxel is empty
+                    if (!getBit(occupancy.occupancy[adjacentBrickIndex], neighborVoxelIndex))
+                    {
+                        // Add contribution to normal
+                        normal -= contribution;
+                    }
+                }
+                else
+                {
+                    // Neighbor is in the same brick
+                    int neighborVoxelIndex = voxelLocalIndex(neighborPos);
+
+                    // Check if neighbor voxel is empty
+                    if (!getBit(occupancy.occupancy[brickIndex], neighborVoxelIndex))
+                    {
+                        // Add contribution to normal
+                        normal -= contribution;
+                    }
+                }
+            }
+        }
+    }
+
+    // Normalize the result (if not zero vector)
+    return -normalize(normal + float3(EPSILON));
 }

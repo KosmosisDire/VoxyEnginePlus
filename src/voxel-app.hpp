@@ -1,5 +1,5 @@
 #pragma once
-#include "user-interface\root.hpp"
+#include "user-interface/root.hpp"
 #include "vox/shaders/shared.inl"
 
 #include "vox/vox-camera.hpp"
