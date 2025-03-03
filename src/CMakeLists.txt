@@ -18,19 +18,19 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 target_include_directories(${PROJECT_NAME} 
     PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/app-framework/src
+        ${CMAKE_SOURCE_DIR}/PrismEngine/src
 )
 
 # Link against the engine library
 target_link_libraries(${PROJECT_NAME} 
     PRIVATE 
-        voxy_engine
+        PrismEngine
 )
 
 # Use file(COPY) instead of CMAKE_COMMAND for copying directories
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/app-framework/resources"
+        "${CMAKE_SOURCE_DIR}/PrismEngine/resources"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
     COMMENT "Copying engine resources"
 )

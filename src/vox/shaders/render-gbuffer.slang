@@ -224,7 +224,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float shadow = 1;
     if (sceneInfo.solid.hit)
     {
-        shadow = traceScene(Ray(shaded.position + shaded.normal * EPSILON, p.state_ptr.sunDir, 100), 0, false).hit ? 0 : 1;
+        shadow = traceScene(Ray(shaded.position + shaded.normal * EPSILON, p.state_ptr.sunDir), 0, false).hit ? 0 : 1;
     }
 
     // calcualte motion vectors

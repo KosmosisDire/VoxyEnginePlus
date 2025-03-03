@@ -7,8 +7,8 @@
                 "${workspaceFolder}/src/**",
                 "${vcpkgRoot}/x64-windows/include",
                 "${workspaceFolder}/build/Debug/vcpkg_installed/x64-windows/include",
-                "${workspaceFolder}/app-framework/src/**",
-                "${workspaceFolder}/app-framework/include/**"
+                "${workspaceFolder}/PrismEngine/src/**",
+                "${workspaceFolder}/PrismEngine/include/**"
             ],
             "defines": [
                 "_DEBUG",

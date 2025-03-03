@@ -1,5 +1,4 @@
 #include "voxel-app.hpp"
-#include <scripting/example.hpp>
 
 auto main() -> int
 {
