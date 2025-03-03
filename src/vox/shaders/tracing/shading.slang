@@ -17,6 +17,12 @@ PixelResult shadePixel(SceneHitInfo hits, float3 rayDir, uint2 pixel, float3 blu
 {
     PixelResult result = (PixelResult)0;
 
+    if (!hits.solid.hit)
+    {
+        result.color = getAtmosphereColor(initAtmosphere(rayDir, p.state_ptr.sunDir), p.state_ptr.time);
+        return result;
+    }
+
     // Setup initial result values
     result.normal = hits.solid.normal;
     result.position = hits.solid.position;

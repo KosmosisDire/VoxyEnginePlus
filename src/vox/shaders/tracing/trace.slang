@@ -17,7 +17,6 @@ Ray getRayFromPixel(uint2 pixel, uint2 dimensions, CameraData camera)
 
     // Calculate ray direction
     ray.direction = normalize(worldPos.xyz - camera.position);
-
     return ray;
 }
 
@@ -117,7 +116,8 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
 
                             result.hit = true;
                             result.position = hitPos;
-                            result.normal = calculateVoxelNormal(brickIdxGlobal, voxelIdx, p.brick_occupancy_ptr);
+                            // result.normal = calculateVoxelNormal(brickIdxGlobal, voxelIdx, p.brick_occupancy_ptr);
+                            result.normal = normal;
                             result.distance = length(hitPos - startPos);
                             result.cell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
                             result.chunkIndex = chunkIdx;

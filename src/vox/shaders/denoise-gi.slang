@@ -86,7 +86,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // if (p.pass > 3)
     //     return;
 
-    const float sigma_geom = 0.01f;
+    const float sigma_geom = 0.1f;
     const float sigma_normal = 0.1f;
     const float sigma_color = 0.05f;
 
@@ -131,7 +131,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
             float weight = kernel_weight * geom_weight * normal_weight;
 
-            // if (p.pass > 1)
+            // if (p.pass > 3)
             // {
             //     weight *= color_weight;
             // }
