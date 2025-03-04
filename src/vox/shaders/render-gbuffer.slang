@@ -237,92 +237,101 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
     float2 prevPos = float2(pixel) + motionPixels;
     var entry = getHashmapEntry(sceneInfo.solid);
+
     if (all(pixel % LIGHTING_DOWNSAMPLE == 0))
     {
         float2 samplePixel = pixel / LIGHTING_DOWNSAMPLE;
         float2 dimensions = p.frame_dim / LIGHTING_DOWNSAMPLE;
-        var lightingColor = float3(0, 0, 0);
 
-        int NUM_PRIMARY_BOUNCES = 2;
-
-        // First bounce loop
-
-        [unroll]
-        for (int bounce = 0; bounce < NUM_PRIMARY_BOUNCES; bounce++)
+        if (sceneInfo.solid.hit)
         {
-            float4 blueNoiseSample = blueNoise[(samplePixel + bounce) % 128];
-            var diffuseRay = getDiffuseRay(pixel, shaded.position, shaded.normal, blueNoiseSample.xyz, p.state_ptr.frame + bounce);
-            var diffuseInfo = traceScene(diffuseRay, 0, false);
+            var lightingColor = float3(0, 0, 0);
 
-            if (diffuseInfo.hit)
+            int NUM_PRIMARY_BOUNCES = 2;
+
+            // First bounce loop
+
+            [unroll]
+            for (int bounce = 0; bounce < NUM_PRIMARY_BOUNCES; bounce++)
             {
-                var diffuseMat = getMaterial(diffuseInfo.materialId);
-                // lightingColor += diffuseMat.emission * 4 / NUM_PRIMARY_BOUNCES;
+                float4 blueNoiseSample = blueNoise[(samplePixel + bounce) % 128];
+                var diffuseRay = getDiffuseRay(pixel, shaded.position, shaded.normal, blueNoiseSample.xyz, p.state_ptr.frame + bounce);
+                var diffuseInfo = traceScene(diffuseRay, 0, false);
 
-                // see if position is visible to the sun
-                var shadowRay = Ray(diffuseInfo.position + diffuseInfo.normal * EPSILON, p.state_ptr.sunDir);
-                var shadowInfo = traceScene(shadowRay, 0, false);
-
-                if (!shadowInfo.hit)
+                if (diffuseInfo.hit)
                 {
-                    lightingColor += getSunColor(initAtmosphere(shadowRay.direction, p.state_ptr.sunDir)) * 16 * diffuseMat.albedo / NUM_PRIMARY_BOUNCES;
+                    var diffuseMat = getMaterial(diffuseInfo.materialId);
+                    // lightingColor += diffuseMat.emission * 4 / NUM_PRIMARY_BOUNCES;
+
+                    // see if position is visible to the sun
+                    var shadowRay = Ray(diffuseInfo.position + diffuseInfo.normal * EPSILON, p.state_ptr.sunDir);
+                    var shadowInfo = traceScene(shadowRay, 0, false);
+
+                    if (!shadowInfo.hit)
+                    {
+                        lightingColor += getSunColor(initAtmosphere(shadowRay.direction, p.state_ptr.sunDir)) * 16 * diffuseMat.albedo / NUM_PRIMARY_BOUNCES;
+                    }
+
+                    // second bounce at half res
+                    if (all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0) && bounce == 0)
+                    {
+                        var halfSamplePixel = pixel / (LIGHTING_DOWNSAMPLE * 2);
+                        float4 blueNoiseSample2 = blueNoise[(halfSamplePixel + 1) % 128];
+                        var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame + bounce);
+                        var bounceInfo = traceScene(bounceRay, 0, false);
+
+                        if (bounceInfo.hit)
+                        {
+                            var bounceMat = getMaterial(bounceInfo.materialId);
+                            // lightingColor += bounceMat.emission * diffuseMat.albedo * 16;
+                        }
+                        else
+                        {
+                            lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 16 / NUM_PRIMARY_BOUNCES;
+                        }
+                    }
                 }
-
-                // second bounce at half res
-                if (all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0) && bounce == 0)
+                else
                 {
-                    var halfSamplePixel = pixel / (LIGHTING_DOWNSAMPLE * 2);
-                    float4 blueNoiseSample2 = blueNoise[(halfSamplePixel + 1) % 128];
-                    var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame + bounce);
-                    var bounceInfo = traceScene(bounceRay, 0, false);
-
-                    if (bounceInfo.hit)
-                    {
-                        var bounceMat = getMaterial(bounceInfo.materialId);
-                        // lightingColor += bounceMat.emission * diffuseMat.albedo * 16;
-                    }
-                    else
-                    {
-                        lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 16 / NUM_PRIMARY_BOUNCES;
-                    }
+                    lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 4 / NUM_PRIMARY_BOUNCES;
                 }
             }
-            else
+
+            // Calculate previous position with subpixel precision
+            float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
+            // Get previous brick ID from the position
+            int2 prevPixel = int2(prevPos);
+            int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
+            int prevBrickId = prevVoxelData.x;
+            // Validate history
+            float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
+
+            prevPos = clamp(prevPos, float2(0), dimensions - 1);
+
+            // Sample lastFrame with bilinear interpolation
+            float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
+            last = clamp(last, float4(0), float4(1000000));
+
+            if (!valid)
             {
-                lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 4 / NUM_PRIMARY_BOUNCES;
+                last.w = 0;
             }
+
+            float blendFactor = (1 / (last.w));
+            blendFactor = clamp(blendFactor, 0.1, 1.0);
+
+            // Final blend
+            lightingColor = lerp(last.rgb, lightingColor, blendFactor);
+
+            // half and half with lighting entry
+            // lightingColor += entry.lighting * 0.2;
+
+            indirect[samplePixel] = float4(lightingColor, last.w + 1);
         }
-
-        // Calculate previous position with subpixel precision
-        float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
-        // Get previous brick ID from the position
-        int2 prevPixel = int2(prevPos);
-        int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
-        int prevBrickId = prevVoxelData.x;
-        // Validate history
-        float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
-
-        prevPos = clamp(prevPos, float2(0), dimensions - 1);
-
-        // Sample lastFrame with bilinear interpolation
-        float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
-        last = clamp(last, float4(0), float4(1000000));
-
-        if (!valid)
+        else
         {
-            last.w = 0;
+            indirect[samplePixel] = float4(1, 1, 1, 0);
         }
-
-        float blendFactor = (1 / (last.w));
-        blendFactor = clamp(blendFactor, 0.1, 1.0);
-
-        // Final blend
-        lightingColor = lerp(last.rgb, lightingColor, blendFactor);
-
-        // half and half with lighting entry
-        // lightingColor += entry.lighting * 0.2;
-
-        indirect[samplePixel] = float4(lightingColor, last.w + 1);
     }
 
     var normal = shaded.normal;

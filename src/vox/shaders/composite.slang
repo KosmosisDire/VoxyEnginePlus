@@ -38,8 +38,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // Get the current normal and UV coordinates
     float3 normal = normalTex[pixel];
     float2 brickUV = brickUVsTex[pixel];
-
     float3 albedo = albedoTex[pixel];
+
+    // normal 0,0,0 means sky
+    if (normal.x == 0 && normal.y == 0 && normal.z == 0)
+    {
+        render_image[pixel] = float4(tonemapUnreal(albedo), 1.0);
+        return;
+    }
+
     float shadow = shadowTex[pixel];
     uint materialID = materialIDTex[pixel];
     materialID = clamp(materialID, 0, TOTAL_MATERIALS - 1);
