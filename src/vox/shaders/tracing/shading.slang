@@ -1,5 +1,4 @@
 #include "../atmosphere.slang"
-#include "common.slang"
 #include "hashmap.slang"
 
 // Schlick's approximation for Fresnel reflection

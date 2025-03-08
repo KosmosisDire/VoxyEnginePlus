@@ -4,6 +4,7 @@
 #include <imgui_impl_glfw.h>
 #include <memory>
 #include <string>
+#include <engine/data/Color.hpp>
 
 // Modern enum wrappers for Clay types
 enum class FlowDirection
@@ -139,7 +140,6 @@ enum ThemeColor
 using Clay_HoverCallback = void (*)(Clay_ElementId elementId, Clay_PointerData pointer, intptr_t userData);
 using ElementId = Clay_ElementId;
 using PointerData = Clay_PointerData;
-using Color = Clay_Color;
 using BoundingBox = Clay_BoundingBox;
 
 // Helper conversion functions
@@ -178,42 +178,58 @@ inline Clay_TextElementConfigWrapMode ToClay(TextWrapMode mode)
     return static_cast<Clay_TextElementConfigWrapMode>(mode);
 }
 
-#define ImGuiColor(ThemeColor) Clay_Color(ImGui::GetStyle().Colors[ThemeColor].x * 255, ImGui::GetStyle().Colors[ThemeColor].y * 255, ImGui::GetStyle().Colors[ThemeColor].z * 255, ImGui::GetStyle().Colors[ThemeColor].w * 255)
+inline Clay_Color ToClay(const Color &color)
+{
+    return {color.r, color.g, color.b, color.a};
+}
+
+#define ImGuiColor(ThemeColor) Color(ImGui::GetStyle().Colors[ThemeColor].x * 255, ImGui::GetStyle().Colors[ThemeColor].y * 255, ImGui::GetStyle().Colors[ThemeColor].z * 255, ImGui::GetStyle().Colors[ThemeColor].w * 255)
+
 
 // Default configurations
 constexpr Clay_LayoutConfig DEFAULT_LAYOUT = {.sizing = {.width = {.size = {.minMax = {0, 3.40282346638528859812e+38F}}, .type = CLAY__SIZING_TYPE_FIT}, .height = {.size = {.minMax = {0, 3.40282346638528859812e+38F}}, .type = CLAY__SIZING_TYPE_FIT}}};
 
-constexpr Clay_RectangleElementConfig DEFAULT_RECTANGLE = {
+constexpr Clay_RectangleElementConfig DEFAULT_RECTANGLE =
+{
     .color = {0, 0, 0, 0},
-    .cornerRadius = {0, 0, 0, 0}};
+    .cornerRadius = {0, 0, 0, 0}
+};
 
-constexpr Clay_TextElementConfig DEFAULT_TEXT = {
+constexpr Clay_TextElementConfig DEFAULT_TEXT =
+{
     .textColor = {255, 255, 255, 255},
     .fontId = 0,
     .fontSize = 16,
     .letterSpacing = 0,
     .lineHeight = 0,
-    .wrapMode = CLAY_TEXT_WRAP_WORDS};
+    .wrapMode = CLAY_TEXT_WRAP_WORDS
+};
 
-constexpr Clay_ScrollElementConfig DEFAULT_SCROLL = {
+constexpr Clay_ScrollElementConfig DEFAULT_SCROLL =
+{
     .horizontal = false,
-    .vertical = false};
+    .vertical = false
+};
 
-constexpr Clay_BorderElementConfig DEFAULT_BORDER = {
+constexpr Clay_BorderElementConfig DEFAULT_BORDER =
+{
     .left = {0, {0, 0, 0, 0}},
     .right = {0, {0, 0, 0, 0}},
     .top = {0, {0, 0, 0, 0}},
     .bottom = {0, {0, 0, 0, 0}},
     .betweenChildren = {0, {0, 0, 0, 0}},
-    .cornerRadius = {0, 0, 0, 0}};
+    .cornerRadius = {0, 0, 0, 0}
+};
 
-constexpr Clay_FloatingElementConfig DEFAULT_FLOATING = {
+constexpr Clay_FloatingElementConfig DEFAULT_FLOATING =
+{
     .offset = {0, 0},
     .expand = {0, 0},
     .zIndex = 0,
     .parentId = 0,
     .attachment = {Clay_FloatingAttachPointType::CLAY_ATTACH_POINT_LEFT_TOP, Clay_FloatingAttachPointType::CLAY_ATTACH_POINT_LEFT_TOP},
-    .pointerCaptureMode = Clay_PointerCaptureMode::CLAY_POINTER_CAPTURE_MODE_CAPTURE};
+    .pointerCaptureMode = Clay_PointerCaptureMode::CLAY_POINTER_CAPTURE_MODE_CAPTURE
+};
 
 struct ClayConfigs
 {

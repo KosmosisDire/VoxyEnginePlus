@@ -2,7 +2,7 @@
 #include "clay-state.hpp"
 #include "clay-types.hpp"
 
-#include <fonts.hpp>
+#include <engine/apis/Fonts.hpp>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -53,7 +53,7 @@ float ClayState::GetPointerDeltaY()
     return pointerDeltaY;
 }
 
-char *ClayState::AllocateString(const std::string &str)
+char* ClayState::AllocateString(const std::string &str)
 {
     if (currentStrings.find(str) != currentStrings.end())
     {
@@ -61,7 +61,7 @@ char *ClayState::AllocateString(const std::string &str)
         return currentStrings[str].str;
     }
 
-    char *newStr = (char *)malloc(str.length() + 1);
+    char* newStr = (char*)malloc(str.length() + 1);
     strcpy(newStr, str.c_str());
     currentStrings[str] = {newStr, 10};
     return newStr;
@@ -90,5 +90,6 @@ void ClayState::FreeAllStrings()
     {
         free(value.str);
     }
+
     currentStrings.clear();
 }

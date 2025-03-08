@@ -3,6 +3,20 @@
         "cmake": true,
         "lib": true,
     },
+    "cmake.debugConfig": {
+        "cwd": "${workspaceFolder}"
+    },
     "editor.formatOnSave": true,
     "C_Cpp.autoAddFileAssociations": false,
+    "astyle.astylerc": "${workspaceFolder}/.astylerc",
+    "astyle.additional_languages": [
+        "angelscript",
+        "as"
+    ],
+    "[cpp]": {
+        "editor.defaultFormatter": "chiehyu.vscode-astyle"
+    },
+    "[angelscript]": {
+        "editor.defaultFormatter": "chiehyu.vscode-astyle"
+    }
 }

@@ -1,0 +1,11 @@
+--style=allman
+--indent=spaces=4
+--indent-switches
+--indent-cases
+--indent-namespaces
+--indent-classes
+--align-pointer=type
+--align-reference=type
+--break-blocks
+--keep-one-line-statements
+--keep-one-line-blocks

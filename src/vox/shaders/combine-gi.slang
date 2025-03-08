@@ -91,8 +91,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             float3 lastColor = entry.lighting;
 
             float blendFactor = 1.0 / (lastTempFrames);
-            blendFactor = clamp(blendFactor, 0.01, 0.99);
-            finalColor = lastColor * (1 - blendFactor) + finalColor * (blendFactor);
+            blendFactor = clamp(blendFactor, 0.01, 1.0);
+            finalColor = lerp(lastColor, finalColor, blendFactor);
+
+            // if (lastTempFrames > 4) return;
 
             voxel_hashtable_insert(p.voxel_hashmap_ptr, voxelID.x, voxelFaceID, finalColor, lastTempFrames + 1, p.state_ptr.frame);
         }

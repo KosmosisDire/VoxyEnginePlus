@@ -4,6 +4,66 @@
 #include "voxel-hashmap.inl"
 #include "const.inl"
 
+// Core ray structure
+struct Ray
+{
+    daxa_f32vec3 origin;
+    daxa_f32vec3 direction;
+    daxa_f32 maxDist;
+};
+
+// Result from a single ray trace
+struct TraceResult
+{
+    bool hit;
+    daxa_f32vec3 position; // World position of hit
+    daxa_f32vec3 normal;   // Surface normal
+    daxa_f32 distance;  // Distance from ray origin
+    daxa_u32 materialId; // Material of hit surface
+    daxa_i32vec3 cell;       // Absolute grid position
+    daxa_i32 chunkIndex;  // Index in chunk array
+    daxa_i32 brickIndex;  // Index in brick array
+    daxa_i32 voxelIndex;  // Index in voxel array
+    daxa_f32vec3 voxelUVW; // UVW coordinates in voxel
+    daxa_f32vec3 brickUVW; // UVW coordinates in brick
+};
+
+// Combined results from all traced rays
+struct SceneHitInfo
+{
+    TraceResult solid;
+};
+
+// Final output per pixel
+struct PixelResult
+{
+    daxa_f32vec3 color;      // Final combined color with GI
+    daxa_f32vec3 normal;     // Final surface normal
+    daxa_f32 depth;       // Closest hit depth
+    daxa_f32vec3 position;   // World space position
+    daxa_u32 hashmapIndex; // Index into lighting hashmap
+    daxa_i32vec2 voxelId;
+};
+
+// Constants
+static const daxa_f32 MAX_TRACE_DISTANCE = 100.0;
+static const daxa_i32 MAX_TRACE_STEPS = 512;
+
+const int RAYCASTER_MAX_RAYS = 256;
+struct RayRequests
+{
+    Ray rays[RAYCASTER_MAX_RAYS];
+    daxa_u32 numRays;
+};
+struct RayResults
+{
+    TraceResult hits[RAYCASTER_MAX_RAYS];
+    daxa_u32 numHits;
+};
+
+DAXA_DECL_BUFFER_PTR(RayRequests);
+DAXA_DECL_BUFFER_PTR(RayResults);
+
 
 struct CameraData
 {
@@ -119,6 +179,8 @@ struct ComputePush
     daxa_BufferPtr(VoxelMaterials) voxel_materials_ptr;
     daxa_BufferPtr(VoxelHashmap) voxel_hashmap_ptr;
     daxa_BufferPtr(RenderData) state_ptr;
+    daxa_BufferPtr(RayRequests) ray_requests_ptr;
+    daxa_BufferPtr(RayResults) ray_results_ptr;
     daxa_ImageViewId final_image;
     daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
     daxa_u32vec2 frame_dim;

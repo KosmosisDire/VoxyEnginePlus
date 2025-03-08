@@ -83,7 +83,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     //     return;
     // }
 
-    // if (p.pass > 3)
+    // if (p.pass > 1)
     //     return;
 
     const float sigma_geom = 0.1f;

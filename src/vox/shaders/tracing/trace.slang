@@ -1,5 +1,6 @@
-#include "common.slang"
 #pragma once
+
+#include "../common.slang"
 
 Ray getRayFromPixel(uint2 pixel, uint2 dimensions, CameraData camera)
 {

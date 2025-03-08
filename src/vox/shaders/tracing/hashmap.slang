@@ -1,7 +1,7 @@
 #include "../voxel-hashmap.slang"
 #include "trace.slang"
 
-uint getFaceID(float3 normal, int voxelIndex)
+uint getFaceID(float3 normal, int voxel)
 {
     uint faceID = 0;
 
@@ -31,7 +31,7 @@ uint getFaceID(float3 normal, int voxelIndex)
             faceID = normal.z > 0 ? 22 : 4;
     }
 
-    faceID = faceID * BRICK_SIZE_CUBE + voxelIndex;
+    faceID = faceID * BRICK_SIZE_CUBE + voxel;
     return faceID;
 }
 
@@ -41,7 +41,7 @@ VoxelHashmapEntry getHashmapEntry(TraceResult trace)
         return (VoxelHashmapEntry)0;
 
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-    return get_hashtable_entry(p.voxel_hashmap_ptr, globalBrickIndex, getFaceID(trace.normal, trace.voxelIndex), p.state_ptr.frame);
+    return get_hashtable_entry(p.voxel_hashmap_ptr, globalBrickIndex, getFaceID(trace.normal, trace.brickIndex), p.state_ptr.frame);
 }
 
 void setHashmapEntry(TraceResult trace, float3 lighting, int historyCount)
@@ -50,6 +50,6 @@ void setHashmapEntry(TraceResult trace, float3 lighting, int historyCount)
         return;
 
     int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-    uint faceID = getFaceID(trace.normal, trace.voxelIndex);
+    uint faceID = getFaceID(trace.normal, trace.brickIndex);
     voxel_hashtable_insert(p.voxel_hashmap_ptr, globalBrickIndex, faceID, lighting, historyCount, p.state_ptr.frame);
 }

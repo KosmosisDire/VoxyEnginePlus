@@ -11,13 +11,13 @@ Text::Text(const std::string &text)
 
 Text &Text::color(const Color &color)
 {
-    props.clay.text.textColor = color;
+    props.clay.text.textColor = ToClay(color);
     return *this;
 }
 
 Text &Text::color(const ThemeColor imguiColor)
 {
-    props.clay.text.textColor = ImGuiColor(imguiColor);
+    props.clay.text.textColor = ToClay(ImGuiColor(imguiColor));
     return *this;
 }
 
@@ -30,9 +30,10 @@ Text &Text::fontSize(float size)
 void Text::_Begin()
 {
     Clay__OpenTextElement(
-        Clay_String{
-            (int)props.textContent.length(),
-            ClayState::AllocateString(props.textContent)},
-        Clay__StoreTextElementConfig(
-            (Clay__Clay_TextElementConfigWrapper{props.clay.text}).wrapped));
+        Clay_String
+    {
+        (int)props.textContent.length(),
+                              ClayState::AllocateString(props.textContent)},
+    Clay__StoreTextElementConfig(
+        (Clay__Clay_TextElementConfigWrapper{props.clay.text}).wrapped));
 }

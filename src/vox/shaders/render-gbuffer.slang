@@ -56,12 +56,12 @@ Ray getDiffuseRay(int2 pixel, float3 origin, float3 normal, float3 blueNoiseSamp
     float3 hitPos = origin + normal * EPSILON;
     float3x3 basis = CreateRotationFromNormal3x3(normal);
     float3 blue = blueNoiseSample;
-    blue = transformBlueNoise(blue, frame + uint(pixel.x * p.frame_dim.y + pixel.y));
+    // blue = transformBlueNoise(blue, frame + uint(pixel.x * p.frame_dim.y + pixel.y));
     blue = blue * 2 - 1;
     blue.y = abs(blue.y);
     blue = mul(basis, blue);
 
-    return Ray(hitPos, blue);
+    return Ray(hitPos, blue, 1);
 }
 
 // float3 hsv2rgb(float3 hsv)
@@ -238,23 +238,24 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float2 prevPos = float2(pixel) + motionPixels;
     var entry = getHashmapEntry(sceneInfo.solid);
 
-    if (all(pixel % LIGHTING_DOWNSAMPLE == 0))
+    float4 blueNoiseSample = blueNoise[pixel % 128];
+    if (all((pixel + int2(blueNoiseSample.xy)) % LIGHTING_DOWNSAMPLE == 0))
     {
         float2 samplePixel = pixel / LIGHTING_DOWNSAMPLE;
         float2 dimensions = p.frame_dim / LIGHTING_DOWNSAMPLE;
 
         if (sceneInfo.solid.hit)
         {
-            var lightingColor = float3(0, 0, 0);
+            var lightingColor = float3(0.01);
 
-            int NUM_PRIMARY_BOUNCES = 2;
+            int NUM_PRIMARY_BOUNCES = 1;
 
             // First bounce loop
 
-            [unroll]
+            [unroll] 
             for (int bounce = 0; bounce < NUM_PRIMARY_BOUNCES; bounce++)
             {
-                float4 blueNoiseSample = blueNoise[(samplePixel + bounce) % 128];
+                blueNoiseSample = blueNoise[(samplePixel + bounce) % 128];
                 var diffuseRay = getDiffuseRay(pixel, shaded.position, shaded.normal, blueNoiseSample.xyz, p.state_ptr.frame + bounce);
                 var diffuseInfo = traceScene(diffuseRay, 0, false);
 
@@ -264,7 +265,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                     // lightingColor += diffuseMat.emission * 4 / NUM_PRIMARY_BOUNCES;
 
                     // see if position is visible to the sun
-                    var shadowRay = Ray(diffuseInfo.position + diffuseInfo.normal * EPSILON, p.state_ptr.sunDir);
+                    var shadowRay = Ray(diffuseInfo.position + diffuseInfo.normal * EPSILON, p.state_ptr.sunDir, 1000);
                     var shadowInfo = traceScene(shadowRay, 0, false);
 
                     if (!shadowInfo.hit)
@@ -273,23 +274,23 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
                     }
 
                     // second bounce at half res
-                    if (all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0) && bounce == 0)
-                    {
-                        var halfSamplePixel = pixel / (LIGHTING_DOWNSAMPLE * 2);
-                        float4 blueNoiseSample2 = blueNoise[(halfSamplePixel + 1) % 128];
-                        var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame + bounce);
-                        var bounceInfo = traceScene(bounceRay, 0, false);
+                    // if (all((pixel + int2(blueNoiseSample.xy)) % (LIGHTING_DOWNSAMPLE * 2) == 0) && bounce <= 2)
+                    // {
+                    //     var halfSamplePixel = pixel / (LIGHTING_DOWNSAMPLE * 2);
+                    //     float4 blueNoiseSample2 = blueNoise[(halfSamplePixel + 1) % 128];
+                    //     var bounceRay = getDiffuseRay(pixel, diffuseInfo.position, diffuseInfo.normal, blueNoiseSample2.xyz, p.state_ptr.frame + bounce);
+                    //     var bounceInfo = traceScene(bounceRay, 0, false);
 
-                        if (bounceInfo.hit)
-                        {
-                            var bounceMat = getMaterial(bounceInfo.materialId);
-                            // lightingColor += bounceMat.emission * diffuseMat.albedo * 16;
-                        }
-                        else
-                        {
-                            lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 16 / NUM_PRIMARY_BOUNCES;
-                        }
-                    }
+                    //     if (bounceInfo.hit)
+                    //     {
+                    //         var bounceMat = getMaterial(bounceInfo.materialId);
+                    //         lightingColor += bounceMat.emission * diffuseMat.albedo * 16;
+                    //     }
+                    //     else
+                    //     {
+                    //         lightingColor += getBaseSkyColor(diffuseRay.direction, p.state_ptr.sunDir) * 16 / NUM_PRIMARY_BOUNCES;
+                    //     }
+                    // }
                 }
                 else
                 {
@@ -353,160 +354,4 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     brickUVs[pixel] = brickFaceUV;
     position[pixel] = shaded.position;
     shadowTex[pixel] = shadow;
-
-    // float halfResDepth = depthHalfRes[pixel / 2];
-
-    // get ray direction
-    // float3 rayOrigin, rayDir;
-    // getRayFromPixel(pixel, p.frame_dim, p.state_ptr.camera, rayOrigin, rayDir);
-
-    // beam optimization (use half res depth prepass as start depth)
-    // float startDepth = 0.0;
-    // if ((bool)p.state_ptr.settings.beamOptimization)
-    // {
-    //     uint2 prepassPixel = pixel / 2;
-    //     startDepth = halfResDepth;
-
-    //     for (int dy = -1; dy <= 1; dy++)
-    //     {
-    //         for (int dx = -1; dx <= 1; dx++)
-    //         {
-    //             uint2 checkPixel = uint2(
-    //                 clamp(int(prepassPixel.x) + dx, 0, int(p.frame_dim.x / 2) - 1),
-    //                 clamp(int(prepassPixel.y) + dy, 0, int(p.frame_dim.y / 2) - 1));
-    //             startDepth = min(startDepth, depthHalfRes[checkPixel]) - WORLD_VOXEL_SIZE * 0.5;
-    //         }
-    //     }
-    // }
-
-    // trace main ray
-    // TraceResult trace = traceVoxelRay(rayOrigin, rayDir, startDepth);
-    // DoubleTraceResult traceDouble = traceVoxelRayDouble(rayOrigin, rayDir, startDepth);
-    // TraceResult trace = traceDouble.second;
-    // TraceResult transparentTrace = traceDouble.first;
-
-    // if (!trace.hit)
-    // {
-    //     depth[pixel] = 10000.0;
-    //     voxelIDs[pixel] = int2(EMPTY_KEY, EMPTY_KEY);
-    //     return;
-    // }
-
-    // float3 normal = trace.normal;
-
-    // // trace hard shadow ray
-    // float shadow = 1;
-    // TraceResult bounceShadow = traceVoxelRayTransparent(trace.hitPos + normal * EPSILON, normalize(p.state_ptr.sunDir));
-    // shadow = bounceShadow.hit ? 1 : 0;
-
-    // // get hit material
-    // int globalBrickIndex = brickGlobalIndex(trace.chunkIndex, trace.brickIndex);
-    // uint voxelMaterialId = getMaterialId(int2(globalBrickIndex, trace.voxelIndex));
-    // Material traceMat = getMaterial(voxelMaterialId);
-
-    // // get motion vectors
-    // float2 motionClip = calculateMotionClip(trace.hitPos, p.state_ptr.camera.viewProj, p.state_ptr.lastCamera.viewProj);
-    // float2 motionPixels = motionClip * (p.frame_dim * 0.5);
-    // if (length(motionPixels) < 0.0001 || isnan(motionPixels.x) || isnan(motionPixels.y))
-    // {
-    //     motionPixels = float2(0, 0);
-    // }
-    // float2 prevPos = float2(pixel) + motionPixels;
-
-    // float3 albedoColor = traceMat.albedo + traceMat.emission;
-
-    // var transMat = getMaterial(getMaterialId(int2(brickGlobalIndex(transparentTrace.chunkIndex, transparentTrace.brickIndex), transparentTrace.voxelIndex)));
-    // var blend = 1 - pow(transMat.transparency, trace.transparencyThickness / 16);
-    // if (transparentTrace.hit)
-    // {
-    //     albedoColor = lerp(albedoColor, transMat.albedo + transMat.emission, blend);
-    //     normal = lerp(normal, transparentTrace.normal, blend);
-    //     shadow = lerp(shadow, 1, blend);
-    // }
-
-    // // do a downsampled path traced indirect lighting
-    // if (all(pixel % LIGHTING_DOWNSAMPLE == 0))
-    // {
-    //     float2 samplePixel = pixel / LIGHTING_DOWNSAMPLE;
-    //     float2 dimensions = p.frame_dim / LIGHTING_DOWNSAMPLE;
-
-    //     float4 blueNoiseSample = blueNoise[samplePixel % 128];
-    //     float3 bounceRayDir;
-    //     DoubleTraceResult bounceResults = computeBounce(pixel, trace.hitPos, normal, blueNoiseSample.xyz, p.state_ptr.frame, bounceRayDir);
-    //     TraceResult bounceResult = bounceResults.second;
-
-    //     Material hitMat = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult.chunkIndex, bounceResult.brickIndex), bounceResult.voxelIndex)));
-    //     float3 rayBounceColor = calculateBounceColor(bounceResult, hitMat, bounceRayDir);
-
-    //     // if (bounceResult.hit && all(pixel % (LIGHTING_DOWNSAMPLE * 2) == 0))
-    //     // {
-    //     //     float4 blueNoiseSample2 = blueNoise[(samplePixel + 17) % 128];
-    //     //     TraceResult bounceResult2 = computeBounce(pixel, bounceResult.hitPos, bounceResult.normal, blueNoiseSample2.xyz, p.state_ptr.frame, bounceRayDir);
-    //     //     Material hitMat2 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult2.chunkIndex, bounceResult2.brickIndex), bounceResult2.voxelIndex)));
-    //     //     rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult2, hitMat2, bounceRayDir) * pow(LIGHTING_DOWNSAMPLE, 2), 0.5);
-    //     // }
-
-    //     // Calculate previous position with subpixel precision
-    //     float2 prevPos = prevPos * LIGHTING_UPSAMPLE;
-    //     // Get previous brick ID from the position
-    //     int2 prevPixel = int2(prevPos);
-    //     int2 prevVoxelData = voxelIDs[prevPixel * LIGHTING_DOWNSAMPLE];
-    //     int prevBrickId = prevVoxelData.x;
-    //     // Validate history
-    //     float valid = validateReprojection(position[pixel].xyz, position[prevPixel * LIGHTING_DOWNSAMPLE].xyz);
-
-    //     prevPos = clamp(prevPos, float2(0), dimensions - 1);
-
-    //     // Sample lastFrame with bilinear interpolation
-    //     float4 last = sampleHistoryBilinear(indirectLast, prevPos, dimensions);
-    //     last = clamp(last, float4(0), float4(10000));
-
-    //     if (!valid)
-    //     {
-    //         last.w = 0;
-    //     }
-
-    //     // do extra bounces for new pixels
-    //     // if (last.w < 2)
-    //     // {
-    //     //     float4 blueNoiseSample3 = blueNoise[(samplePixel + 46) % 128];
-    //     //     TraceResult bounceResult3 = computeBounce(pixel, trace.hitPos, normal, blueNoiseSample3.xyz, p.state_ptr.frame, bounceRayDir);
-    //     //     Material hitMat3 = getMaterial(getMaterialId(int2(brickGlobalIndex(bounceResult3.chunkIndex, bounceResult3.brickIndex), bounceResult3.voxelIndex)));
-    //     //     rayBounceColor = lerp(rayBounceColor, calculateBounceColor(bounceResult3, hitMat3, bounceRayDir), 0.5);
-    //     // }
-
-    //     float blendFactor = (1 / (last.w + 1));
-    //     blendFactor = clamp(blendFactor, TEMPORAL_MIN_ALPHA, 1.0);
-
-    //     // Final blend
-    //     float3 blended = lerp(last.rgb, rayBounceColor, blendFactor);
-    //     indirect[samplePixel] = float4(blended, last.w + 1);
-    // }
-
-    // float2 voxelFaceUV = normal.x != 0 ? trace.voxelUv.yz : normal.y != 0 ? trace.voxelUv.xz
-    //                                                                       : trace.voxelUv.xy;
-    // float2 brickFaceUV = normal.x != 0 ? trace.brickUv.yz : normal.y != 0 ? trace.brickUv.xz
-    //                                                                       : trace.brickUv.xy;
-
-    // // write to the gbuffer
-    // albedo[pixel] = albedoColor;
-    // normalTex[pixel] = normal;
-    // position[pixel] = trace.hitPos;
-    // voxelUVs[pixel] = voxelFaceUV;
-    // brickUVs[pixel] = brickFaceUV;
-    // depth[pixel] = trace.distance;
-    // motion[pixel] = trace.hit ? motionPixels : float2(0, 0);
-    // shadowTex[pixel] = 1 - shadow;
-    // materialIDs[pixel] = voxelMaterialId;
-
-    // if (trace.hit)
-    // {
-    //     voxelIDs[pixel] = int2(globalBrickIndex, trace.voxelIndex);
-    //     voxelFaceIDs[pixel] = getHashtableFaceIndex(trace);
-    // }
-    // else
-    // {
-    //     voxelIDs[pixel] = int2(EMPTY_KEY, EMPTY_KEY);
-    //     voxelFaceIDs[pixel] = EMPTY_KEY;
-    // }
 }

@@ -138,66 +138,41 @@ inline int brickGlobalIndex(int chunkIndex, int localBrickIndex)
 // Get adjacent brick index in normal direction
 uint getAdjacentBrickIndex(uint brickIndex, int3 normal)
 {
-    // Get chunk index and local brick index
+    // Extract chunk and local brick indices
     uint chunkIdx = brickIndex / CHUNK_SIZE_CUBE;
     uint localBrickIdx = brickIndex % CHUNK_SIZE_CUBE;
-
-    // Convert local brick index to 3D coordinates
-    int3 localBrickPos;
-    localBrickPos.x = int(localBrickIdx % CHUNK_SIZE);
-    localBrickPos.y = int((localBrickIdx / CHUNK_SIZE) % CHUNK_SIZE);
-    localBrickPos.z = int(localBrickIdx / CHUNK_SIZE_SQUARE);
-
-    // Convert chunk index to 3D coordinates
+    
+    // Convert to 3D positions
     int3 chunkPos;
     chunkPos.x = int(chunkIdx % GRID_SIZE);
     chunkPos.y = int((chunkIdx / GRID_SIZE) % GRID_SIZE);
     chunkPos.z = int(chunkIdx / (GRID_SIZE * GRID_SIZE));
-
-    // Calculate global brick position
-    int3 globalBrickPos = chunkPos * CHUNK_SIZE + localBrickPos;
-
-    // Add normal to get adjacent brick position
-    // Convert normal to direction vector with integer components
-    int3 adjacentGlobalBrickPos = globalBrickPos + normal;
-
-    // Calculate new chunk position (handle negative coordinates correctly)
-    int3 newChunkPos;
-
-    // For negative coordinates, we need a different division formula
-    // to ensure rounding towards negative infinity
-    newChunkPos.x = adjacentGlobalBrickPos.x < 0
-                        ? (adjacentGlobalBrickPos.x - CHUNK_SIZE + 1) / CHUNK_SIZE
-                        : adjacentGlobalBrickPos.x / CHUNK_SIZE;
-
-    newChunkPos.y = adjacentGlobalBrickPos.y < 0
-                        ? (adjacentGlobalBrickPos.y - CHUNK_SIZE + 1) / CHUNK_SIZE
-                        : adjacentGlobalBrickPos.y / CHUNK_SIZE;
-
-    newChunkPos.z = adjacentGlobalBrickPos.z < 0
-                        ? (adjacentGlobalBrickPos.z - CHUNK_SIZE + 1) / CHUNK_SIZE
-                        : adjacentGlobalBrickPos.z / CHUNK_SIZE;
-
-    // Check if the new position is out of bounds
-    if (newChunkPos.x < 0 || newChunkPos.y < 0 || newChunkPos.z < 0 ||
-        !isInBounds(newChunkPos, int3(GRID_SIZE)))
+    
+    int3 localPos;
+    localPos.x = int(localBrickIdx % CHUNK_SIZE);
+    localPos.y = int((localBrickIdx / CHUNK_SIZE) % CHUNK_SIZE);
+    localPos.z = int(localBrickIdx / CHUNK_SIZE_SQUARE);
+    
+    // Calculate global position and add offset
+    int3 globalPos = chunkPos * CHUNK_SIZE + localPos + normal;
+    
+    // Calculate new chunk position using floor division
+    int3 newChunkPos = int3(floor(float3(globalPos) / float(CHUNK_SIZE)));
+    
+    // Check bounds
+    if (any(newChunkPos < 0) || any(newChunkPos >= GRID_SIZE))
     {
-        // Return invalid index if out of bounds
-        return 0xFFFFFFFF; // Sentinel value for invalid index
+        return 0xFFFFFFFF; // Invalid index
     }
-
-    // Calculate new local brick position (handle negative coordinates correctly)
-    int3 newLocalBrickPos;
-    newLocalBrickPos.x = (adjacentGlobalBrickPos.x % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
-    newLocalBrickPos.y = (adjacentGlobalBrickPos.y % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
-    newLocalBrickPos.z = (adjacentGlobalBrickPos.z % CHUNK_SIZE + CHUNK_SIZE) % CHUNK_SIZE;
-
-    // Calculate new chunk index and local brick index
+    
+    // Calculate new local position (this will always be positive now)
+    int3 newLocalPos = globalPos - newChunkPos * CHUNK_SIZE;
+    
+    // Calculate new indices
     int newChunkIdx = chunkIndex(newChunkPos);
-    int newLocalBrickIdx = brickLocalIndex(newLocalBrickPos);
-
-    // Return global brick index
-    return brickGlobalIndex(newChunkIdx, newLocalBrickIdx);
+    int newLocalIdx = brickLocalIndex(newLocalPos);
+    
+    return brickGlobalIndex(newChunkIdx, newLocalIdx);
 }
 
 bool brickBitmaskEmpty(BrickBitmask mask)

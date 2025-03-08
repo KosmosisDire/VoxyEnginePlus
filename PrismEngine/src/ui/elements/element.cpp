@@ -48,6 +48,7 @@ ComputedProps Element::GetComputedProperties()
 Element::Element(std::string id)
 {
     parent = Element::PeekStack();
+
     if (parent != nullptr)
     {
         props.computed.parentId = parent->props.clay.clayId.id;
@@ -66,34 +67,36 @@ uint32_t Element::GetCurrentOpenId()
 
 Clay_ElementId Element::HashId(const std::string &id)
 {
-    return Clay__HashString(Clay_String{
-                                static_cast<int32_t>(id.length()),
-                                ClayState::AllocateString(id.c_str()),
-                            },
-                            0, 0);
+    return Clay__HashString(Clay_String
+    {
+        static_cast<int32_t>(id.length()),
+        ClayState::AllocateString(id.c_str()),
+    },
+    0, 0);
 }
 
 Element &Element::size(SizingType type, float width, float height)
 {
     switch (type)
     {
-    case SizingType::Fixed:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{width, width}}, CLAY__SIZING_TYPE_FIXED};
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{height, height}}, CLAY__SIZING_TYPE_FIXED};
-        break;
-    case SizingType::Percent:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{width / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{height / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
-        break;
-    case SizingType::Grow:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
-        break;
-    case SizingType::Fit:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
-        break;
+        case SizingType::Fixed:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{width, width}}, CLAY__SIZING_TYPE_FIXED};
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{height, height}}, CLAY__SIZING_TYPE_FIXED};
+            break;
+        case SizingType::Percent:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{width / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{height / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
+            break;
+        case SizingType::Grow:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
+            break;
+        case SizingType::Fit:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
+            break;
     }
+
     return *this;
 }
 
@@ -106,19 +109,20 @@ Element &Element::width(SizingType type, float width)
 {
     switch (type)
     {
-    case SizingType::Fixed:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{width, width}}, CLAY__SIZING_TYPE_FIXED};
-        break;
-    case SizingType::Percent:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{width / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
-        break;
-    case SizingType::Grow:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
-        break;
-    case SizingType::Fit:
-        props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
-        break;
+        case SizingType::Fixed:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{width, width}}, CLAY__SIZING_TYPE_FIXED};
+            break;
+        case SizingType::Percent:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{width / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
+            break;
+        case SizingType::Grow:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
+            break;
+        case SizingType::Fit:
+            props.clay.layout.sizing.width = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
+            break;
     }
+
     return *this;
 }
 
@@ -126,19 +130,20 @@ Element &Element::height(SizingType type, float height)
 {
     switch (type)
     {
-    case SizingType::Fixed:
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{height, height}}, CLAY__SIZING_TYPE_FIXED};
-        break;
-    case SizingType::Percent:
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{height / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
-        break;
-    case SizingType::Grow:
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
-        break;
-    case SizingType::Fit:
-        props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
-        break;
+        case SizingType::Fixed:
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{height, height}}, CLAY__SIZING_TYPE_FIXED};
+            break;
+        case SizingType::Percent:
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{height / 100.0f}}, CLAY__SIZING_TYPE_PERCENT};
+            break;
+        case SizingType::Grow:
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_GROW};
+            break;
+        case SizingType::Fit:
+            props.clay.layout.sizing.height = Clay_SizingAxis{{{0, 0}}, CLAY__SIZING_TYPE_FIT};
+            break;
     }
+
     return *this;
 }
 
@@ -263,7 +268,7 @@ Element &Element::borderWidth(float width)
 
 Element &Element::borderColor(const Color &color)
 {
-    auto col = Color{color.r * 255, color.g * 255, color.b * 255, color.a * 255};
+    auto col = Clay_Color{color.r * 255, color.g * 255, color.b * 255, color.a * 255};
     props.clay.border.bottom.color = col;
     props.clay.border.top.color = col;
     props.clay.border.left.color = col;
@@ -405,6 +410,7 @@ Element &Element::StopCaptureDrag()
     {
         ClayState::capturedElement = 0;
     }
+
     return *this;
 }
 
@@ -429,34 +435,38 @@ void Element::_Begin()
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_RECTANGLE)
     {
         Clay__AttachElementConfig(
-            Clay_ElementConfigUnion{
-                .rectangleElementConfig = Clay__StoreRectangleElementConfig(
-                    (Clay__Clay_RectangleElementConfigWrapper{props.clay.rectangle}).wrapped)},
-            CLAY__ELEMENT_CONFIG_TYPE_RECTANGLE);
+            Clay_ElementConfigUnion
+        {
+            .rectangleElementConfig = Clay__StoreRectangleElementConfig(
+            (Clay__Clay_RectangleElementConfigWrapper{props.clay.rectangle}).wrapped)},
+        CLAY__ELEMENT_CONFIG_TYPE_RECTANGLE);
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER)
     {
         Clay__AttachElementConfig(
-            Clay_ElementConfigUnion{
-                .borderElementConfig = Clay__StoreBorderElementConfig(props.clay.border)},
-            CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER);
+            Clay_ElementConfigUnion
+        {
+            .borderElementConfig = Clay__StoreBorderElementConfig(props.clay.border)},
+        CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER);
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_SCROLL_CONTAINER)
     {
         Clay__AttachElementConfig(
-            Clay_ElementConfigUnion{
-                .scrollElementConfig = Clay__StoreScrollElementConfig(props.clay.scroll)},
-            CLAY__ELEMENT_CONFIG_TYPE_SCROLL_CONTAINER);
+            Clay_ElementConfigUnion
+        {
+            .scrollElementConfig = Clay__StoreScrollElementConfig(props.clay.scroll)},
+        CLAY__ELEMENT_CONFIG_TYPE_SCROLL_CONTAINER);
     }
 
     if (props.clay.activeConfigs & CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER)
     {
         Clay__AttachElementConfig(
-            Clay_ElementConfigUnion{
-                .floatingElementConfig = Clay__StoreFloatingElementConfig(props.clay.floating)},
-            CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER);
+            Clay_ElementConfigUnion
+        {
+            .floatingElementConfig = Clay__StoreFloatingElementConfig(props.clay.floating)},
+        CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER);
     }
 
     Clay__ElementPostConfiguration();
@@ -490,6 +500,7 @@ bool Element::IsHovered()
     for (int32_t i = 0; i < Clay__pointerOverIds.length; ++i)
     {
         auto element = Clay__ElementIdArray_Get(&Clay__pointerOverIds, i);
+
         if (element->id == openElement)
         {
             ClayState::lastHoveredElement = element->id;

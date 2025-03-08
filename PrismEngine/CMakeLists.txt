@@ -3,6 +3,7 @@ file(GLOB_RECURSE ENGINE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp",
     "${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/source/*.cpp"
 )
+
 # Create static library
 add_library(PrismEngine STATIC ${ENGINE_SRC})
 
@@ -107,6 +108,13 @@ if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     endif()
 endif()
 
+# create a file that contains the project root directory
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
+    "${PROJECT_BINARY_DIR}/include/project_paths.h"
+)
+include_directories("${PROJECT_BINARY_DIR}/include")
+
 # Add include directories
 target_include_directories(PrismEngine 
     PUBLIC 
@@ -116,6 +124,7 @@ target_include_directories(PrismEngine
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${PROJECT_BINARY_DIR}/include
 )
 
 # Find and link dependencies
