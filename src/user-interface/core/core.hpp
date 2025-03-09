@@ -15,16 +15,16 @@ using namespace std;
 struct UIData;
 
 struct Page
-{         
-    bool isActive;             
-    std::function<void(UIData& data, UIInputs input)> render_page; 
+{
+    bool isActive;
+    std::function<void(UIData& data, UIInputs input)> render_page;
 };
 
-struct UIData {
+struct UIData
+{
     float time = 0.0;
     int selectedPage = 0;
     bool mouseIsActive = true; // Does this mean that the mouse is captured or not captured? Is this meant to be used to hide or show the UI?
     std::unordered_map<std::string, Page> pages; // name -> page
-    RenderData *renderData;
 };
 

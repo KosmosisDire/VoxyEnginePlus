@@ -3,7 +3,6 @@
 #include "vox/shaders/shared.inl"
 #include <scripting/scripting.hpp>
 
-#include "vox/vox-camera.hpp"
 #include "vox/vox-renderer.hpp"
 #include <engine/objects/Application.hpp>
 #include <engine/apis/Input.hpp>
@@ -18,18 +17,12 @@ struct VoxyApp : public Application
         daxa::ImageId render_image;
         daxa::TaskImage task_render_image;
 
-        VoxyApp()
-            : Application("Voxy", {PROJECT_ROOT_DIR "/src/vox/shaders"}), // use this path instead for dist: "resources/shaders"
+        VoxyApp(): Application("Voxy", {"resources/shaders"}),
 
-        voxelRenderer(renderer),
-        uiState({.renderData = &voxelRenderer.stateData})
+                voxelRenderer(renderer),
+                uiState()
         {
             render_image = renderer->CreateRenderImage("game_render_image", &task_render_image);
-            voxelRenderer.camera.speed = 6.0f;
-            voxelRenderer.camera.sensitivity = 0.05f;
-
-            scriptingEngine.registerProperty("Vector3 sunDir", &voxelRenderer.stateData.sunDir);
-            scriptingEngine.registerProperty("Camera camera", &voxelRenderer.camera);
         }
 
         ~VoxyApp()
@@ -48,14 +41,9 @@ struct VoxyApp : public Application
 
         void OnUpdate(float dt) override
         {
-            // renderer state
-            RenderData &renderData = voxelRenderer.stateData;
-            renderData.dt = dt;
-            renderData.time = GetTime();
-            renderData.frame++;
-
-            // ui state
             uiState.time = GetTime();
+            voxelRenderer.time = GetTime();
+
 
             fflush(stdout);
 

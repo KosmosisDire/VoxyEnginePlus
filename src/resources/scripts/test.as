@@ -2,10 +2,10 @@
 
 void Update(float dt)
 {
-    if (Input::IsKeyPressed(Key::L))
-    {
-        sunDir = -camera.getForward();
-    }
+    // if (Input::IsKeyPressed(Key::L))
+    // {
+    //     sunDir = -camera.getForward();
+    // }
 
     if (!Input::IsMouseCaptured() && Input::IsMouseButtonPressed(MouseButton::Left))
     {
@@ -17,10 +17,10 @@ void Update(float dt)
         Input::CaptureMouse(false);
     }
 
-    if (Input::IsMouseCaptured())
-    {
-        camera.processMouseMovement(-Input::GetMouseDelta(), true);
-        camera.processKeyboard(0.01);
-    }
+    // if (Input::IsMouseCaptured())
+    // {
+    //     camera.processMouseMovement(-Input::GetMouseDelta(), true);
+    //     camera.processKeyboard(0.01);
+    // }
 
 }
