@@ -354,11 +354,18 @@ class Renderer
         }
 
         template <typename PushConstant>
-        inline std::shared_ptr<daxa::ComputePipeline> AddComputePipeline(std::string name, std::filesystem::path shaderPath)
+        inline std::shared_ptr<daxa::ComputePipeline> AddComputePipeline(std::string name, std::filesystem::path shaderPath, std::string entry_point = "main")
         {
             return pipeline_manager.add_compute_pipeline(
             {
-                .shader_info = {.source = daxa::ShaderFile{shaderPath}},
+                .shader_info =
+                {
+                    .source = daxa::ShaderFile{shaderPath},
+                    .compile_options =
+                    {
+                        .entry_point = entry_point,
+                    }
+                },
                 .push_constant_size = sizeof(PushConstant),
                 .name = name,
             }).value();
