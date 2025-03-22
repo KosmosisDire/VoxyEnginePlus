@@ -17,10 +17,10 @@ void Update(float dt)
         Input::CaptureMouse(false);
     }
 
-    // if (Input::IsMouseCaptured())
-    // {
-    //     camera.processMouseMovement(-Input::GetMouseDelta(), true);
-    //     camera.processKeyboard(0.01);
-    // }
+    if (Input::IsMouseCaptured())
+    {
+        camera.processMouseMovement(-Input::GetMouseDelta(), true);
+        camera.processKeyboard(0.0001);
+    }
 
 }

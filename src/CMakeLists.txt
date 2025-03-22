@@ -100,7 +100,7 @@ if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
         "Create-HardLinks \"${CMAKE_SOURCE_DIR}/PrismEngine/resources\" \"${CMAKE_BINARY_DIR}/src/Debug/resources\" \"${CMAKE_SOURCE_DIR}/PrismEngine/resources\"\n"
         "\n"
         "# Process shader resources\n"
-        "Create-HardLinks \"${CMAKE_SOURCE_DIR}/src/vox/shaders\" \"${CMAKE_BINARY_DIR}/src/Debug/resources/shaders\" \"${CMAKE_SOURCE_DIR}/src/vox/shaders\"\n"
+        "Create-HardLinks \"${CMAKE_SOURCE_DIR}/src/voxels/shaders\" \"${CMAKE_BINARY_DIR}/src/Debug/resources/shaders\" \"${CMAKE_SOURCE_DIR}/src/voxels/shaders\"\n"
         "\n"
         "# Process application resources\n"
         "Create-HardLinks \"${CMAKE_SOURCE_DIR}/src/resources\" \"${CMAKE_BINARY_DIR}/src/Debug/resources\" \"${CMAKE_SOURCE_DIR}/src/resources\"\n"
@@ -119,7 +119,7 @@ endif()
 
 # Add resource folders
 add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/PrismEngine/resources" "resources")
-add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/src/vox/shaders" "resources/shaders")
+add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/src/voxels/shaders" "resources/shaders")
 add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/src/resources" "resources")
 
 # DLL handling with safer command

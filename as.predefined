@@ -683,4 +683,5 @@ namespace Math { float Rad2Deg; }
 namespace Math { float Epsilon; }
 namespace Math { float Infinity; }
 namespace Math { float NegativeInfinity; }
+Camera camera;
 

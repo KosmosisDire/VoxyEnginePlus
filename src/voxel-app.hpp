@@ -1,9 +1,9 @@
 #pragma once
 #include "user-interface/root.hpp"
-#include "vox/shaders/shared.inl"
+#include "voxels/shaders/shared.inl"
 #include <scripting/scripting.hpp>
 
-#include "vox/vox-renderer.hpp"
+#include "voxels/vox-renderer.hpp"
 #include <engine/objects/Application.hpp>
 #include <engine/apis/Input.hpp>
 #include <project_paths.h>

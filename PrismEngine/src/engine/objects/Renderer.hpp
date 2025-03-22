@@ -389,10 +389,18 @@ class Renderer
             CreateBuffer(name, sizeof(T), out_buffer, out_task_buffer, flags);
         }
 
+
+
         template <typename T>
         inline T *MapBufferAs(daxa::BufferId buffer)
         {
             return device.buffer_host_address_as<T>(buffer).value();
+        }
+
+        inline void CopyToBuffer(daxa::BufferId buffer, void* data)
+        {
+            void* mapped = device.buffer_host_address(buffer).value();
+            std::memcpy(mapped, data, device.buffer_info(buffer).value().size);
         }
 
         inline daxa::InlineTaskInfo CreateBlitTask(daxa::TaskImage src, daxa::TaskImage dst)

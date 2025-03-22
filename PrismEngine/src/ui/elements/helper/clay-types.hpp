@@ -140,7 +140,6 @@ enum ThemeColor
 using Clay_HoverCallback = void (*)(Clay_ElementId elementId, Clay_PointerData pointer, intptr_t userData);
 using ElementId = Clay_ElementId;
 using PointerData = Clay_PointerData;
-using BoundingBox = Clay_BoundingBox;
 
 // Helper conversion functions
 inline Clay_LayoutDirection ToClay(FlowDirection dir)

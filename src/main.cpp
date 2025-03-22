@@ -5,6 +5,7 @@
 
 auto main() -> int
 {
+
     scriptingEngine.registerStdLib();
     scriptingEngine.registerEngineAPI();
 
