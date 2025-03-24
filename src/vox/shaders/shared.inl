@@ -13,7 +13,7 @@ struct Ray
 #ifndef __cplusplus
     // Add these constants for jittering
     static const int HALTON_SEQUENCE_LENGTH = 16; // Number of jitter patterns to cycle through
-    static const float JITTER_SCALE = 0.5f; // Size of jitter (0.5 = half a pixel)
+    static const float JITTER_SCALE = 1.0f; // Size of jitter (0.5 = half a pixel)
 
     // Halton sequence for jittering (base 2 and 3)
     // These provide a well-distributed sampling pattern

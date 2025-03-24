@@ -97,8 +97,8 @@ struct GBufferCPU
             .voxelIDs = voxelIDs.default_view(),
             .voxelFaceIDs = voxelFaceIDs.default_view(),
             .materialIDs = materialIDs.default_view(),
-            .history = history.default_view(),
-            .currentFrame = currentFrame.default_view(),
+            .history = frame % 2 == 0 ? history.default_view() : currentFrame.default_view(),
+            .currentFrame = frame % 2 == 0 ? currentFrame.default_view() : history.default_view(),
         };
     }
 

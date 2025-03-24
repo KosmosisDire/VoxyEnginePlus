@@ -3,13 +3,13 @@
 static const float3 UP_VECTOR = float3(0, 1, 0);
 static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
-static const float TAA_BLEND_FACTOR = 0.1f;
+static const float TAA_BLEND_FACTOR = 1/16.0f;
 
 bool validateReprojection(float3 currentPosition, float3 previousPosition)
 {
-    float xDiff = abs(currentPosition.x - previousPosition.x);
-    float yDiff = abs(currentPosition.y - previousPosition.y);
-    float zDiff = abs(currentPosition.z - previousPosition.z);
+    float xDiff = abs(currentPosition.x - previousPosition.x) * 10;
+    float yDiff = abs(currentPosition.y - previousPosition.y) * 10;
+    float zDiff = abs(currentPosition.z - previousPosition.z) * 10;
 
     return xDiff < WORLD_VOXEL_SIZE || yDiff < WORLD_VOXEL_SIZE || zDiff < WORLD_VOXEL_SIZE;
 }
@@ -25,7 +25,7 @@ float2 calculateMotionClip(float3 worldPos, float4x4 viewProj, float4x4 lastView
     // Add jitter offset difference to motion vector
     float2 jitterOffset = (previousJitter - currentJitter) / float2(p.frame_dim) * 2.0f;
     
-    return (previousPos - currentPos) + jitterOffset;
+    return (previousPos - currentPos);
 }
 
 void getBilinearWeights(float2 pos, out int2 baseCoord, out float2 weights)
@@ -38,18 +38,21 @@ float3 sampleHistoryBilinear(RWTexture2D<float3> history, float2 pos, float2 dim
 {
     int2 baseCoord;
     float2 weights;
-    getBilinearWeights(pos * dimensions, baseCoord, weights);
+    getBilinearWeights(pos, baseCoord, weights);
 
+    // Clamp coordinates to texture bounds
     int2 c00 = clamp(baseCoord, int2(0, 0), int2(dimensions) - 1);
     int2 c10 = clamp(int2(baseCoord.x + 1, baseCoord.y), int2(0, 0), int2(dimensions) - 1);
     int2 c01 = clamp(int2(baseCoord.x, baseCoord.y + 1), int2(0, 0), int2(dimensions) - 1);
     int2 c11 = clamp(baseCoord + int2(1, 1), int2(0, 0), int2(dimensions) - 1);
 
+    // Sample four nearest pixels
     float3 s00 = history[c00];
     float3 s10 = history[c10];
     float3 s01 = history[c01];
     float3 s11 = history[c11];
 
+    // Bilinear blend
     float3 s0 = lerp(s00, s10, weights.x);
     float3 s1 = lerp(s01, s11, weights.x);
     return lerp(s0, s1, weights.y);
@@ -89,10 +92,10 @@ float3 clipToNeighborhood(float3 color, ColorBounds bounds)
 }
 
 float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history, 
-                uint2 pixel, float2 reprojectedUV, float2 dimensions, float3 currentColor)
+                uint2 pixel, float2 previousPixel, float2 dimensions, float3 currentColor)
 {
     // Sample history color using bilinear filtering
-    float3 previousColor = sampleHistoryBilinear(history, reprojectedUV, dimensions);
+    float3 previousColor = sampleHistoryBilinear(history, previousPixel, dimensions);
     
     // Find neighborhood bounds for color clamping (use 3x3 neighborhood)
     // ColorBounds bounds = findNeighborhoodBounds(current, pixel, dimensions, 1);
@@ -105,8 +108,8 @@ float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history,
 }
 
 // Configuration parameters for AO
-static const int AO_SAMPLE_COUNT = 2;
-static const float AO_RADIUS = 1.0f;
+static const int AO_SAMPLE_COUNT = 1;
+static const float AO_RADIUS = 100.0f;
 static const float AO_INTENSITY = 1.0f;
 static const float AO_BIAS = 0.001;
 
@@ -171,7 +174,7 @@ float calculateAmbientOcclusion(float3 position, float3 normal, uint2 pixel)
         Ray aoRay;
         aoRay.origin = position + normal * AO_BIAS; // Avoid self-intersection
         aoRay.direction = sampleDir;
-        aoRay.maxDist = 50;
+        aoRay.maxDist = 50 * AO_RADIUS;
         
         // Trace the ray with limited distance (AO_RADIUS)
         var aoHit = traceScene(aoRay, 0, false, false);
@@ -222,7 +225,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             normalTex[pixel] = 0;
             position[pixel] = 0;
             motion[pixel] = 0;
-            depth[pixel] = 0;
+            depth[pixel] = -10;
             return;
         }
         
@@ -236,11 +239,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float2 currentJitter = Ray.getJitterOffset(p.state_ptr.frame);
         float2 previousJitter = Ray.getJitterOffset(p.state_ptr.frame - 1);
         float2 motionClip = calculateMotionClip(worldPos, p.state_ptr.camera.viewProj, p.state_ptr.lastCamera.viewProj, currentJitter, previousJitter);
-        motionClip = float2(0, 0);
-        if (length(motionClip) < 1 || isnan(motionClip.x) || isnan(motionClip.y))
-        {
-            motionClip = float2(0, 0);
-        }
+
         motion[pixel] = motionClip;
         depth[pixel] = hit.distance;
 
@@ -269,56 +268,37 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // Apply ambient occlusion
         float ao = calculateAmbientOcclusion(worldPos, worldNormal, pixel);
         baseColor *= ao + ((float)!shadowHit.hit) * 0.6f;
-        
-        
-        // Store color in current frame buffer for TAA
         currentFrame[pixel] = baseColor;
-        
-        // For first frame or when TAA is disabled, write directly to output
-        if (p.state_ptr.frame == 0)
-        {
-            albedo[pixel] = baseColor;
-            history[pixel] = baseColor;
-        }
     }
-    // Second pass: Apply TAA
+
+    // Second pass: Apply temporal anti-aliasing
     else if (p.pass == 1)
     {
-        // Skip on first frame - the first pass already wrote to the output
-        if (p.state_ptr.frame == 0)
-            return;
-            
-        // Skip pixels that don't have valid data
-        if (depth[pixel] <= 0)
-            return;
-            
         float3 worldPos = position[pixel];
         float2 motionClip = motion[pixel];
-        float3 currentColor = currentFrame[pixel];
-        
-        // Convert motion vector from NDC to UV space
+        float3 baseColor = currentFrame[pixel];
+
         float2 motionPixels = motionClip * (p.frame_dim * 0.5);
         if (length(motionPixels) < 0.0001 || isnan(motionPixels.x) || isnan(motionPixels.y))
         {
             motionPixels = float2(0, 0);
         }
-        
-        // Apply TAA if reprojection is valid
-        uint2 prevPixel = pixel - uint2(motionPixels);
-        bool valid = validateReprojection(position[pixel].xyz, position[prevPixel].xyz);
+
+        float2 prevPixel = float2(pixel) + float2(motionPixels);
+        bool valid = validateReprojection(worldPos, position[prevPixel]);
 
         float3 finalColor;
         if (valid)
         {
-            finalColor = lerp(currentColor, history[prevPixel], 0.9);
-        }
+            finalColor = applyTAA(albedo, history, pixel, prevPixel, p.frame_dim, baseColor);
+        } 
         else
         {
-            finalColor = currentColor;
+            finalColor = baseColor;
         }
-        
+
         // Write final color to output
         albedo[pixel] = finalColor;
-        history[pixel] = finalColor; // Update history buffer
+        currentFrame[pixel] = finalColor;
     }
 }
