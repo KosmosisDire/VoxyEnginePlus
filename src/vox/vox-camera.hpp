@@ -16,6 +16,8 @@ class VoxCamera : public Camera
             auto viewProj = proj * view;
 
             data.viewProj = viewProj.toDaxa();
+            data.view = view.toDaxa();
+            data.proj = proj.toDaxa();
             data.invViewProj = viewProj.inverse().toDaxa();
             data.position = getPosition().toDaxa();
             data.near = getNearPlane();

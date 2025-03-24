@@ -2,26 +2,7 @@
 
 #include "../common.slang"
 
-Ray getRayFromPixel(uint2 pixel, uint2 dimensions, CameraData camera)
-{
-    Ray ray;
-    ray.origin = camera.position;
-    ray.maxDist = camera.far;
-
-    // Convert pixel to NDC space (-1 to 1)
-    float2 uv = (float2(pixel) + 0.5f) / float2(dimensions);
-    float2 ndc = uv * 2.0f - 1.0f;
-
-    // Transform NDC position to world space
-    float4 worldPos = mul(camera.invViewProj, float4(ndc.x, ndc.y, 1.0f, 1.0f));
-    worldPos.xyz /= worldPos.w;
-
-    // Calculate ray direction
-    ray.direction = normalize(worldPos.xyz - camera.position);
-    return ray;
-}
-
-TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = false)
+TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = false, bool coarse = false)
 {
     float3 startPos = ray.origin;
     ray.origin += ray.direction * startDepth;
@@ -44,6 +25,12 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
         return result;
     }
 
+    // Return early if tMin is already beyond maxDist
+    if (tMin > ray.maxDist)
+    {
+        return result;
+    }
+
     // Adjust start position if needed
     if (tMin > EPSILON)
     {
@@ -53,8 +40,18 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
 
     // Begin DDA traversal
     DDAState chunkDDA = initDDA(ray.origin, ray.direction, invDir);
+    
     while (isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
     {
+        // Calculate current distance to decide if we should terminate
+        // Estimate distance based on DDA state - using tMax values
+        float minTMax = min(min(chunkDDA.tMax.x, chunkDDA.tMax.y), chunkDDA.tMax.z);
+        float estimatedDist = minTMax - tMin;
+        if (estimatedDist > ray.maxDist)
+        {
+            return result;
+        }
+        
         int chunkIdx = chunkIndex(chunkDDA.cell);
         daxa_u32vec2 chunkMask = p.chunk_occupancy_ptr.occupancy[chunkIdx];
 
@@ -71,6 +68,14 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
 
         while (isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
         {
+            // Calculate estimated distance at brick level
+            float brickEstDist = estimatedDist + 
+                min(min(brickDDA.tMax.x, brickDDA.tMax.y), brickDDA.tMax.z) / float(CHUNK_SIZE);
+            if (brickEstDist > ray.maxDist)
+            {
+                return result;
+            }
+            
             int brickIdx = brickLocalIndex(brickDDA.cell);
             if (getBit(chunkMask, brickIdx))
             {
@@ -84,11 +89,45 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                     float3 voxelOrigin = clamp(brickUv * BRICK_SIZE, float3(EPSILON), float3(BRICK_SIZE - EPSILON));
                     DDAState voxelDDA = initDDA(voxelOrigin, ray.direction, invDir);
 
+                    if (coarse)
+                    {
+                        // Calculate position for coarse hit
+                        float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + 
+                                        voxelDDA.cell / float(BRICK_SIZE) / float(CHUNK_SIZE);
+                        float hitDist = length(hitPos - startPos);
+                        
+                        if (hitDist > ray.maxDist)
+                        {
+                            return result;
+                        }
+                        
+                        result.hit = true;
+                        result.position = hitPos;
+                        result.normal = normal;
+                        result.distance = hitDist;
+                        result.cell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell;
+                        result.chunkIndex = chunkIdx;
+                        result.brickIndex = brickIdx;
+                        return result;   
+                    }
+
                     while (isInBounds(voxelDDA.cell, int3(BRICK_SIZE)))
                     {
                         int voxelIdx = voxelLocalIndex(voxelDDA.cell);
                         if (getBit(brickMask, voxelIdx))
                         {
+                            // Calculate potential hit position
+                            float3 voxelUv = getDdaUvs(voxelDDA, voxelOrigin, ray.direction);
+                            float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) +
+                                            voxelDDA.cell / float(BRICK_SIZE) / float(CHUNK_SIZE) +
+                                            voxelUv / float(BRICK_SIZE) / float(CHUNK_SIZE);
+                                            
+                            float hitDist = length(hitPos - startPos);
+                            if (hitDist > ray.maxDist)
+                            {
+                                return result;
+                            }
+                            
                             // Get material to check transparency
                             uint materialId = getMaterialId(int2(brickIdxGlobal, voxelIdx));
 
@@ -110,16 +149,11 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                             }
 
                             // Hit found
-                            float3 voxelUv = getDdaUvs(voxelDDA, voxelOrigin, ray.direction);
-                            float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) +
-                                            voxelDDA.cell / float(BRICK_SIZE) / float(CHUNK_SIZE) +
-                                            voxelUv / float(BRICK_SIZE) / float(CHUNK_SIZE);
-
                             result.hit = true;
                             result.position = hitPos;
                             // result.normal = calculateVoxelNormal(brickIdxGlobal, voxelIdx, p.brick_occupancy_ptr);
                             result.normal = normal;
-                            result.distance = length(hitPos - startPos);
+                            result.distance = hitDist;
                             result.cell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
                             result.chunkIndex = chunkIdx;
                             result.brickIndex = brickIdx;
@@ -131,23 +165,17 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                             return result;
                         }
                         normal = stepDDA(voxelDDA);
+                        result.iterations++;
                     }
                 }
             }
             normal = stepDDA(brickDDA);
+            result.iterations++;
         }
         normal = stepDDA(chunkDDA);
+        result.iterations++;
     }
 
+    result.normal = 0;
     return result;
-}
-
-SceneHitInfo traceAllRays(Ray primaryRay)
-{
-    SceneHitInfo hits = (SceneHitInfo)0;
-
-    // Trace primary ray
-    hits.solid = traceScene(primaryRay, 0, false);
-
-    return hits;
 }
