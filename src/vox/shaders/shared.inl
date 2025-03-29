@@ -9,11 +9,12 @@ struct Ray
     daxa_f32vec3 origin;
     daxa_f32vec3 direction;
     daxa_f32 maxDist;
+    daxa_u32 maxIterations = 1024;
 
 #ifndef __cplusplus
     // Add these constants for jittering
     static const int HALTON_SEQUENCE_LENGTH = 16; // Number of jitter patterns to cycle through
-    static const float JITTER_SCALE = 1.0f; // Size of jitter (0.5 = half a pixel)
+    static const float JITTER_SCALE = 0.51f; // Size of jitter (0.5 = half a pixel)
 
     // Halton sequence for jittering (base 2 and 3)
     // These provide a well-distributed sampling pattern
@@ -50,10 +51,10 @@ struct Ray
     {
         Ray ray;
         ray.origin = camera.position;
-        ray.maxDist = camera.far;
+        ray.maxDist = camera.far * 50;
 
         // Get jitter offset for current frame
-        float2 jitter = getJitterOffset(p.state_ptr.frame);
+        float2 jitter = getJitterOffset(p.stateBuffer.frame);
 
         // Convert pixel to NDC space (-1 to 1) with jitter
         float2 uv = (float2(pixel) + 0.5f + jitter) / float2(dimensions);
@@ -72,7 +73,7 @@ struct Ray
     {
         Ray ray;
         ray.origin = camera.position;
-        ray.maxDist = camera.far;
+        ray.maxDist = camera.far * 50;
 
         // Convert pixel to NDC space (-1 to 1)
         float2 uv = (float2(pixel) + 0.5f) / float2(dimensions);
@@ -181,25 +182,35 @@ struct RenderData
 // 216 bits used for bitmask. Aligned to 256 bits.
 // leaving 40 bits.
 // last 4 bytes are used for the compressed data ptr (so only 8 bits are wasted per block)
-// in the future this could be used for light level accumulation.
 struct BrickBitmask
 {
     daxa_u32 data[8];
 };
 
-struct BrickOccupancy
+struct Bricks
 {
-    BrickBitmask occupancy[TOTAL_BRICKS];
+    BrickBitmask data[256];
 };
 
-DAXA_DECL_BUFFER_PTR(BrickOccupancy);
+DAXA_DECL_BUFFER_PTR(Bricks);
 
-struct ChunkOccupancy
+struct BrickPointers
 {
-    daxa_u32vec2 occupancy[TOTAL_CHUNKS];
+#ifdef __cplusplus
+    daxa_u32 data[TOTAL_BRICKS / 4];
+#else
+    uint8_t data[TOTAL_BRICKS];
+#endif
 };
 
-DAXA_DECL_BUFFER_PTR(ChunkOccupancy);
+DAXA_DECL_BUFFER_PTR(BrickPointers);
+
+struct Chunks
+{
+    daxa_u32vec2 data[TOTAL_CHUNKS];
+};
+
+DAXA_DECL_BUFFER_PTR(Chunks);
 
 // Material definition
 struct Material
@@ -215,17 +226,17 @@ struct Material
 
 struct Materials
 {
-    Material materials[TOTAL_MATERIALS];
+    Material data[TOTAL_MATERIALS];
 };
 
 DAXA_DECL_BUFFER_PTR(Materials);
 
-struct VoxelMaterials
+struct MaterialPointers
 {
-    daxa_u32 materials[TOTAL_VOXELS / (32 / BITS_PER_MATERIAL)];
+    uint8_t data[TOTAL_BRICKS];
 };
 
-DAXA_DECL_BUFFER_PTR(VoxelMaterials);
+DAXA_DECL_BUFFER_PTR(MaterialPointers);
 
 struct GBuffer
 {
@@ -242,28 +253,22 @@ struct GBuffer
 
     daxa_ImageViewId history;
     daxa_ImageViewId currentFrame;
-
 };
 
 struct ComputePush
 {
     daxa_BufferPtr(GBuffer) gbuffer;
-    daxa_BufferPtr(ChunkOccupancy) chunk_occupancy_ptr;
-    daxa_BufferPtr(BrickOccupancy) brick_occupancy_ptr;
-    daxa_BufferPtr(Materials) materials_ptr;
-    daxa_BufferPtr(VoxelMaterials) voxel_materials_ptr;
-    daxa_BufferPtr(RenderData) state_ptr;
-    daxa_BufferPtr(RayRequests) ray_requests_ptr;
-    daxa_BufferPtr(RayResults) ray_results_ptr;
-    daxa_ImageViewId final_image;
+    daxa_BufferPtr(Chunks) chunksBuffer;
+    daxa_BufferPtr(Bricks) bricksBuffer;
+    daxa_BufferPtr(BrickPointers) brickPtrBuffer;
+    daxa_BufferPtr(Materials) materialsBuffer;
+    daxa_BufferPtr(MaterialPointers) materialPtrBuffer;
+    daxa_BufferPtr(RenderData) stateBuffer;
+    daxa_BufferPtr(RayRequests) rayRequestBuffer;
+    daxa_BufferPtr(RayResults) rayResultBuffer;
+    daxa_ImageViewId screen;
     daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
-    daxa_u32vec2 frame_dim;
-    daxa_u32 pass;
-};
-
-struct DenoisePush
-{
-    daxa_BufferPtr(GBuffer) gbuffer;
-    daxa_u32 pass;
-    daxa_u32vec2 frame_dim;
+    daxa_ImageViewId blueNoiseStatic; // blue noise texture 128 x 128, different for each frame
+    daxa_u32vec2 screenSize;
+    daxa_u32 passNum;
 };

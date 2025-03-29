@@ -97,7 +97,7 @@ class Renderer
             : window(window)
         {
             daxa_instance = daxa::create_instance({});
-            device = daxa_instance.create_device_2(daxa_instance.choose_device({}, {}));
+            device = daxa_instance.create_device_2(daxa_instance.choose_device(daxa::ImplicitFeatureFlagBits::SHADER_FLOAT16, {}));
             swapchain = CreateSwapchain(device, window, "swapchain");
             task_swap_image = CreateSwapchainImage(swapchain, "swapchain_image");
             pipeline_manager = CreatePipelineManager(device, shaderDirectories, "pipeline_manager");

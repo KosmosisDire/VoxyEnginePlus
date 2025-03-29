@@ -10,14 +10,14 @@ float3 inverseDirection(float3 dir)
     return (1.0 / max(abs(dir), float3(EPSILON))) * sign(dir);
 }
 
-void setBit(Ptr<BrickOccupancy> occupancy, int brickIndex, int voxelIndex)
+void setBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
 {
-    InterlockedOr(occupancy.occupancy[brickIndex].data[voxelIndex / 32], (1 << (voxelIndex % 32)));
+    InterlockedOr(occupancy.data[brickIndex].data[voxelIndex / 32], (1 << (voxelIndex % 32)));
 }
 
-void clearBit(Ptr<BrickOccupancy> occupancy, int brickIndex, int voxelIndex)
+void clearBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
 {
-    InterlockedAnd(occupancy.occupancy[brickIndex].data[voxelIndex / 32], ~(1 << (voxelIndex % 32)));
+    InterlockedAnd(occupancy.data[brickIndex].data[voxelIndex / 32], ~(1 << (voxelIndex % 32)));
 }
 
 void setBit(inout BrickBitmask mask, int index)
@@ -47,14 +47,14 @@ bool getBit(daxa_u32vec2 value, int index)
     return (bool)(value[index / 32] & (1 << (index % 32)));
 }
 
-void setBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+void setBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
 {
-    InterlockedOr(occupancy.occupancy[chunkIndex][brickIndex / 32], (1 << (brickIndex % 32)));
+    InterlockedOr(occupancy.data[chunkIndex][brickIndex / 32], (1 << (brickIndex % 32)));
 }
 
-void clearBit(Ptr<ChunkOccupancy> occupancy, int chunkIndex, int brickIndex)
+void clearBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
 {
-    InterlockedAnd(occupancy.occupancy[chunkIndex][brickIndex / 32], ~(1 << (brickIndex % 32)));
+    InterlockedAnd(occupancy.data[chunkIndex][brickIndex / 32], ~(1 << (brickIndex % 32)));
 }
 
 Material getMaterial(uint materialID)
@@ -64,7 +64,7 @@ Material getMaterial(uint materialID)
         materialID = 0;
     }
 
-    return p.materials_ptr.materials[materialID];
+    return p.materialsBuffer.data[materialID];
 }
 
 
@@ -137,7 +137,7 @@ bool getBitFast(BrickBitmask mask, int index)
 bool brickBitmaskEmpty(BrickBitmask mask)
 {
     // Check if all data elements are 0
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 7; i++)
     {
         if (mask.data[i] != 0) return false;
     }
@@ -285,8 +285,7 @@ float3 getDdaUvs(DDAState state, float3 rayPos, float3 rayDir)
     return uvs;
 }
 
-uint getMaterialId(int2 voxelID)
+uint getMaterialId(int brickIndex)
 {
-    uint globalVoxelIndex = voxelGlobalIndex(voxelID.x, voxelID.y);
-    return (p.voxel_materials_ptr.materials[globalVoxelIndex / 8] >> ((globalVoxelIndex % 8) * 4)) & 0xF;
+    return p.materialPtrBuffer.data[brickIndex];
 }

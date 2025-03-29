@@ -41,19 +41,10 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
     // Begin DDA traversal
     DDAState chunkDDA = initDDA(ray.origin, ray.direction, invDir);
     
-    while (isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
+    while (result.iterations < ray.maxIterations && isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
     {
-        // Calculate current distance to decide if we should terminate
-        // Estimate distance based on DDA state - using tMax values
-        float minTMax = min(min(chunkDDA.tMax.x, chunkDDA.tMax.y), chunkDDA.tMax.z);
-        float estimatedDist = minTMax - tMin;
-        if (estimatedDist > ray.maxDist)
-        {
-            return result;
-        }
-        
         int chunkIdx = chunkIndex(chunkDDA.cell);
-        daxa_u32vec2 chunkMask = p.chunk_occupancy_ptr.occupancy[chunkIdx];
+        daxa_u32vec2 chunkMask = p.chunksBuffer.data[chunkIdx];
 
         if (all(chunkMask == 0))
         {
@@ -66,21 +57,13 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
         float3 brickOrigin = clamp(chunkUv * CHUNK_SIZE, float3(EPSILON), float3(CHUNK_SIZE - EPSILON));
         DDAState brickDDA = initDDA(brickOrigin, ray.direction, invDir);
 
-        while (isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
+        while (result.iterations < ray.maxIterations && isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
         {
-            // Calculate estimated distance at brick level
-            float brickEstDist = estimatedDist + 
-                min(min(brickDDA.tMax.x, brickDDA.tMax.y), brickDDA.tMax.z) / float(CHUNK_SIZE);
-            if (brickEstDist > ray.maxDist)
-            {
-                return result;
-            }
-            
             int brickIdx = brickLocalIndex(brickDDA.cell);
             if (getBit(chunkMask, brickIdx))
             {
                 int brickIdxGlobal = brickGlobalIndex(chunkIdx, brickIdx);
-                BrickBitmask brickMask = p.brick_occupancy_ptr.occupancy[brickIdxGlobal];
+                BrickBitmask brickMask = p.bricksBuffer.data[(int)p.brickPtrBuffer.data[brickIdxGlobal]];
 
                 if (!brickBitmaskEmpty(brickMask))
                 {
@@ -89,7 +72,7 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                     float3 voxelOrigin = clamp(brickUv * BRICK_SIZE, float3(EPSILON), float3(BRICK_SIZE - EPSILON));
                     DDAState voxelDDA = initDDA(voxelOrigin, ray.direction, invDir);
 
-                    if (coarse)
+                    if (coarse || result.iterations > ray.maxIterations - 1)
                     {
                         // Calculate position for coarse hit
                         float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + 
@@ -111,7 +94,7 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                         return result;   
                     }
 
-                    while (isInBounds(voxelDDA.cell, int3(BRICK_SIZE)))
+                    while (result.iterations < ray.maxIterations && isInBounds(voxelDDA.cell, int3(BRICK_SIZE)))
                     {
                         int voxelIdx = voxelLocalIndex(voxelDDA.cell);
                         if (getBit(brickMask, voxelIdx))
@@ -129,7 +112,7 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                             }
                             
                             // Get material to check transparency
-                            uint materialId = getMaterialId(int2(brickIdxGlobal, voxelIdx));
+                            uint materialId = getMaterialId(brickIdxGlobal);
 
                             // Skip transparent materials if requested
                             if (ignoreTransparent)
@@ -151,7 +134,6 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
                             // Hit found
                             result.hit = true;
                             result.position = hitPos;
-                            // result.normal = calculateVoxelNormal(brickIdxGlobal, voxelIdx, p.brick_occupancy_ptr);
                             result.normal = normal;
                             result.distance = hitDist;
                             result.cell = chunkDDA.cell * CHUNK_SIZE + brickDDA.cell * BRICK_SIZE + voxelDDA.cell;
@@ -178,4 +160,26 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
 
     result.normal = 0;
     return result;
+}
+
+float3 RandomHemisphereUnitVector(uint seed1, uint seed2)
+{
+    // Simple hash for speed
+    seed1 = seed1 * 747796405u + 2891336453u;
+    seed2 = seed2 * 1664525u + 1013904223u;
+    
+    // Convert to float in [0,1) range
+    float r1 = float(seed1) / 4294967296.0;
+    float r2 = float(seed2) / 4294967296.0;
+    
+    // Simpler hemisphere generation
+    float cosTheta = r1;
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    float phi = r2 * 6.28318530718;
+    
+    return float3(
+        sinTheta * cos(phi),
+        sinTheta * sin(phi),
+        cosTheta
+    );
 }

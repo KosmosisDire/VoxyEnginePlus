@@ -9,6 +9,7 @@
 #include <engine/apis/Daxa.hpp>
 #include <engine/objects/Renderer.hpp>
 
+
 using namespace daxa::types;
 
 struct GBufferCPU
@@ -119,20 +120,23 @@ class VoxelRenderer
         std::shared_ptr<daxa::ComputePipeline> render_gbuffer_compute;
         std::shared_ptr<daxa::ComputePipeline> render_composite_compute;
 
-        daxa::BufferId chunk_occupancy_buffer;
-        daxa::TaskBuffer task_chunk_occupancy_buffer;
+        daxa::BufferId chunksBuffer;
+        daxa::TaskBuffer task_chunksBuffer;
 
-        daxa::BufferId brick_occupancy_buffer;
-        daxa::TaskBuffer task_brick_occupancy_buffer;
+        daxa::BufferId bricksBuffer;
+        daxa::TaskBuffer task_bricksBuffer;
 
-        daxa::BufferId materials_buffer;
-        daxa::TaskBuffer task_materials_buffer;
+        daxa::BufferId brickPtrBuffer;
+        daxa::TaskBuffer task_brickPtrBuffer;
 
-        daxa::BufferId voxel_materials_buffer;
-        daxa::TaskBuffer task_voxel_materials_buffer;
+        daxa::BufferId materialsBuffer;
+        daxa::TaskBuffer task_materialsBuffer;
 
-        daxa::BufferId state_buffer;
-        daxa::TaskBuffer task_state_buffer;
+        daxa::BufferId materialPtrBuffer;
+        daxa::TaskBuffer task_materialPtrBuffer;
+
+        daxa::BufferId stateBuffer;
+        daxa::TaskBuffer task_stateBuffer;
 
         std::unique_ptr<Image> blue_noise_images_data[64];
         daxa::ImageId blue_noise_images[64];
@@ -167,12 +171,13 @@ class VoxelRenderer
             render_composite_compute = renderer->AddComputePipeline<ComputePush>("composite", "composite.slang");
 
             // Initialize occupancy buffer
-            renderer->CreateBuffer<ChunkOccupancy>("chunk_occupancy", chunk_occupancy_buffer, task_chunk_occupancy_buffer);
-            renderer->CreateBuffer<BrickOccupancy>("brick_occupancy", brick_occupancy_buffer, task_brick_occupancy_buffer);
-            renderer->CreateBuffer<Materials>("materials buffer", materials_buffer, task_materials_buffer, daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE);
-            renderer->CreateBuffer<VoxelMaterials>("voxel materials buffer", voxel_materials_buffer, task_voxel_materials_buffer);
-            renderer->CreateBuffer<RenderData>("state buffer", state_buffer, task_state_buffer);
-            renderer->CreateBuffer<GBuffer>("gbufferGPU", gbufferGPU, task_gbufferGPU);
+            renderer->CreateBuffer<Chunks>("Chunks", chunksBuffer, task_chunksBuffer);
+            renderer->CreateBuffer<Bricks>("Bricks", bricksBuffer, task_bricksBuffer);
+            renderer->CreateBuffer<BrickPointers>("BrickPointers", brickPtrBuffer, task_brickPtrBuffer);
+            renderer->CreateBuffer<Materials>("Materials", materialsBuffer, task_materialsBuffer, daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE);
+            renderer->CreateBuffer<MaterialPointers>("MaterialPointers", materialPtrBuffer, task_materialPtrBuffer);
+            renderer->CreateBuffer<RenderData>("RenderData", stateBuffer, task_stateBuffer);
+            renderer->CreateBuffer<GBuffer>("GBuffer", gbufferGPU, task_gbufferGPU);
 
             gbufferCPU.CreateImages(*renderer);
 
@@ -191,71 +196,71 @@ class VoxelRenderer
             float glowStrength = 2;
 
             // push default materials
-            auto materials_ptr = renderer->MapBufferAs<Materials>(materials_buffer);
-            materials_ptr->materials[0] = Material
+            auto materials_ptr = renderer->MapBufferAs<Materials>(materialsBuffer);
+            materials_ptr->data[0] = Material
             {
                 .albedo = {1.0, 0, 1.0},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 1,
             };
-            materials_ptr->materials[1] = Material // grass
+            materials_ptr->data[1] = Material // grass
             {
                 .albedo = {0.17f, 0.33f, 0.23f},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[2] = Material // stone
+            materials_ptr->data[2] = Material // stone
             {
                 .albedo = {0.5, 0.5, 0.5},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[3] = Material // dirt
+            materials_ptr->data[3] = Material // dirt
             {
                 .albedo = {0.14f, 0.09f, 0.02f},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[4] = Material // leaves
+            materials_ptr->data[4] = Material // leaves
             {
                 .albedo = {0.08f, 0.17f, 0.03f},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[5] = Material // wood
+            materials_ptr->data[5] = Material // wood
             {
                 .albedo = {0.17f, 0.09f, 0.03f},
                 .emission = {0.0f, 0.0f, 0.0f},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[6] = Material // purple glow
+            materials_ptr->data[6] = Material // purple glow
             {
                 .albedo = {0.8, 0.3, 1},
                 .emission = {0.8f * glowStrength, 0.3f * glowStrength, 1 * glowStrength},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[7] = Material // rblue glow
+            materials_ptr->data[7] = Material // rblue glow
             {
                 .albedo = {0.29f, 0.62f, 1},
                 .emission = {0.29f * glowStrength, 0.62f * glowStrength, 1 * glowStrength},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[8] = Material
+            materials_ptr->data[8] = Material
             {
                 .albedo = {0.3f, 0.79f, 0.69f},
                 .emission = {0.3f * glowStrength, 1.0f * glowStrength, 0.69f * glowStrength},
                 .transparency = 0.0f,
                 .roughness = 0.5f,
             };
-            materials_ptr->materials[9] = Material // water
+            materials_ptr->data[9] = Material // water
             {
                 .albedo = {0.3f, 0.79f, 0.69f},
                 .emission = {0, 0, 0},
@@ -263,7 +268,7 @@ class VoxelRenderer
                 .transparency = 0.5f,
                 .reflectivity = 0.2f,
             };
-            materials_ptr->materials[10] = Material // mirror
+            materials_ptr->data[10] = Material // mirror
             {
                 .albedo = {0.9, 1, 0.9},
                 .emission = {0, 0, 0},
@@ -274,11 +279,11 @@ class VoxelRenderer
 
         ~VoxelRenderer()
         {
-            renderer->DestroyBuffer(chunk_occupancy_buffer);
-            renderer->DestroyBuffer(brick_occupancy_buffer);
-            renderer->DestroyBuffer(materials_buffer);
-            renderer->DestroyBuffer(voxel_materials_buffer);
-            renderer->DestroyBuffer(state_buffer);
+            renderer->DestroyBuffer(chunksBuffer);
+            renderer->DestroyBuffer(bricksBuffer);
+            renderer->DestroyBuffer(materialsBuffer);
+            renderer->DestroyBuffer(materialPtrBuffer);
+            renderer->DestroyBuffer(stateBuffer);
             renderer->DestroyBuffer(gbufferGPU);
 
             for (int i = 0; i < 64; i++)
@@ -303,18 +308,18 @@ class VoxelRenderer
         void InitializeTasks(daxa::TaskGraph &task_graph, daxa::TaskImage *task_render_image, daxa::ImageId *render_image)
         {
             task_graph.use_persistent_image(*task_render_image);
-            task_graph.use_persistent_buffer(task_chunk_occupancy_buffer);
-            task_graph.use_persistent_buffer(task_brick_occupancy_buffer);
-            task_graph.use_persistent_buffer(task_materials_buffer);
-            task_graph.use_persistent_buffer(task_voxel_materials_buffer);
-            task_graph.use_persistent_buffer(task_state_buffer);
+            task_graph.use_persistent_buffer(task_chunksBuffer);
+            task_graph.use_persistent_buffer(task_bricksBuffer);
+            task_graph.use_persistent_buffer(task_brickPtrBuffer);
+            task_graph.use_persistent_buffer(task_materialsBuffer);
+            task_graph.use_persistent_buffer(task_materialPtrBuffer);
+            task_graph.use_persistent_buffer(task_stateBuffer);
             task_graph.use_persistent_image(task_blue_noise_image);
             task_graph.use_persistent_buffer(task_gbufferGPU);
             gbufferCPU.UseImages(task_graph);
 
             renderer->AddTask(InlineTask("setup_gbuffer")
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_state_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, task_gbufferGPU)
+                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_WRITE, {task_stateBuffer, task_gbufferGPU})
                               .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_WRITE_CONCURRENT, gbufferCPU.task_images)
                               .SetTask(
                                   [this](daxa::TaskInterface ti)
@@ -323,15 +328,13 @@ class VoxelRenderer
 
                 stateData.lastCamera = stateData.camera;
                 stateData.camera = camera.getCameraData();
-                renderer->CopyToBuffer<RenderData>(ti, stateData, ti.get(task_state_buffer), 0);
+                renderer->CopyToBuffer<RenderData>(ti, stateData, ti.get(task_stateBuffer), 0);
             }));
 
             renderer->AddTask(
                 InlineTask("terrain_gen")
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_chunk_occupancy_buffer)
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_brick_occupancy_buffer)
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, task_voxel_materials_buffer)
-                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_state_buffer)
+                .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE_CONCURRENT, {task_chunksBuffer, task_bricksBuffer, task_brickPtrBuffer, task_materialPtrBuffer})
+                .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_stateBuffer)
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
             {
@@ -340,60 +343,65 @@ class VoxelRenderer
 
                 auto push = ComputePush
                 {
-                    .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer, 0),
-                    .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer, 0),
-                    .voxel_materials_ptr = renderer->GetDeviceAddress(ti, task_voxel_materials_buffer, 0),
-                    .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer, 0)};
+                    .chunksBuffer = renderer->GetDeviceAddress(ti, task_chunksBuffer, 0),
+                    .bricksBuffer = renderer->GetDeviceAddress(ti, task_bricksBuffer, 0),
+                    .brickPtrBuffer = renderer->GetDeviceAddress(ti, task_brickPtrBuffer, 0),
+                    .materialPtrBuffer = renderer->GetDeviceAddress(ti, task_materialPtrBuffer, 0),
+                    .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer, 0)
+                };
                 ti.recorder.set_pipeline(*terrain_compute);
 
-                push.pass = 1;
+                push.passNum = 1;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4});
 
-                push.pass = 2;
+                push.passNum = 2;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4});
 
                 dirtyTerrain = false;
             }));
 
+
+
+
+
             renderer->AddTask(InlineTask("main_render_gbuffer")
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_chunk_occupancy_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_brick_occupancy_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_voxel_materials_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_materials_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_state_buffer)
+                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, {task_chunksBuffer, task_bricksBuffer, task_brickPtrBuffer, task_materialPtrBuffer, task_materialsBuffer})
+                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_stateBuffer)
                               .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
                               .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, gbufferCPU.task_images)
-                              .SetTask(
-                                  [this, render_image](daxa::TaskInterface ti)
+                              .SetTask([this, render_image](daxa::TaskInterface ti)
             {
                 auto push = ComputePush
                 {
                     .gbuffer = renderer->GetDeviceAddress(ti, task_gbufferGPU),
-                    .chunk_occupancy_ptr = renderer->GetDeviceAddress(ti, task_chunk_occupancy_buffer),
-                    .brick_occupancy_ptr = renderer->GetDeviceAddress(ti, task_brick_occupancy_buffer),
-                    .materials_ptr = renderer->GetDeviceAddress(ti, task_materials_buffer),
-                    .voxel_materials_ptr = renderer->GetDeviceAddress(ti, task_voxel_materials_buffer),
-                    .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer),
+                    .chunksBuffer = renderer->GetDeviceAddress(ti, task_chunksBuffer),
+                    .bricksBuffer = renderer->GetDeviceAddress(ti, task_bricksBuffer),
+                    .brickPtrBuffer = renderer->GetDeviceAddress(ti, task_brickPtrBuffer),
+                    .materialsBuffer = renderer->GetDeviceAddress(ti, task_materialsBuffer),
+                    .materialPtrBuffer = renderer->GetDeviceAddress(ti, task_materialPtrBuffer),
+                    .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer),
                     .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
-                    .frame_dim = {renderer->surface_width, renderer->surface_height}};
+                    .blueNoiseStatic = blue_noise_images[0].default_view(),
+                    .screenSize = {renderer->surface_width, renderer->surface_height}
+                };
 
-                push.pass = 0;
+                push.passNum = 0;
                 ti.recorder.set_pipeline(*render_gbuffer_compute);
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
 
-                push.pass = 1;
+                push.passNum = 1;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
             }));
 
             renderer->AddTask(InlineTask("composite_render")
                               .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_WRITE_ONLY, *task_render_image)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_materials_buffer)
-                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_state_buffer)
+                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_materialsBuffer)
+                              .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_stateBuffer)
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
                               .AddAllAttachments(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, gbufferCPU.task_images)
                               .SetTask(
@@ -402,10 +410,10 @@ class VoxelRenderer
                 auto push = ComputePush
                 {
                     .gbuffer = renderer->GetDeviceAddress(ti, task_gbufferGPU),
-                    .materials_ptr = renderer->GetDeviceAddress(ti, task_materials_buffer),
-                    .state_ptr = renderer->GetDeviceAddress(ti, task_state_buffer),
-                    .final_image = render_image->default_view(),
-                    .frame_dim = {renderer->surface_width, renderer->surface_height}};
+                    .materialsBuffer = renderer->GetDeviceAddress(ti, task_materialsBuffer),
+                    .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer),
+                    .screen = render_image->default_view(),
+                    .screenSize = {renderer->surface_width, renderer->surface_height}};
 
                 ti.recorder.set_pipeline(*render_composite_compute);
                 ti.recorder.push_constant(push);

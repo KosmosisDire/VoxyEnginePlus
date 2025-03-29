@@ -3,8 +3,8 @@
 #include "lygia/generative/snoise.hlsl"
 
 // Terrain generation parameters
-static const float noiseScale = 0.1f;
-static const uint blockSize = 6;
+static const float noiseScale = 0.07f;
+static const uint blockSize = 12;
 
 // Convert grid coordinates to world position for noise sampling
 float3 gridToWorldPos(int3 gridPos)
@@ -26,40 +26,56 @@ float3 getBlockAlignedPos(int3 gridPos)
 bool calculateSolid(int3 gridPos)
 {
     float3 worldBlockPos = getBlockAlignedPos(gridPos);
-    float scale = noiseScale * (snoise(worldBlockPos * noiseScale * 0.1f) + 1.0f);
+    float scale = noiseScale * (snoise(worldBlockPos * noiseScale * 0.001f) + 1.0f);
 
     // Height map with 3 levels of noise
     float h = snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.1f) * 2.0f;
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.5f) * 0.5f;
     h += snoise(float2(worldBlockPos.x, worldBlockPos.z) * scale * 0.9f) * 0.25f;
     h = h * 0.5f + 0.5f;
-    h *= 3.0f / scale;
-    h += 14.0f;
+    h *= 1.0f / scale;
+
+    float heightOffset = 90;
+    h += heightOffset;
 
     // Generate holes
     float holes = snoise(worldBlockPos * scale * 0.1);
 
     // Generate caves
-    float caves = snoise(worldBlockPos * scale * 1.0f) * 0.5f + 0.3f;
+    float caves = snoise(worldBlockPos * scale * 0.5f) * 0.5f + 0.3f;
 
-    return worldBlockPos.y < h && holes > -0.5f && !(caves > -0.2f && caves < 0.2f);
+    // cliffs
+    float cliffs = snoise(worldBlockPos * scale * 0.5f);
+    cliffs += snoise(worldBlockPos * scale * 0.01f) * 0.5f;
+
+    cliffs = cliffs / (gridPos.y) * GRID_SIZE * CHUNK_SIZE * 4;
+
+    if (cliffs > 0.1)
+    {
+        h *= 1.1f;
+    }
+
+    if (cliffs > 0.8)
+    {
+        h *= 1.1f;
+    }
+
+    return worldBlockPos.y < h && holes > -0.5f && !(caves > -0.05f && caves < 0.05f);
 }
 
 // Helper function to set voxel material safely
-void setVoxelMaterial(uint globalVoxelIndex, uint material)
+void setVoxelMaterial(uint brickIndex, uint8_t material)
 {
     // Clear the old bits
-    p.voxel_materials_ptr.materials[globalVoxelIndex / 8] &= ~(0xF << ((globalVoxelIndex % 8) * 4));
-    // Set the new bits
-    p.voxel_materials_ptr.materials[globalVoxelIndex / 8] |= ((material & 0xF) << ((globalVoxelIndex % 8) * 4));
+    p.materialPtrBuffer.data[brickIndex] = material;
 }
 
 // Helper function to determine material based on conditions
 uint selectMaterial(int3 brickPos, int3 voxelPos)
 {
     float noise = snoise(voxelPos * 0.01f + snoise(voxelPos) * 0.03);
-    var isSolidAbove = calculateSolid(brickPos * blockSize + int3(0, blockSize, 0));
-    var isSolidAboveFar = calculateSolid(brickPos * blockSize + int3(0, blockSize * 4, 0));
+    var isSolidAbove = calculateSolid(brickPos * BRICK_SIZE + int3(0, blockSize, 0));
+    var isSolidAboveFar = calculateSolid(brickPos * BRICK_SIZE + int3(0, blockSize * 4, 0));
 
     if (!isSolidAbove)
     {
@@ -78,39 +94,6 @@ uint selectMaterial(int3 brickPos, int3 voxelPos)
         return 2;
     }
 }
-
-// function to set whole brick to full with a material
-void fillBrick(uint brickIndex, uint material)
-{
-    if (brickIndex >= TOTAL_BRICKS)
-        return;
-
-    BrickBitmask brickOccupancy;
-    brickOccupancy.data = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
-
-    for (uint i = 0; i < BRICK_SIZE * BRICK_SIZE * BRICK_SIZE; i++)
-    {
-        setVoxelMaterial(voxelGlobalIndex(brickIndex, i), material);
-    }
-
-    p.brick_occupancy_ptr.occupancy[brickIndex] = brickOccupancy;
-    p.chunk_occupancy_ptr.occupancy[brickIndex / CHUNK_SIZE_CUBE] = 0xFFFFFFFF;
-}
-
-void clearBrick(uint brickIndex)
-{
-    BrickBitmask brickOccupancy;
-    brickOccupancy.data = {0, 0, 0, 0, 0, 0, 0, 0};
-
-    for (uint i = 0; i < BRICK_SIZE * BRICK_SIZE * BRICK_SIZE; i++)
-    {
-        clearBit(brickOccupancy, i);
-    }
-
-    p.brick_occupancy_ptr.occupancy[brickIndex] = brickOccupancy;
-    p.chunk_occupancy_ptr.occupancy[brickIndex / CHUNK_SIZE_CUBE] = 0;
-}
-
 
 // Structure to hold brick and voxel indices
 struct VoxelIndices
@@ -170,8 +153,8 @@ void setWorldVoxel(int3 worldPos, uint material)
     setVoxelMaterial(globalVoxelIndex, material);
 
     // Update occupancy
-    setBit(p.brick_occupancy_ptr.occupancy[indices.brickIndex], indices.voxelIndex);
-    setBit(p.chunk_occupancy_ptr, indices.brickIndex / CHUNK_SIZE_CUBE, indices.brickIndex % CHUNK_SIZE_CUBE);
+    setBit(p.bricksBuffer.data[indices.brickIndex], indices.voxelIndex);
+    setBit(p.bricksBuffer, indices.brickIndex / CHUNK_SIZE_CUBE, indices.brickIndex % CHUNK_SIZE_CUBE);
 }
 
 // Check if a world position contains a voxel
@@ -181,7 +164,7 @@ bool hasWorldVoxel(int3 worldPos)
     if (!indices.isValid)
         return false;
 
-    BrickBitmask occupancy = p.brick_occupancy_ptr.occupancy[indices.brickIndex];
+    BrickBitmask occupancy = p.bricksBuffer.data[indices.brickIndex];
     return getBit(occupancy, indices.voxelIndex);
 }
 
@@ -199,60 +182,44 @@ void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_Group
     int localBrickIndex = brickLocalIndex(localBrickCoord);
     int brickIndex = brickGlobalIndex(chunkIndex, localBrickIndex);
 
-    if (p.pass == 1)
+    // write to bricks as well
+    p.bricksBuffer.data[0].data = {0, 0, 0, 0, 0, 0, 0, 0};
+    p.bricksBuffer.data[1].data = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+    
+
+    if (p.passNum == 1)
     {
-        BrickBitmask brickOccupancy;
-        brickOccupancy.data = {0, 0, 0, 0, 0, 0, 0, 0};
+        var absVoxel = brickCoord * BRICK_SIZE;
+        bool isSolid = calculateSolid(absVoxel);
+        p.brickPtrBuffer.data[brickIndex] = isSolid ? 1 : 0;
+        setVoxelMaterial(brickIndex, selectMaterial(brickCoord, absVoxel));
 
-        bool hasVoxel = false;
-        for (uint z = 0; z < BRICK_SIZE; z++)
+        // for (uint z = 0; z < BRICK_SIZE; z++)
+        // {
+        //     for (uint y = 0; y < BRICK_SIZE; y++)
+        //     {
+        //         for (uint x = 0; x < BRICK_SIZE; x++)
+        //         {
+        //             int3 localVoxelPos = int3(x, y, z);
+        //             int3 absVoxel = brickCoord * BRICK_SIZE + localVoxelPos;
+        //             int voxelIndex = voxelLocalIndex(localVoxelPos);
+
+        //             uint globalVoxelIndex = voxelGlobalIndex(brickIndex, voxelIndex);
+        //             setVoxelMaterial(globalVoxelIndex, selectMaterial(brickCoord, absVoxel));
+        //             // setVoxelMaterial(globalVoxelIndex, 0);
+        //         }
+        //     }
+        // }
+
+        // p.bricksBuffer.data[brickIndex] = brickOccupancy;
+
+        if (isSolid)
         {
-            for (uint y = 0; y < BRICK_SIZE; y++)
-            {
-                for (uint x = 0; x < BRICK_SIZE; x++)
-                {
-                    int3 localVoxelPos = int3(x, y, z);
-                    int3 absVoxel = brickCoord * BRICK_SIZE + localVoxelPos;
-                    int voxelIndex = voxelLocalIndex(localVoxelPos);
-
-                    bool isSolid = calculateSolid(absVoxel);
-
-                    if (isSolid)
-                    {
-                        uint globalVoxelIndex = voxelGlobalIndex(brickIndex, voxelIndex);
-                        setVoxelMaterial(globalVoxelIndex, selectMaterial(brickCoord, absVoxel));
-                        setBit(brickOccupancy, voxelIndex);
-
-                        hasVoxel = true;
-                    }
-                    else
-                    {
-                        if (absVoxel.y <= 400) // water
-                        {
-                            uint globalVoxelIndex = voxelGlobalIndex(brickIndex, voxelIndex);
-                            setVoxelMaterial(globalVoxelIndex, 9);
-                            setBit(brickOccupancy, voxelIndex);
-
-                            hasVoxel = true;
-                        }
-                        else
-                        {
-                            clearBit(brickOccupancy, voxelIndex);
-                        }
-                    }
-                }
-            }
-        }
-
-        p.brick_occupancy_ptr.occupancy[brickIndex] = brickOccupancy;
-
-        if (hasVoxel)
-        {
-            setBit(p.chunk_occupancy_ptr, chunkIndex, localBrickIndex);
+            setBit(p.chunksBuffer, chunkIndex, localBrickIndex);
         }
         else
         {
-            clearBit(p.chunk_occupancy_ptr, chunkIndex, localBrickIndex);
+            clearBit(p.chunksBuffer, chunkIndex, localBrickIndex);
         }
     }
 }

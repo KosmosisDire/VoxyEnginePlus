@@ -1,20 +1,47 @@
-#include "tracing/trace.slang"
 
+
+
+#include "tracing/trace.slang"
+#include "atmosphere.slang"
+
+//------------------------------------------------------------------------------
+// Constants and Configuration
+//------------------------------------------------------------------------------
+
+// Vectors and thresholds
 static const float3 UP_VECTOR = float3(0, 1, 0);
 static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
-static const float TAA_BLEND_FACTOR = 1/16.0f;
+
+// TAA constants
+static const float TAA_BLEND_FACTOR = 0.1f;
+static const float TAA_MOTION_REJECTION_THRESHOLD = 0.5f;
+
+// AO configuration 
+static const int AO_SAMPLE_COUNT = 1;  // Increased from 1 for better quality
+static const float AO_RADIUS = 4.0f;
+static const float AO_INTENSITY = 1.0f;
+static const float AO_BIAS = 0.001f;
+static const float AO_DISTANCE_SCALING = 0.8f;
+
+// Lighting parameters
+static const float SPECULAR_POWER = 32.0f;
+static const float SPECULAR_INTENSITY = 0.5f;
+static const float AMBIENT_LIGHT_LEVEL = 0.1f;
+static const float NORMAL_NOISE_AMOUNT = 0.03f;
+
+//------------------------------------------------------------------------------
+// Motion and Reprojection
+//------------------------------------------------------------------------------
 
 bool validateReprojection(float3 currentPosition, float3 previousPosition)
 {
-    float xDiff = abs(currentPosition.x - previousPosition.x) * 10;
-    float yDiff = abs(currentPosition.y - previousPosition.y) * 10;
-    float zDiff = abs(currentPosition.z - previousPosition.z) * 10;
-
-    return xDiff < WORLD_VOXEL_SIZE || yDiff < WORLD_VOXEL_SIZE || zDiff < WORLD_VOXEL_SIZE;
+    float3 diff = abs(currentPosition - previousPosition);
+    return all(diff < WORLD_VOXEL_SIZE);
 }
 
-float2 calculateMotionClip(float3 worldPos, float4x4 viewProj, float4x4 lastViewProj, float2 currentJitter, float2 previousJitter)
+float2 calculateMotionVector(float3 worldPos, float4x4 viewProj, float4x4 lastViewProj, 
+                            float2 currentJitter, float2 previousJitter)
 {
     float4 currentClip = mul(viewProj, float4(worldPos, 1.0));
     float4 previousClip = mul(lastViewProj, float4(worldPos, 1.0));
@@ -22,11 +49,15 @@ float2 calculateMotionClip(float3 worldPos, float4x4 viewProj, float4x4 lastView
     float2 currentPos = currentClip.xy / currentClip.w;
     float2 previousPos = previousClip.xy / previousClip.w;
 
-    // Add jitter offset difference to motion vector
-    float2 jitterOffset = (previousJitter - currentJitter) / float2(p.frame_dim) * 2.0f;
+    // Add jitter offset difference
+    float2 jitterOffset = (previousJitter - currentJitter) / float2(p.screenSize) * 2.0f;
     
     return (previousPos - currentPos);
 }
+
+//------------------------------------------------------------------------------
+// TAA Implementation
+//------------------------------------------------------------------------------
 
 void getBilinearWeights(float2 pos, out int2 baseCoord, out float2 weights)
 {
@@ -42,11 +73,11 @@ float3 sampleHistoryBilinear(RWTexture2D<float3> history, float2 pos, float2 dim
 
     // Clamp coordinates to texture bounds
     int2 c00 = clamp(baseCoord, int2(0, 0), int2(dimensions) - 1);
-    int2 c10 = clamp(int2(baseCoord.x + 1, baseCoord.y), int2(0, 0), int2(dimensions) - 1);
-    int2 c01 = clamp(int2(baseCoord.x, baseCoord.y + 1), int2(0, 0), int2(dimensions) - 1);
+    int2 c10 = clamp(baseCoord + int2(1, 0), int2(0, 0), int2(dimensions) - 1);
+    int2 c01 = clamp(baseCoord + int2(0, 1), int2(0, 0), int2(dimensions) - 1);
     int2 c11 = clamp(baseCoord + int2(1, 1), int2(0, 0), int2(dimensions) - 1);
 
-    // Sample four nearest pixels
+    // Sample nearest pixels
     float3 s00 = history[c00];
     float3 s10 = history[c10];
     float3 s01 = history[c01];
@@ -58,17 +89,19 @@ float3 sampleHistoryBilinear(RWTexture2D<float3> history, float2 pos, float2 dim
     return lerp(s0, s1, weights.y);
 }
 
-// Find minimum and maximum color in neighborhood for clamping
 struct ColorBounds {
     float3 min;
     float3 max;
 };
 
-ColorBounds findNeighborhoodBounds(RWTexture2D<float3> current, uint2 pixel, uint2 dimensions, int radius)
+ColorBounds findNeighborhoodBounds(RWTexture2D<float3> current, uint2 pixel, uint2 dimensions)
 {
     ColorBounds bounds;
     bounds.min = float3(1.0, 1.0, 1.0);
     bounds.max = float3(0.0, 0.0, 0.0);
+    
+    // Use a compact 3x3 neighborhood for better performance
+    const int radius = 1;
     
     for (int y = -radius; y <= radius; y++)
     {
@@ -82,13 +115,12 @@ ColorBounds findNeighborhoodBounds(RWTexture2D<float3> current, uint2 pixel, uin
         }
     }
     
+    // Slightly expand bounds to reduce flickering
+    float3 boundDelta = (bounds.max - bounds.min) * 0.1f;
+    bounds.min -= boundDelta;
+    bounds.max += boundDelta;
+    
     return bounds;
-}
-
-// Clamp history color to neighborhood bounds to reduce ghosting
-float3 clipToNeighborhood(float3 color, ColorBounds bounds)
-{
-    return clamp(color, bounds.min, bounds.max);
 }
 
 float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history, 
@@ -97,115 +129,134 @@ float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history,
     // Sample history color using bilinear filtering
     float3 previousColor = sampleHistoryBilinear(history, previousPixel, dimensions);
     
-    // Find neighborhood bounds for color clamping (use 3x3 neighborhood)
-    // ColorBounds bounds = findNeighborhoodBounds(current, pixel, dimensions, 1);
+    // Find neighborhood bounds for color clamping
+    ColorBounds bounds = findNeighborhoodBounds(current, pixel, uint2(dimensions));
     
-    // Clamp history color to neighborhood bounds to reduce ghosting
-    // previousColor = clipToNeighborhood(previousColor, bounds);
+    // Clamp history color to reduce ghosting
+    previousColor = clamp(previousColor, bounds.min, bounds.max);
     
     // Blend between current and history colors
     return lerp(previousColor, currentColor, TAA_BLEND_FACTOR);
 }
 
-// Configuration parameters for AO
-static const int AO_SAMPLE_COUNT = 1;
-static const float AO_RADIUS = 100.0f;
-static const float AO_INTENSITY = 1.0f;
-static const float AO_BIAS = 0.001;
+//------------------------------------------------------------------------------
+// Lighting Helpers
+//------------------------------------------------------------------------------
 
-
-// Creates a 3x3 rotation matrix that rotates from up vector to the given normal
-float3x3 CreateRotationFromNormal3x3(float3 normal)
+float3x3 createRotationFromNormal(float3 normal)
 {
-    // Ensure normal is normalized
     normal = normalize(normal);
-
-    // Check if normal is nearly parallel to up vector
+    
     float upDot = dot(normal, UP_VECTOR);
-
     float3 right;
+    
     if (abs(upDot) > PARALLEL_THRESHOLD)
     {
-        // If parallel, use forward vector as reference
         right = normalize(cross(FORWARD_VECTOR, normal));
     }
     else
     {
         right = normalize(cross(UP_VECTOR, normal));
     }
-
-    // Create forward vector to complete orthonormal basis
+    
     float3 forward = normalize(cross(normal, right));
-
-    // Construct rotation matrix
-    // Each column represents one of our basis vectors
+    
     return float3x3(
         right.x, normal.x, forward.x,
         right.y, normal.y, forward.y,
         right.z, normal.z, forward.z);
 }
 
-float calculateAmbientOcclusion(float3 position, float3 normal, uint2 pixel)
+float calculateAmbientOcclusion(float3 position, float distance, float3 normal, float4 noiseVec)
 {
     float occlusion = 0.0f;
+    float adaptiveRadius = AO_RADIUS * min(1.0f, AO_RADIUS / distance);
     
-    // Get random rotation vector from blue noise texture
-    RWTexture2D<float4> blueNoise = RWTexture2D<float4>.get(p.blueNoise);
-    float4 noiseVec = blueNoise[pixel % 64];
+    // Adaptively reduce sample count based on distance for better performance
+    int sampleCount = AO_SAMPLE_COUNT;
+    if (distance > 20) sampleCount = max(2, sampleCount / 2);
+    if (distance > 40) sampleCount = max(1, sampleCount / 2);
     
-    // Sample points around the hemisphere
-    for (int i = 0; i < AO_SAMPLE_COUNT; i++)
+    float3x3 rotation = createRotationFromNormal(normal);
+    
+    for (int i = 0; i < sampleCount; i++)
     {
+        // Generate sample direction using blue noise for better distribution
         float3 sampleDir = noiseVec.xyz;
         sampleDir = float3(sampleDir.x * 2.0f - 1.0f, sampleDir.y - 0.2f, sampleDir.z * 2.0f - 1.0f);
         sampleDir = normalize(sampleDir);
-
-        // rotate ray around y axis
-        float angle = noiseVec.w * 2 * PI * float(i) / float(AO_SAMPLE_COUNT);
+        
+        // Rotate sample direction to create better distribution
+        float angle = noiseVec.w * 2 * PI * float(i) / float(sampleCount);
         float s = sin(angle);
         float c = cos(angle);
         sampleDir = float3(sampleDir.x * c - sampleDir.z * s, sampleDir.y, sampleDir.x * s + sampleDir.z * c);
-
-        // Rotate sample direction to match normal
-        float3x3 rotation = CreateRotationFromNormal3x3(normal);
+        
+        // Transform sample to align with normal
         sampleDir = mul(rotation, sampleDir);
         
-        // Create the ray for occlusion testing
+        // Create ray for occlusion testing
         Ray aoRay;
-        aoRay.origin = position + normal * AO_BIAS; // Avoid self-intersection
+        aoRay.origin = position + normal * AO_BIAS;
         aoRay.direction = sampleDir;
-        aoRay.maxDist = 50 * AO_RADIUS;
         
-        // Trace the ray with limited distance (AO_RADIUS)
+        // Use adaptive ray length based on distance
+        aoRay.maxIterations = 8;
+        if (distance > 10) aoRay.maxIterations = 6;
+        if (distance > 40) aoRay.maxIterations = 4;
+        
+        // Trace the ray
         var aoHit = traceScene(aoRay, 0, false, false);
         
-        // If we hit something within our AO radius, it contributes to occlusion
-        if (aoHit.hit && aoHit.distance < AO_RADIUS)
+        // Accumulate occlusion with distance-based falloff
+        if (aoHit.hit && aoHit.distance < adaptiveRadius)
         {
-            // Weight by distance - farther hits occlude less
-            float weight = 1.0f - (aoHit.distance / AO_RADIUS);
+            float weight = 1.0f - pow(aoHit.distance / adaptiveRadius, AO_DISTANCE_SCALING);
             occlusion += weight;
         }
     }
     
     // Normalize and apply intensity
-    occlusion = occlusion / float(AO_SAMPLE_COUNT);
-    occlusion = pow(occlusion, 1.5f); // Optional: Adjust occlusion curve
+    occlusion = occlusion / float(sampleCount);
+    occlusion = pow(occlusion, 1.5f); // Adjusts occlusion curve for better appearance
     occlusion *= AO_INTENSITY;
     
-    // Return visibility (1.0 = fully visible, 0.0 = fully occluded)
-    return 1.0f - occlusion;
+    // Return visibility factor
+    return saturate(1.0f - occlusion);
 }
 
+uint hash(uint x) {
+    x ^= x >> 16;
+    x *= 0x85ebca6b;
+    x ^= x >> 13; 
+    x *= 0xc2b2ae35;
+    x ^= x >> 16;
+    return x;
+}
 
+float3 calculateSpecular(float3 viewDirection, float3 normal, float3 lightDirection, float specularPower, float specularIntensity)
+{
+    float3 halfVector = normalize(viewDirection + lightDirection);
+    float NdotH = max(dot(normal, halfVector), 0.0f);
+    
+    // Use smoother specular falloff for more pleasing highlights
+    float specularFactor = pow(NdotH, specularPower);
+    
+    return float3(specularIntensity * specularFactor);
+}
+
+//------------------------------------------------------------------------------
+// Main Shader
+//------------------------------------------------------------------------------
 
 [numthreads(32, 32, 1)]
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     uint2 pixel = pixel_i.xy;
-    if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
+    if (any(pixel >= p.screenSize))
         return;
 
+    // Get G-buffer textures
     RWTexture2D<float3> albedo = RWTexture2D<float3>.get(p.gbuffer.color);
     RWTexture2D<float3> normalTex = RWTexture2D<float3>.get(p.gbuffer.normal);
     RWTexture2D<float3> position = RWTexture2D<float3>.get(p.gbuffer.position);
@@ -213,13 +264,21 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depth = RWTexture2D<float>.get(p.gbuffer.depth);
     RWTexture2D<float3> history = RWTexture2D<float3>.get(p.gbuffer.history);
     RWTexture2D<float3> currentFrame = RWTexture2D<float3>.get(p.gbuffer.currentFrame);
+    RWTexture2D<float4> blueNoise = RWTexture2D<float4>.get(p.blueNoise);
+    RWTexture2D<float4> blueNoiseStatic = RWTexture2D<float4>.get(p.blueNoiseStatic);
 
-    // First pass: Generate GBuffer data and initial color
-    if (p.pass == 0)
+    float4 noiseVec = blueNoise[pixel % 128];
+
+    //--------------------------------------------------------------------------
+    // Pass 0: Generate GBuffer and initial color
+    //--------------------------------------------------------------------------
+    if (p.passNum == 0)
     {
-        var ray = Ray.FromPixelJitter(pixel, p.frame_dim, p.state_ptr.camera);
+        // Generate primary ray
+        var ray = Ray.FromPixelJitter(pixel, p.screenSize, p.stateBuffer.camera);
         var hit = traceScene(ray, 0, false);
 
+        // Early out for sky/background
         if (!hit.hit)
         {
             normalTex[pixel] = 0;
@@ -229,75 +288,130 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             return;
         }
         
+        // Extract hit information
         float3 worldNormal = hit.normal;
         float3 worldPos = ray.origin + ray.direction * hit.distance;
         
         // Write GBuffer data
         normalTex[pixel] = worldNormal;
         position[pixel] = worldPos;
-        // In the first pass (p.pass == 0)
-        float2 currentJitter = Ray.getJitterOffset(p.state_ptr.frame);
-        float2 previousJitter = Ray.getJitterOffset(p.state_ptr.frame - 1);
-        float2 motionClip = calculateMotionClip(worldPos, p.state_ptr.camera.viewProj, p.state_ptr.lastCamera.viewProj, currentJitter, previousJitter);
+        
+        // Calculate motion vectors for TAA
+        float2 currentJitter = Ray.getJitterOffset(p.stateBuffer.frame);
+        float2 previousJitter = Ray.getJitterOffset(p.stateBuffer.frame - 1);
+        float2 motionVector = calculateMotionVector(
+            worldPos, 
+            p.stateBuffer.camera.viewProj, 
+            p.stateBuffer.lastCamera.viewProj, 
+            currentJitter, 
+            previousJitter
+        );
 
-        motion[pixel] = motionClip;
+        motion[pixel] = motionVector;
         depth[pixel] = hit.distance;
 
-        
-
-        // Get base color from material
+        // Get material properties
         float3 baseColor = getMaterial(hit.materialId).albedo;
+        float specularStrength = 1.0f; // Can be adjusted from material properties
 
-        // shadow
-        // first calc dot product between normal and light direction
-        float3 lightDir = normalize(p.state_ptr.sunDir);
-        float dot = dot(worldNormal, lightDir);
-        // baseColor *= max(dot, 0.2);
+        // View and light directions
+        float3 lightDir = normalize(p.stateBuffer.sunDir);
+        float3 viewDir = -ray.direction;
 
-        // cast shadow ray
+        // Initialize atmosphere
+        var atmosphere = initAtmosphere(lightDir, p.stateBuffer.sunDir);
+        float3 sunColor = saturate(getSunColor(atmosphere));
+        
+        // Shadow calculation
         Ray shadowRay;
-        shadowRay.origin = worldPos + worldNormal * 0.0001f;
+        shadowRay.origin = worldPos + worldNormal * 0.0001f; // Offset to avoid self-intersection
         shadowRay.direction = lightDir;
         var shadowHit = traceScene(shadowRay, 0, false);
         
+        // Add subtle normal variation using blue noise for more natural lighting
+        uint uniqueIndex = hash(hit.voxelIndex ^ (hit.brickIndex << 16));
+        uint blueNoiseIndex = uniqueIndex % 128;
+        float3 perturbedNormal = normalize(worldNormal + 
+            (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
+            
+        // Calculate lighting
+        float3 diffuseColor;
+        float3 specularColor = float3(0, 0, 0);
+        
+        // Direct lighting calculation (diffuse + specular)
         if (shadowHit.hit)
         {
-            baseColor *= 0.2f;
+            // In shadow - only ambient light
+            diffuseColor = baseColor * AMBIENT_LIGHT_LEVEL;
+        }
+        else
+        {
+            // Direct light - diffuse term
+            float NdotL = max(dot(perturbedNormal, lightDir), 0.0);
+            diffuseColor = baseColor * NdotL * sunColor;
+            
+            // Add specular highlight for non-shadowed areas
+            specularColor = calculateSpecular(viewDir, perturbedNormal, lightDir, 
+                SPECULAR_POWER, SPECULAR_INTENSITY * specularStrength) * sunColor;
         }
 
-        // Apply ambient occlusion
-        float ao = calculateAmbientOcclusion(worldPos, worldNormal, pixel);
-        baseColor *= ao + ((float)!shadowHit.hit) * 0.6f;
-        currentFrame[pixel] = baseColor;
-    }
+        // Calculate ambient occlusion
+        float ao = calculateAmbientOcclusion(worldPos, hit.distance, worldNormal, noiseVec);
+        
+        // Apply AO and atmosphere for better visual quality
+        if (!shadowHit.hit)
+        {
+            // Blend atmosphere influence based on AO
+            float aoFactor = 1.5 - ao;
+            ao = lerp(1.0f, aoFactor, 0.5); // Keep ao as a scalar value
+        }
 
-    // Second pass: Apply temporal anti-aliasing
-    else if (p.pass == 1)
+        // Combine all lighting components
+        float3 finalColor;
+        if (!shadowHit.hit) {
+            // Apply AO to diffuse and add atmosphere influence
+            finalColor = (diffuseColor * ao * sunColor) + specularColor;
+        } else {
+            // In shadow - just apply AO to ambient light
+            finalColor = diffuseColor * ao;
+        }
+        
+        // Store result
+        currentFrame[pixel] = finalColor;
+    }
+    
+    //--------------------------------------------------------------------------
+    // Pass 1: Apply temporal anti-aliasing
+    //--------------------------------------------------------------------------
+    else if (p.passNum == 1)
     {
         float3 worldPos = position[pixel];
-        float2 motionClip = motion[pixel];
-        float3 baseColor = currentFrame[pixel];
+        float2 motionVector = motion[pixel];
+        float3 currentColor = currentFrame[pixel];
 
-        float2 motionPixels = motionClip * (p.frame_dim * 0.5);
-        if (length(motionPixels) < 0.0001 || isnan(motionPixels.x) || isnan(motionPixels.y))
+        // Calculate previous pixel position
+        float2 motionPixels = motionVector * (p.screenSize * 0.5);
+        
+        // Check for invalid motion vectors
+        if (length(motionPixels) < 0.0001 || any(isnan(motionPixels)))
         {
             motionPixels = float2(0, 0);
         }
 
-        float2 prevPixel = float2(pixel) + float2(motionPixels);
-        bool valid = validateReprojection(worldPos, position[prevPixel]);
+        float2 prevPixel = float2(pixel) + motionPixels;
+        
+        // Validate reprojection
+        bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && 
+                                validateReprojection(worldPos, position[uint2(prevPixel)]);
 
-        float3 finalColor;
-        if (valid)
+        // Apply TAA only if reprojection is valid
+        float3 finalColor = currentColor;
+        if (validReprojection)
         {
-            finalColor = applyTAA(albedo, history, pixel, prevPixel, p.frame_dim, baseColor);
-        } 
-        else
-        {
-            finalColor = baseColor;
+            finalColor = applyTAA(currentFrame, history, pixel, prevPixel, p.screenSize, currentColor);
         }
 
-        // Write final color to output
+        // Write final color
         albedo[pixel] = finalColor;
         currentFrame[pixel] = finalColor;
     }

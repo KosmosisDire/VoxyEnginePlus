@@ -685,4 +685,5 @@ namespace Math { float Infinity; }
 namespace Math { float NegativeInfinity; }
 Vector3 sunDir;
 Camera camera;
+float dt;
 

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "user-interface/root.hpp"
 #include "vox/shaders/shared.inl"
 #include <scripting/scripting.hpp>
@@ -30,6 +31,7 @@ struct VoxyApp : public Application
 
             scriptingEngine.registerProperty("Vector3 sunDir", &voxelRenderer.stateData.sunDir);
             scriptingEngine.registerProperty("Camera camera", &voxelRenderer.camera);
+            scriptingEngine.registerProperty("float dt", &voxelRenderer.stateData.dt);
         }
 
         ~VoxyApp()
@@ -85,7 +87,7 @@ struct VoxyApp : public Application
                 Input::CaptureMouseResetDelta(true);
             }
 
-            scripts->executeFunction("void Update(float dt)", dt);
+            scripts->executeFunction("void Update()");
             voxelRenderer.Update();
         }
 

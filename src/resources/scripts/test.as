@@ -1,6 +1,6 @@
 
 
-void Update(float dt)
+void Update()
 {
     if (Input::IsKeyPressed(Key::L))
     {
@@ -19,8 +19,9 @@ void Update(float dt)
 
     if (Input::IsMouseCaptured())
     {
+        camera.speed = 30;
         camera.processMouseMovement(-Input::GetMouseDelta(), true);
-        camera.processKeyboard(0.01);
+        camera.processKeyboard(dt);
     }
 
 }

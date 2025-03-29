@@ -7,11 +7,11 @@
 void main(uint3 pixel_i: SV_DispatchThreadID)
 {
     uint2 pixel = pixel_i.xy;
-    if (pixel.x >= p.frame_dim.x || pixel.y >= p.frame_dim.y)
+    if (pixel.x >= p.screenSize.x || pixel.y >= p.screenSize.y)
         return;
 
     // Retrieve our render targets and G-buffer textures.
-    RWTexture2D<float4> render_image = RWTexture2D<float4>.get(p.final_image);
+    RWTexture2D<float4> screenTex = RWTexture2D<float4>.get(p.screen);
     RWTexture2D<float3> albedoTex = RWTexture2D<float3>.get(p.gbuffer.color);
     RWTexture2D<uint2> voxelIDTex = RWTexture2D<uint2>.get(p.gbuffer.voxelIDs);
     RWTexture2D<uint> voxelFaceIDTex = RWTexture2D<uint>.get(p.gbuffer.voxelFaceIDs);
@@ -40,20 +40,15 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // If there is no valid normal, we assume sky.
     if (depth < 0)
     {
-        float3 sky = getAtmosphereColor(initAtmosphere(Ray.FromPixel(pixel, p.frame_dim, p.state_ptr.camera).direction, p.state_ptr.sunDir), p.state_ptr.time);
-        render_image[pixel] = tonemapUnreal(float4(sky, 1.0));
+        float3 sky = getAtmosphereColor(initAtmosphere(Ray.FromPixel(pixel, p.screenSize, p.stateBuffer.camera).direction, p.stateBuffer.sunDir), p.stateBuffer.time);
+        screenTex[pixel] = tonemapUnreal(float4(sky, 1.0));
         return;
     }
-
-    uint materialID = materialIDTex[pixel];
-    materialID = clamp(materialID, 0, TOTAL_MATERIALS - 1);
-    Material material = p.materials_ptr.materials[materialID];
-    float ldot = max(dot(normal, p.state_ptr.sunDir), 0.0);
 
     float3 color = albedo;
 
     // Apply tonemapping.
     color = tonemapUnreal(color);
 
-    render_image[pixel] = float4(color, 1.0);
+    screenTex[pixel] = float4(color, 1.0);
 }
