@@ -5,17 +5,17 @@
             "name": "Debug VoxyEngine (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/src/Debug/VoxyEngine.exe",
+            "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/VoxyEngine.exe",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/Debug/src/Debug",
+            "cwd": "${workspaceFolder}/build/Debug/PrismEngine/Debug",
             "environment": [],
             "externalConsole": false,
             "preLaunchTask": "Build VoxyEngine",
             "internalConsoleOptions": "openOnSessionStart",
             "windows": {
-                "program": "${workspaceFolder}/build/Debug/src/Debug/VoxyEngine.exe",
-                "cwd": "${workspaceFolder}/build/Debug/src/Debug"
+                "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/VoxyEngine.exe",
+                "cwd": "${workspaceFolder}/build/Debug/PrismEngine/Debug"
             }
         },
         {

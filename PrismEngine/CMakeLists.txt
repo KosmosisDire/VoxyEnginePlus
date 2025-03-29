@@ -1,151 +1,135 @@
-# PrismEngine/CMakeLists.txt
-file(GLOB_RECURSE ENGINE_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp",
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/source/*.cpp"
+file(GLOB_RECURSE APP_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp"
 )
 
-# Create static library
-add_library(PrismEngine STATIC ${ENGINE_SRC})
+# Use PROJECT_NAME consistently
+add_executable(${PROJECT_NAME} ${APP_SRC})
 
-if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-    # Initialize a variable to hold the ml64 path
-    set(ML64 "ML64-NOTFOUND")
-    
-    # Try to find ml64 in PATH first (works if CMake is run from Developer Command Prompt)
-    find_program(ML64_IN_PATH ml64)
-    if(ML64_IN_PATH)
-        set(ML64 ${ML64_IN_PATH})
-    else()
-        # Try to use vswhere to locate Visual Studio installation
-        find_program(VSWHERE vswhere 
-            PATHS "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer" 
-            "$ENV{ProgramFiles}/Microsoft Visual Studio/Installer")
-            
-        if(VSWHERE)
-            # Use vswhere to find the latest Visual Studio installation path
-            execute_process(
-                COMMAND ${VSWHERE} -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-                OUTPUT_VARIABLE VS_INSTALL_DIR
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            
-            if(VS_INSTALL_DIR)
-                # Find the MSVC tools version directory
-                file(GLOB MSVC_TOOLS_DIRS "${VS_INSTALL_DIR}/VC/Tools/MSVC/*")
-                if(MSVC_TOOLS_DIRS)
-                    # Get the latest version (assuming directory naming is consistent)
-                    list(SORT MSVC_TOOLS_DIRS)
-                    list(GET MSVC_TOOLS_DIRS -1 LATEST_MSVC_TOOLS_DIR)
-                    
-                    # Check if ml64.exe exists
-                    set(ML64_CANDIDATE "${LATEST_MSVC_TOOLS_DIR}/bin/Hostx64/x64/ml64.exe")
-                    if(EXISTS "${ML64_CANDIDATE}")
-                        set(ML64 "${ML64_CANDIDATE}")
-                    endif()
-                endif()
-            endif()
-        endif()
-        
-        # Fallback method: Try to run vcvarsall.bat to query for ml64
-        if(NOT ML64 OR NOT EXISTS "${ML64}")
-            # Try to find vcvarsall.bat in common locations
-            file(GLOB VS_INSTALLATIONS 
-                "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/*/[Community,Professional,Enterprise]/VC/Auxiliary/Build"
-                "$ENV{ProgramFiles}/Microsoft Visual Studio/*/[Community,Professional,Enterprise]/VC/Auxiliary/Build")
-                
-            if(VS_INSTALLATIONS)
-                list(GET VS_INSTALLATIONS 0 VS_DIR)
-                if(EXISTS "${VS_DIR}/vcvarsall.bat")
-                    # Create a temporary batch file to help find ml64
-                    set(TEMP_BATCH_FILE "${CMAKE_BINARY_DIR}/find_ml64.bat")
-                    file(WRITE ${TEMP_BATCH_FILE} "
-                        @echo off
-                        call \"${VS_DIR}/vcvarsall.bat\" x64 > nul
-                        where ml64
-                    ")
-                    
-                    execute_process(
-                        COMMAND ${CMAKE_COMMAND} -E env "${TEMP_BATCH_FILE}"
-                        OUTPUT_VARIABLE ML64_WHERE_OUTPUT
-                        OUTPUT_STRIP_TRAILING_WHITESPACE
-                        ERROR_QUIET
-                    )
-                    
-                    # Extract first line of where output
-                    if(ML64_WHERE_OUTPUT)
-                        string(REGEX REPLACE "\r?\n.*$" "" ML64_PATH "${ML64_WHERE_OUTPUT}")
-                        if(EXISTS "${ML64_PATH}")
-                            set(ML64 "${ML64_PATH}")
-                        endif()
-                    endif()
-                endif()
-            endif()
-        endif()
-    endif()
-    
-    # Check if we found ml64
-    if(NOT ML64 OR NOT EXISTS "${ML64}")
-        message(STATUS "ML64 not found. Trying alternative approach with AS_MAX_PORTABILITY.")
-        # Fall back to using the portable approach that doesn't require assembly
-        add_definitions(-DAS_MAX_PORTABILITY)
-    else()
-        message(STATUS "Found ML64: ${ML64}")
-        
-        # Set the asm file path
-        set(ASM_FILE "${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/source/as_callfunc_x64_msvc_asm.asm")
-        
-        # Create a custom command to compile the assembly file
-        set(ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_msvc_asm.obj")
-        add_custom_command(
-            OUTPUT ${ASM_OBJ}
-            COMMAND ${ML64} /c /nologo /Fo${ASM_OBJ} /W3 /Zi /Ta ${ASM_FILE}
-            DEPENDS ${ASM_FILE}
-            COMMENT "Assembling ${ASM_FILE}"
-        )
-        
-        # Add the object file to your library
-        target_sources(PrismEngine PRIVATE ${ASM_OBJ})
-    endif()
-endif()
-
-# create a file that contains the project root directory
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
-    "${PROJECT_BINARY_DIR}/include/project_paths.h"
+# Set RPATH properties for the executable
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib:${CMAKE_BINARY_DIR}/vcpkg_installed/x64-linux/lib:${CMAKE_BINARY_DIR}/vcpkg_installed/x64-linux/debug/lib"
 )
+
 include_directories("${PROJECT_BINARY_DIR}/include")
-
-# Add include directories
-target_include_directories(PrismEngine 
-    PUBLIC 
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+# Add include directories for the application
+target_include_directories(${PROJECT_NAME} 
+    PRIVATE 
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/Mycelium/src
         ${PROJECT_BINARY_DIR}/include
 )
 
-# Find and link dependencies
-find_package(glfw3 CONFIG REQUIRED)
-find_package(daxa CONFIG REQUIRED)
-find_package(glm CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-
-# Link dependencies
-target_link_libraries(PrismEngine 
-    PUBLIC 
-        glfw
-        daxa::daxa
-        glm::glm
-        fmt::fmt
-        imgui::imgui
+# Link against the engine library
+target_link_libraries(${PROJECT_NAME} 
+    PRIVATE 
+        Mycelium
 )
 
-# Create resources directories
-add_custom_command(TARGET PrismEngine PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders"
-    COMMENT "Creating engine resource directories"
-)
+# Function to handle resource deployment based on platform and build type
+function(add_resource_folder TARGET SOURCE_PATH DEST_REL_PATH)
+    set(FULL_DEST_PATH "$<TARGET_FILE_DIR:${TARGET}>/${DEST_REL_PATH}")
+    
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        if(WIN32)
+            # For Windows Debug mode, add to the script for hardlinking
+            set_property(TARGET ${TARGET} APPEND PROPERTY VS_DEBUGGER_COMMAND_ARGUMENTS "--resource-path ${SOURCE_PATH} --dest-path ${DEST_REL_PATH}")
+        else()
+            # For Linux/macOS Debug mode, use symlinks
+            add_custom_command(TARGET ${TARGET} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${TARGET}>"
+                COMMAND ${CMAKE_COMMAND} -E create_symlink
+                    "${SOURCE_PATH}"
+                    "${FULL_DEST_PATH}"
+                COMMENT "Creating symlink for ${SOURCE_PATH} -> ${FULL_DEST_PATH}"
+            )
+        endif()
+    else()
+        # For Release mode, copy directories
+        add_custom_command(TARGET ${TARGET} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${FULL_DEST_PATH}"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${SOURCE_PATH}"
+                "${FULL_DEST_PATH}"
+            COMMENT "Copying ${SOURCE_PATH} to ${FULL_DEST_PATH}"
+        )
+    endif()
+endfunction()
+
+# For Windows Debug mode, create a PowerShell script to handle all hard linking
+if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Create the PowerShell script for resource hard links
+    file(WRITE "${CMAKE_BINARY_DIR}/create_hardlinks.ps1" 
+         "Write-Host \"Creating hard links for hot reloading...\"\n"
+         "\n"
+         "# Create destination base directory\n"
+         "New-Item -Path \"${CMAKE_BINARY_DIR}/PrismEngine/Debug\" -ItemType Directory -Force | Out-Null\n"
+         "\n"
+         "# Function to create hard links preserving directory structure\n"
+         "function Create-HardLinks($sourcePath, $targetBasePath, $relativeToPath) {\n"
+         "    # Create the initial directory\n"
+         "    New-Item -Path $targetBasePath -ItemType Directory -Force | Out-Null\n"
+         "    \n"
+         "    # Create directory structure\n"
+         "    Get-ChildItem -Path $sourcePath -Recurse -Directory | ForEach-Object {\n"
+         "        $relPath = $_.FullName.Substring($relativeToPath.Length)\n"
+         "        New-Item -Path \"$targetBasePath$relPath\" -ItemType Directory -Force | Out-Null\n"
+         "    }\n"
+         "    \n"
+         "    # Create hard links for all files\n"
+         "    Get-ChildItem -Path $sourcePath -Recurse -File | ForEach-Object {\n"
+         "        $sourceFile = $_.FullName\n"
+         "        $relativePath = $sourceFile.Substring($relativeToPath.Length)\n"
+         "        $targetPath = Join-Path -Path $targetBasePath -ChildPath $relativePath\n"
+         "        \n"
+         "        try {\n"
+         "            New-Item -ItemType HardLink -Path $targetPath -Target $sourceFile -Force | Out-Null\n"
+         "            Write-Host \"Created hard link: $targetPath -> $sourceFile\"\n"
+         "        } catch {\n"
+         "            Write-Warning \"Failed to create hard link for $sourceFile. Copying instead.\"\n"
+         "            Copy-Item -Path $sourceFile -Destination $targetPath -Force\n"
+         "        }\n"
+         "    }\n"
+         "}\n"
+    )
+    
+    # Add resource folders
+    file(APPEND "${CMAKE_BINARY_DIR}/create_hardlinks.ps1"
+        "# Process engine resources\n"
+        "Create-HardLinks \"${CMAKE_SOURCE_DIR}/Mycelium/resources\" \"${CMAKE_BINARY_DIR}/PrismEngine/Debug/resources\" \"${CMAKE_SOURCE_DIR}/Mycelium/resources\"\n"
+        "\n"
+        "# Process shader resources\n"
+        "Create-HardLinks \"${CMAKE_SOURCE_DIR}/PrismEngine/src/vox/shaders\" \"${CMAKE_BINARY_DIR}/PrismEngine/Debug/resources/shaders\" \"${CMAKE_SOURCE_DIR}/PrismEngine/src/vox/shaders\"\n"
+        "\n"
+        "# Process application resources\n"
+        "Create-HardLinks \"${CMAKE_SOURCE_DIR}/PrismEngine/resources\" \"${CMAKE_BINARY_DIR}/PrismEngine/Debug/resources\" \"${CMAKE_SOURCE_DIR}/PrismEngine/resources\"\n"
+        "\n"
+        "Write-Host \"Hard links created successfully!\"\n"
+        "exit 0\n"  # Ensure script always exits with success
+    )
+    
+    # Run the script as a single post-build command
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File "${CMAKE_BINARY_DIR}/create_hardlinks.ps1"
+        VERBATIM
+        COMMENT "Setting up resource hard links for hot reloading"
+    )
+endif()
+
+# Add resource folders
+add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/Mycelium/resources" "resources")
+add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/PrismEngine/src/vox/shaders" "resources/shaders")
+add_resource_folder(${PROJECT_NAME} "${CMAKE_SOURCE_DIR}/PrismEngine/src/resources" "resources")
+
+# DLL handling with safer command
+if(WIN32)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+        -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        COMMAND_EXPAND_LISTS
+        COMMENT "Copying runtime DLLs"
+    )
+endif()

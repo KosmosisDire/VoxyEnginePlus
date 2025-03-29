@@ -1,0 +1,33 @@
+type Header : Text
+{
+    fontSize: 24
+    fontWeight: bold
+    align: center
+}
+
+type TextInput : Element
+{
+    @placeholder: "Enter text here"
+    @text: ""
+    
+}
+
+type LabeledInput(label: string) : Row
+{
+    Text(label)
+    TextInput()
+}
+
+
+Element
+{
+    Header("Login")
+    
+
+    
+
+
+
+
+
+}

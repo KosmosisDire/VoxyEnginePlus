@@ -21,7 +21,7 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 project(VoxyEngine VERSION 1.0)
 
 # Add engine library first
-add_subdirectory(PrismEngine)
+add_subdirectory(Mycelium)
 
 # Add main application
-add_subdirectory(src)
+add_subdirectory(PrismEngine)
