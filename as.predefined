@@ -133,20 +133,26 @@ class string{
 	string& opAddAssign(bool);
 	string opAdd(bool) const;
 	string opAdd_r(bool) const;
-	string substr(uint start = 0, int count = - 1) const;
+	string substr(uint start = 0, int count = -1) const;
 	int findFirst(const string&in, uint start = 0) const;
 	int findFirstOf(const string&in, uint start = 0) const;
 	int findFirstNotOf(const string&in, uint start = 0) const;
-	int findLast(const string&in, int start = - 1) const;
-	int findLastOf(const string&in, int start = - 1) const;
-	int findLastNotOf(const string&in, int start = - 1) const;
+	int findLast(const string&in, int start = -1) const;
+	int findLastOf(const string&in, int start = -1) const;
+	int findLastNotOf(const string&in, int start = -1) const;
 	void insert(uint pos, const string&in other);
-	void erase(uint pos, int count = - 1);
+	void erase(uint pos, int count = -1);
+	int regexFind(const string&in regex, uint start = 0, uint&out lengthOfMatch = void) const;
 	string[]@ split(const string&in) const;
 }
 class array<T>{
 	T& opIndex(uint index);
 	const T& opIndex(uint index) const;
+	uint opForBegin() const;
+	bool opForEnd(uint) const;
+	uint opForNext(uint) const;
+	const T& opForValue0(uint index) const;
+	uint opForValue1(uint index) const;
 	T[]& opAssign(const T[]&in);
 	void insertAt(uint index, const T&in value);
 	void insertAt(uint index, const T[]&inout arr);
@@ -168,7 +174,7 @@ class array<T>{
 	int findByRef(uint startAt, const T&in value) const;
 	bool opEquals(const T[]&in) const;
 	bool isEmpty() const;
-	void sort(T[]::less&in, uint startAt = 0, uint count = uint ( - 1 ));
+	void sort(T[]::less&in, uint startAt = 0, uint count = uint(-1));
 	funcdef bool less(const T&in, const T&in);
 }
 class dictionaryValue{
@@ -201,6 +207,13 @@ class dictionary{
 	string[]@ getKeys() const;
 	dictionaryValue& opIndex(const string&in);
 	const dictionaryValue& opIndex(const string&in) const;
+	dictionaryIter@ opForBegin() const;
+	bool opForEnd(dictionaryIter@) const;
+	dictionaryIter@ opForNext(dictionaryIter@) const;
+	const dictionaryValue& opForValue0(dictionaryIter@) const;
+	const string& opForValue1(dictionaryIter@) const;
+}
+class dictionaryIter{
 }
 class datetime{
 	datetime();
@@ -213,6 +226,7 @@ class datetime{
 	uint get_hour() const;
 	uint get_minute() const;
 	uint get_second() const;
+	uint get_weekDay() const;
 	bool setDate(uint year, uint month, uint day);
 	bool setTime(uint hour, uint minute, uint second);
 	int64 opSub(const datetime&in) const;
@@ -267,9 +281,9 @@ class any{
 	void store(?&in);
 	void store(const int64&in);
 	void store(const double&in);
-	bool retrieve(?&out);
-	bool retrieve(int64&out);
-	bool retrieve(double&out);
+	bool retrieve(?&out) const;
+	bool retrieve(int64&out) const;
+	bool retrieve(double&out) const;
 }
 class ref{
 	~ref();
@@ -474,7 +488,7 @@ class Transform{
 	void Rotate(const Vector3&in eulerAngles);
 	void Rotate(const Vector3&in axis, float angle);
 	void Rotate(const Quaternion&in rotation);
-	void LookAt(const Vector3&in target, const Vector3&in worldUp = Vector3 ( 0 , 1 , 0 ));
+	void LookAt(const Vector3&in target, const Vector3&in worldUp = Vector3(0,1,0));
 	Vector3 GetScale() const;
 	void SetScale(const Vector3&in scale);
 	void SetScale(float uniformScale);
@@ -513,6 +527,8 @@ class Camera{
 	float sensitivity;
 }
 
+uint scan(const string&in str, ?&out...);
+string format(const string&in fmt, const ?&in...);
 string formatInt(int64 val, const string&in options = "", uint width = 0);
 string formatUInt(uint64 val, const string&in options = "", uint width = 0);
 string formatFloat(double val, const string&in options = "", uint width = 0, uint precision = 0);
@@ -589,7 +605,7 @@ namespace Quaternion { Quaternion angleAxis(float, Vector3); }
 namespace Quaternion { Quaternion euler(float, float, float); }
 namespace Quaternion { Quaternion euler(Vector3); }
 namespace Quaternion { Quaternion fromToRotation(Vector3, Vector3); }
-namespace Quaternion { Quaternion lookRotation(Vector3, Vector3 = Vector3 ( 0 , 1 , 0 )); }
+namespace Quaternion { Quaternion lookRotation(Vector3, Vector3 = Vector3(0,1,0)); }
 namespace Quaternion { float angle(Quaternion, Quaternion); }
 namespace Quaternion { Quaternion lerp(Quaternion, Quaternion, float); }
 namespace Quaternion { Quaternion slerp(Quaternion, Quaternion, float); }
@@ -650,8 +666,8 @@ namespace Math { float deltaAngle(float current, float target); }
 namespace Math { float moveTowards(float current, float target, float maxDelta); }
 namespace Math { float moveTowardsAngle(float current, float target, float maxDelta); }
 namespace Math { float smoothStep(float from, float to, float t); }
-namespace Math { float smoothDamp(float current, float target, float&out currentVelocity, float smoothTime, float maxSpeed = Math :: Infinity, float deltaTime = 0.02f); }
-namespace Math { float smoothDampAngle(float current, float target, float&out currentVelocity, float smoothTime, float maxSpeed = Math :: Infinity, float deltaTime = 0.02f); }
+namespace Math { float smoothDamp(float current, float target, float&out currentVelocity, float smoothTime, float maxSpeed = Math::Infinity, float deltaTime = 0.02f); }
+namespace Math { float smoothDampAngle(float current, float target, float&out currentVelocity, float smoothTime, float maxSpeed = Math::Infinity, float deltaTime = 0.02f); }
 namespace Math { bool approximately(float a, float b); }
 namespace Math { bool isPowerOfTwo(int x); }
 namespace Math { int nextPowerOfTwo(int x); }

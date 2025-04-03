@@ -1,16 +1,16 @@
 #pragma once
 
-#include "addon/scriptany/scriptany.h"
-#include "addon/scriptarray/scriptarray.h"
-#include "addon/scriptbuilder/scriptbuilder.h"
-#include "addon/scriptdictionary/scriptdictionary.h"
-#include "addon/scriptfile/scriptfile.h"
-#include "addon/scriptfile/scriptfilesystem.h"
-#include "addon/scripthandle/scripthandle.h"
-#include "addon/scripthelper/scripthelper.h"
-#include "addon/scriptmath/scriptmath.h"
-#include "addon/scriptstdstring/scriptstdstring.h"
-#include "addon/weakref/weakref.h"
+#include <add_on/scriptany/scriptany.h>
+#include <add_on/scriptarray/scriptarray.h>
+#include <add_on/scriptbuilder/scriptbuilder.h>
+#include <add_on/scriptdictionary/scriptdictionary.h>
+#include <add_on/scriptfile/scriptfile.h>
+#include <add_on/scriptfile/scriptfilesystem.h>
+#include <add_on/scripthandle/scripthandle.h>
+#include <add_on/scripthelper/scripthelper.h>
+#include <add_on/scriptmath/scriptmath.h>
+#include <add_on/scriptstdstring/scriptstdstring.h>
+#include <add_on/weakref/weakref.h>
 #include <angelscript.h>
 
 #include "registrations/data/Matrix4x4.hpp"

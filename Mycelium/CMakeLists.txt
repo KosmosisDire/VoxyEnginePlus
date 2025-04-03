@@ -140,6 +140,7 @@ target_include_directories(Mycelium
         ${ANTLR_GENERATED_DIR}
         ${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src # Ensure ANTLR include dir is public
         ${angelscript_SOURCE_DIR}/sdk/angelscript/include
+        ${angelscript_SOURCE_DIR}/sdk/
 )
 
 # Add compile definition for static ANTLR build

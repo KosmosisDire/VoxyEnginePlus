@@ -29,131 +29,118 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 # --- Resource Handling ---
-# Define resource source locations relative to CMAKE_SOURCE_DIR
-set(MYCELIUM_RESOURCE_DIR ${CMAKE_SOURCE_DIR}/Mycelium/resources)
-set(PRISM_SHADER_DIR ${CMAKE_SOURCE_DIR}/PrismEngine/src/vox/shaders) # Check this path
-set(PRISM_RESOURCE_DIR ${CMAKE_SOURCE_DIR}/PrismEngine/resources) # Check this path
 
-# Define the base destination directory relative to the executable
-set(DEST_RESOURCE_BASE_DIR "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources")
+# Define resource source directories
+set(RESOURCE_SOURCE_DIRS
+    "${CMAKE_SOURCE_DIR}/Mycelium/resources"
+    "${CMAKE_SOURCE_DIR}/PrismEngine/resources"
+)
 
 # Windows Debug: Use PowerShell script for hard links
 if(WIN32 AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(PS_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/setup_debug_resources.ps1") # Use CURRENT_BINARY_DIR
-    set(TARGET_EXE_DIR_PS "$($(<TARGET_FILE_DIR:${PROJECT_NAME}>) -replace '\\', '\\\\')") # Escaped path for PS
+    set(POWERSHELL_SCRIPT_PATH "${CMAKE_CURRENT_BINARY_DIR}/create_hardlinks.ps1")
 
-    # PowerShell Script Content (Improved Structure)
-    file(WRITE ${PS_SCRIPT} "
-param(
-    [string]\$TargetExeDir,
-    [string[]]\$SourceDirs,
-    [string[]]\$SourceBasePaths,
-    [string]\$DestBaseDir
-)
+    # Base script content with function definition
+    file(WRITE "${POWERSHELL_SCRIPT_PATH}"
+        "param(\n"
+        "    [string]\$TargetBuildDir # Passed from add_custom_command\n"
+        ")\n\n"
+        "Write-Host \"Creating hard links for hot reloading into: \$TargetBuildDir\"\n\n"
+        "# Ensure base destination directory exists\n"
+        "\$destBase = Join-Path -Path \$TargetBuildDir -ChildPath 'resources'\n"
+        "if (-not (Test-Path \$destBase)) {\n"
+        "    New-Item -Path \$destBase -ItemType Directory -Force | Out-Null\n"
+        "}\n\n"
+        "# Function to create hard links preserving directory structure\n"
+        "function Create-HardLinks(\$sourcePath, \$targetBasePath, \$relativeToPath) {\n"
+        "    Write-Host \"Processing source: \$sourcePath -> \$targetBasePath\"\n"
+        "    # Create directory structure first\n"
+        "    Get-ChildItem -Path \$sourcePath -Recurse -Directory | ForEach-Object {\n"
+        "        \$relPath = \$_.FullName.Substring(\$relativeToPath.Length)\n"
+        "        \$fullTargetPath = Join-Path -Path \$targetBasePath -ChildPath \$relPath\n"
+        "        if (-not (Test-Path \$fullTargetPath)) {\n"
+        "             New-Item -Path \$fullTargetPath -ItemType Directory -Force | Out-Null\n"
+        "        }\n"
+        "    }\n\n"
+        "    # Create hard links for all files\n"
+        "    Get-ChildItem -Path \$sourcePath -Recurse -File | ForEach-Object {\n"
+        "        \$sourceFile = \$_.FullName\n"
+        "        \$relativePath = \$sourceFile.Substring(\$relativeToPath.Length)\n"
+        "        \$targetPath = Join-Path -Path \$targetBasePath -ChildPath \$relativePath\n\n"
+        "        # Remove existing item at target path if it exists\n"
+        "        if (Test-Path \$targetPath) {\n"
+        "            Remove-Item \$targetPath -Force -Recurse\n"
+        "        }\n\n"
+        "        try {\n"
+        "            New-Item -ItemType HardLink -Path \$targetPath -Target \$sourceFile -Force | Out-Null\n"
+        "            # Write-Host \"  Link: \$targetPath -> \$sourceFile\"\n"
+        "        } catch {\n"
+        "            Write-Warning \"  Failed hard link for \$sourceFile. Error: \$(\$_.Exception.Message)\"\n"
+        "            # Optional: Copy as fallback? \n"
+        "            # Write-Host \"  Copying instead: \$sourceFile -> \$targetPath\"\n"
+        "            # Copy-Item -Path \$sourceFile -Destination \$targetPath -Force\n"
+        "        }\n"
+        "    }\n"
+        "}\n\n"
+    )
 
-Write-Host \"Setting up debug resources via hard links...\"
+    # Append calls for each resource directory
+    foreach(SOURCE_DIR ${RESOURCE_SOURCE_DIRS})
+        # Need to escape backslashes in paths for PowerShell strings
+        string(REPLACE "\\" "\\\\" SOURCE_DIR_ESC "${SOURCE_DIR}")
+        file(APPEND "${POWERSHELL_SCRIPT_PATH}"
+            "Create-HardLinks \"${SOURCE_DIR_ESC}\" \"\$destBase\" \"${SOURCE_DIR_ESC}\"\n"
+        )
+    endforeach()
 
-# Ensure base destination exists
-\$null = New-Item -Path \$DestBaseDir -ItemType Directory -Force
+    file(APPEND "${POWERSHELL_SCRIPT_PATH}"
+        "Write-Host \"Resource hard linking complete.\"\n"
+        "exit 0\n"
+    )
 
-# Function to create hard links preserving structure
-function Create-HardLinks(\$sourcePath, \$targetPath, \$baseSourcePath) {
-    Write-Host \"Processing: \$sourcePath -> \$targetPath\"
-    if (-not (Test-Path \$sourcePath)) {
-        Write-Warning \"Source path does not exist: \$sourcePath\"
-        return
-    }
-    \$null = New-Item -Path \$targetPath -ItemType Directory -Force
-
-    Get-ChildItem -Path \$sourcePath -Recurse -Directory | ForEach-Object {
-        \$relPath = \$_.FullName.Substring(\$baseSourcePath.Length)
-        \$null = New-Item -Path (Join-Path \$targetPath \$relPath) -ItemType Directory -Force
-    }
-
-    Get-ChildItem -Path \$sourcePath -Recurse -File | ForEach-Object {
-        \$srcFile = \$_.FullName
-        \$relPath = \$srcFile.Substring(\$baseSourcePath.Length)
-        \$destFile = Join-Path \$targetPath \$relPath
-        \$destDir = Split-Path \$destFile -Parent
-        if (-not (Test-Path \$destDir)) {
-            \$null = New-Item -Path \$destDir -ItemType Directory -Force
-        }
-        try {
-            # Remove existing item first if it exists (might be file or link)
-            if (Test-Path \$destFile) { Remove-Item \$destFile -Force }
-            New-Item -ItemType HardLink -Path \$destFile -Target \$srcFile -Force | Out-Null
-            # Write-Host \"  Linked: \$destFile -> \$srcFile\"
-        } catch {
-            Write-Warning \"  Failed hard link for \$srcFile. Error: \$(\$_.Exception.Message)\"
-        }
-    }
-}
-
-# Process each resource directory
-for (\$i = 0; \$i -lt \$SourceDirs.Length; \$i++) {
-    \$source = \$SourceDirs[\$i]
-    \$base = \$SourceBasePaths[\$i]
-    \$destRel = (Split-Path \$source -Leaf) # Use last component as dest subfolder
-    \$dest = Join-Path \$DestBaseDir \$destRel
-
-    # Special case for shaders going into resources/shaders
-    if (\$source -like '*vox/shaders') {
-        \$dest = Join-Path \$DestBaseDir 'shaders'
-    } elseif (\$source -like '*Mycelium/resources') {
-         \$dest = \$DestBaseDir # Mycelium resources go directly into dest base
-    } elseif (\$source -like '*PrismEngine/resources') {
-         \$dest = \$DestBaseDir # PrismEngine resources go directly into dest base
-    }
-
-    Create-HardLinks -sourcePath \$source -targetPath \$dest -baseSourcePath \$base
-}
-
-Write-Host \"Debug resource setup finished.\"
-exit 0
-") # End of file(WRITE)
-
-    # Add the single post-build command to execute the script
+    # Add the post-build command to execute the script
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File "${PS_SCRIPT}" -TargetExeDir "$<TARGET_FILE_DIR:${PROJECT_NAME}>" -SourceDirs "${MYCELIUM_RESOURCE_DIR};${PRISM_SHADER_DIR};${PRISM_RESOURCE_DIR}" -SourceBasePaths "${MYCELIUM_RESOURCE_DIR};${PRISM_SHADER_DIR};${PRISM_RESOURCE_DIR}" -DestBaseDir "${DEST_RESOURCE_BASE_DIR}"
+        COMMAND powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive
+                -File "${POWERSHELL_SCRIPT_PATH}"
+                -TargetBuildDir "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
         VERBATIM
         COMMENT "Setting up resource hard links via PowerShell"
     )
 
-# Non-Windows Debug (Symlinks) / Release (Copy)
+# Other Builds (Release all platforms, Debug Linux/macOS)
 else()
-    # Function to add symlink/copy command
-    function(add_resource_deployment TARGET SOURCE_PATH DEST_REL_PATH)
-        set(FULL_DEST_PATH "$<TARGET_FILE_DIR:${TARGET}>/${DEST_REL_PATH}")
-        set(ACTION_VERB "Copying")
-        set(CMAKE_ACTION "-E copy_directory_if_different") # Safer copy
-        if(NOT CMAKE_BUILD_TYPE STREQUAL "Release") # Assume Debug/RelWithDebInfo etc. use links
-           if(UNIX OR APPLE)
-                set(ACTION_VERB "Symlinking")
-                set(CMAKE_ACTION "-E create_symlink")
-           endif()
+    foreach(SOURCE_DIR ${RESOURCE_SOURCE_DIRS})
+        # Destination is base resources directory next to executable
+        set(FULL_DEST_PATH "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources")
+
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug") # Linux/macOS Debug
+            set(ACTION_VERB "Symlinking")
+            set(CMAKE_COMMAND_ACTION create_symlink)
+            set(SOURCE_ARG "${SOURCE_DIR}") # Symlink the source directory itself
+            # Need the name of the source directory for the destination link name
+            get_filename_component(DIR_NAME "${SOURCE_DIR}" NAME)
+            set(DEST_ARG "${FULL_DEST_PATH}/${DIR_NAME}")
+        else() # Release (all platforms)
+            set(ACTION_VERB "Copying")
+            set(CMAKE_COMMAND_ACTION copy_directory)
+            set(SOURCE_ARG "${SOURCE_DIR}")
+            set(DEST_ARG "${FULL_DEST_PATH}") # Copy contents into resources/
         endif()
 
-        # Ensure source exists before adding command
-        if(EXISTS "${SOURCE_PATH}")
-            add_custom_command(TARGET ${TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory "${FULL_DEST_PATH}"
-                COMMAND ${CMAKE_COMMAND} ${CMAKE_ACTION} "${SOURCE_PATH}" "${FULL_DEST_PATH}"
-                COMMENT "${ACTION_VERB} ${SOURCE_PATH} -> ${FULL_DEST_PATH}"
-                VERBATIM
-            )
-        else()
-            message(WARNING "Resource source path not found, skipping deployment: ${SOURCE_PATH}")
-        endif()
-    endfunction()
-
-    # Deploy resources using the function
-    add_resource_deployment(${PROJECT_NAME} "${MYCELIUM_RESOURCE_DIR}" "resources") # Mycelium resources into 'resources' subdir
-    add_resource_deployment(${PROJECT_NAME} "${PRISM_SHADER_DIR}" "resources/shaders") # Shaders into 'resources/shaders'
-    add_resource_deployment(${PROJECT_NAME} "${PRISM_RESOURCE_DIR}" "resources") # PrismEngine resources into 'resources' subdir
-
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${FULL_DEST_PATH}" # Ensure base dir exists
+            COMMAND ${CMAKE_COMMAND} -E ${CMAKE_COMMAND_ACTION}
+                "${SOURCE_ARG}"
+                "${DEST_ARG}"
+            COMMENT "${ACTION_VERB} resources: ${SOURCE_DIR} -> ${DEST_ARG}"
+            VERBATIM
+        )
+    endforeach()
 endif()
 
-# DLL Handling (Requires CMake 3.21+)
+
+# --- DLL Handling (Requires CMake 3.21+) ---
+# (Keep existing DLL handling logic)
 if(WIN32)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> $<TARGET_FILE_DIR:${PROJECT_NAME}>
