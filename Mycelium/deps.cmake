@@ -1,6 +1,22 @@
-include(FetchContent)
-# ANTLR is now fetched in the root CMakeLists.txt
+# Mycelium/deps.cmake
+# Dependencies fetched specifically for Mycelium
 
+include(FetchContent) # Ensure FetchContent is available
+
+# --- ANTLR ---
+FetchContent_Declare(
+    antlr
+    GIT_REPOSITORY https://github.com/antlr/antlr4.git
+    GIT_TAG        4.13.2 # Use the same tag as before
+)
+# Set ANTLR build options *before* MakeAvailable
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE) # Force static libs for dependencies
+set(ANTLR_BUILD_CPP_RUNTIME ON CACHE BOOL "Build ANTLR C++ Runtime" FORCE) # Ensure runtime is built
+set(WITH_STATIC_CRT OFF CACHE BOOL "Build ANTLR with dynamic CRT" FORCE) # Match project CRT
+FetchContent_MakeAvailable(antlr)
+message(STATUS "Mycelium: antlr_SOURCE_DIR = ${antlr_SOURCE_DIR}")
+
+# --- AngelScript ---
 FetchContent_Declare(
     angelscript
     GIT_REPOSITORY https://github.com/codecat/angelscript-mirror.git
@@ -9,41 +25,22 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(angelscript)
 message(STATUS "Mycelium: angelscript_SOURCE_DIR = ${angelscript_SOURCE_DIR}")
 
+# --- Daxa ---
+FetchContent_Declare(
+    daxa
+    GIT_REPOSITORY https://github.com/Ipotrick/Daxa.git
+    GIT_TAG        d91f215842ca0d49cc6882a234172fdeb5b383b7 # Specific commit requested
+)
+# Set Daxa build options *before* MakeAvailable
+set(DAXA_ENABLE_UTILS_IMGUI ON CACHE BOOL "Enable Daxa ImGui utils" FORCE)
+set(DAXA_ENABLE_UTILS_MEM ON CACHE BOOL "Enable Daxa memory utils" FORCE)
+set(DAXA_ENABLE_UTILS_PIPELINE_MANAGER_GLSLANG ON CACHE BOOL "Enable Daxa pipeline manager with GLSLang" FORCE)
+set(DAXA_ENABLE_UTILS_PIPELINE_MANAGER_SLANG ON CACHE BOOL "Enable Daxa pipeline manager with Slang" FORCE)
+set(DAXA_ENABLE_UTILS_TASK_GRAPH ON CACHE BOOL "Enable Daxa task graph utils" FORCE)
+# Add other Daxa options if needed, e.g.:
+# set(DAXA_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(daxa)
+message(STATUS "Mycelium: daxa_SOURCE_DIR = ${daxa_SOURCE_DIR}")
 
-# FetchContent_Declare(
-#     daxa
-#     GIT_REPOSITORY https://github.com/Ipotrick/Daxa.git
-#     GIT_TAG        3.0.4
-# )
-# FetchContent_MakeAvailable(daxa)
-# message(STATUS "Mycelium: daxa_SOURCE_DIR = ${daxa_SOURCE_DIR}")
-
-if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/../lib/Daxa/CMakeLists.txt")
-    find_package(Git REQUIRED)
-    file(MAKE_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib")
-    execute_process(COMMAND ${GIT_EXECUTABLE} clone https://github.com/Ipotrick/Daxa
-        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib"
-        COMMAND_ERROR_IS_FATAL ANY)
-    execute_process(COMMAND ${GIT_EXECUTABLE} checkout d91f215842ca0d49cc6882a234172fdeb5b383b7
-        WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib/Daxa"
-        COMMAND_ERROR_IS_FATAL ANY)
-endif()
-
-# If the user has set a toolchain file, we'll want to chainload it via vcpkg
-if(NOT (CMAKE_TOOLCHAIN_FILE MATCHES "/scripts/buildsystems/vcpkg.cmake") AND DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${CMAKE_TOOLCHAIN_FILE}" CACHE UNINITIALIZED "")
-endif()
-
-# Check if vcpkg is installed globally. Otherwise, clone vcpkg
-if(EXISTS "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
-    file(TO_CMAKE_PATH $ENV{VCPKG_ROOT} VCPKG_ROOT)
-    set(CMAKE_TOOLCHAIN_FILE "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
-else()
-    if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/../lib/vcpkg/scripts/buildsystems/vcpkg.cmake")
-        find_package(Git REQUIRED)
-        execute_process(COMMAND ${GIT_EXECUTABLE} clone https://github.com/Microsoft/vcpkg
-            WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../lib"
-            COMMAND_ERROR_IS_FATAL ANY)
-    endif()
-    set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../lib/vcpkg/scripts/buildsystems/vcpkg.cmake")
-endif()
+# vcpkg setup is now handled in the root CMakeLists.txt
+# Manual Daxa clone is replaced by FetchContent above

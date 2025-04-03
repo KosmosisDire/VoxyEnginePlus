@@ -146,18 +146,18 @@ target_include_directories(Mycelium
 # Add compile definition for static ANTLR build
 target_compile_definitions(Mycelium PUBLIC ANTLR4CPP_STATIC)
 
-# Find and link dependencies
+# Find and link dependencies (Daxa is now built via FetchContent)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(daxa CONFIG REQUIRED)
+# find_package(daxa CONFIG REQUIRED) # Removed: Daxa is built via FetchContent in deps.cmake
 find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
 # Link dependencies
 target_link_libraries(Mycelium
-    PUBLIC 
+    PUBLIC
         glfw # Assuming glfw provides 'glfw' target
-        daxa::daxa # Standard target for daxa
+        daxa::daxa # Link against the FetchContent-built Daxa target
         glm::glm # Standard target for glm
         fmt::fmt # Standard target for fmt
         imgui::imgui # Standard target for imgui
