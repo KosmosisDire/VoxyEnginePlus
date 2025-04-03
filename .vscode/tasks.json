@@ -25,7 +25,7 @@
             "problemMatcher": []
         },
         {
-            "label": "Build VoxyEngine",
+            "label": "Build PrismEngine",
             "type": "shell",
             "windows": {
                 "command": "cmake",
@@ -42,7 +42,7 @@
                     "--parallel",
                     "22",
                     "--target",
-                    "VoxyEngine"
+                    "PrismEngine"
                 ]
             },
             "linux": {
@@ -52,7 +52,7 @@
                     "&&",
                     "make",
                     "-j22",
-                    "VoxyEngine"
+                    "PrismEngine"
                 ]
             },
             "group": {

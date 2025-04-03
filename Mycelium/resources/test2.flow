@@ -1,0 +1,169 @@
+// --- Component Definitions ---
+
+// Base element applying common properties
+component Element { }
+
+component Column : Element { direction: vertical; }
+component Row : Element { direction: horizontal; }
+
+// Text component now takes content as a parameter
+component Text(string content) : Element {
+    // Internal logic applies 'content' and text-specific properties
+    // Properties like fontSize, color, etc., are set externally
+}
+
+// Image definition remains the same
+component Image(string source) : Element { }
+
+// Button definition remains the same
+component Button(string label, string? icon) : Element {
+    padding: 8px 12px;
+    background: rgb(80, 80, 90);
+    radius: 4px;
+    width: fit; height: fit;
+
+    if (Hovered) { background: rgb(100, 100, 110); }
+    if (Pressed) {
+        background: rgb(60, 60, 70);
+        padding: 9px 12px 7px 12px;
+    }
+
+    Row {
+        alignItems: center;
+        gap: 6px;
+        if (icon) {
+            Image(icon) { width: 16px; height: 16px; } // Pass source as parameter
+        }
+        if (label) {
+            // Use Text parameter syntax here too
+            Text(label) { color: rgb(230, 230, 230); fontSize: 14px; }
+        }
+    }
+}
+
+// Slider definition remains the same
+component Slider(bind float value, float min, float max) : Element {
+    width: 100px; height: 20px; minWidth: 50px;
+    prop percent = (value - min) / (max - min);
+
+    if (Pressed) {
+        CaptureMouse();
+        var elementWidth = Computed.width;
+        var mouseXRelative = MouseX - Computed.x;
+        var p = clamp(mouseXRelative / elementWidth, 0.0, 1.0);
+        value = min + p * (max - min);
+    }
+
+    background: rgb(40, 40, 40); radius: 10px;
+    Element { // Visual indicator
+        width: percent * 100%; height: 100%;
+        background: rgb(100, 150, 250); radius: 10px;
+    }
+}
+
+// --- Application State ---
+
+state float sliderValue = 25.0;
+state boolean showTooltip = false;
+
+// --- Root UI Definition ---
+
+Column {
+    padding: 20px; gap: 15px; background: rgb(30, 30, 30);
+
+    // Use Text parameter syntax
+    Text("Mycelium Dashboard (Units & Shorthand)") {
+        fontSize: 28px; color: rgb(230, 230, 230);
+        textAlign: center; width: 100%;
+    }
+
+    Row {
+        gap: 20px; width: 100%; alignItems: start;
+
+        // Left Panel
+        Column {
+            width: 250px; height: 400px; padding: 10px;
+            background: rgb(45, 45, 45); radius: 8px;
+            overflow: scrollY; gap: 8px;
+
+            // Use Text parameter syntax
+            Text("Navigation") { color: rgb(200, 200, 200); fontSize: 18px; }
+
+            Button homeButton { label: "Home"; }
+            Button settingsButton { label: "Settings"; }
+            Button profileButton { label: "Profile"; }
+
+            if (homeButton.Hovered and homeButton.MouseUp) { print("Home clicked"); }
+            if (settingsButton.Hovered and settingsButton.MouseUp) { print("Settings clicked"); }
+            if (profileButton.Hovered and profileButton.MouseUp) { print("Profile clicked"); }
+
+            // Use Text parameter syntax
+            Text("More Items...") { color: rgb(150, 150, 150); }
+            Button { label: "Item 4"; }
+            Button { label: "Item 5"; }
+            Button { label: "Item 6"; }
+            Button { label: "Item 7"; }
+            Button { label: "Item 8"; }
+        }
+
+        // Right Panel
+        Column {
+            width: grow; height: fit; gap: 15px; padding: 15px;
+            background: rgb(55, 55, 55); radius: 8px;
+
+            // Interactive Card
+            Element interactiveCard {
+                padding: 15px; background: rgb(70, 70, 70); radius: 6px;
+                borderColor: rgb(150, 150, 150); borderWidth: 1px; width: 100%;
+
+                if (Hovered) { background: rgb(80, 90, 100); }
+
+                Row {
+                    alignItems: center; gap: 10px;
+                    // Image parameter usage
+                    Image("icons/my_icon.png") {
+                        width: 50px; height: 50px; radius: 4px; aspectRatio: ignore;
+                    }
+                    Column { width: grow; } // Spacer
+                    Button cardActionButton { label: "Action"; }
+                    if (cardActionButton.Hovered and cardActionButton.MouseUp) { print("Card action!"); }
+                }
+            }
+
+            if (interactiveCard.Hovered) { showTooltip = true; }
+            else { showTooltip = false; }
+
+            // Slider Control Area
+            Row {
+                alignItems: center; gap: 10px; padding: { top: 10px };
+                // Use Text parameter syntax
+                Text("Value:") { color: rgb(210, 210, 210); }
+                Slider(bind sliderValue, 0.0, 100.0) { width: grow; }
+                // Use Text parameter syntax - content is dynamic expression
+                Text("" + sliderValue) {
+                    color: rgb(210, 210, 210); width: 40px; textAlign: right;
+                }
+            }
+
+            // Tooltip
+            Element {
+                visible: showTooltip; position: absolute; relativeTo: interactiveCard;
+                attach: { element: bottomLeft, parent: topRight };
+                offset: { x: 5px, y: -5px }; zIndex: 10;
+                background: rgb(20, 20, 20); borderColor: rgb(180, 180, 180);
+                borderWidth: 1px; radius: 4px; padding: 4px 8px;
+                pointerEvents: passthrough;
+
+                // Use Text parameter syntax
+                Text("Card Information") { fontSize: 12px; color: rgb(220, 220, 220); }
+            }
+        }
+    }
+
+    // Footer
+    // Use Text parameter syntax
+    Text("© 2024 Mycelium UI (Parameter Content Example)") {
+        fontSize: 12px; color: rgb(100, 100, 100);
+        textAlign: center; width: 100%; margin: 10px 0px 0px 0px;
+    }
+}

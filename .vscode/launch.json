@@ -2,33 +2,33 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug VoxyEngine (Windows)",
+            "name": "Debug PrismEngine (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/VoxyEngine.exe",
+            "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/PrismEngine.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/Debug/PrismEngine/Debug",
             "environment": [],
             "externalConsole": false,
-            "preLaunchTask": "Build VoxyEngine",
+            "preLaunchTask": "Build PrismEngine",
             "internalConsoleOptions": "openOnSessionStart",
             "windows": {
-                "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/VoxyEngine.exe",
+                "program": "${workspaceFolder}/build/Debug/PrismEngine/Debug/PrismEngine.exe",
                 "cwd": "${workspaceFolder}/build/Debug/PrismEngine/Debug"
             }
         },
         {
-            "name": "Debug VoxyEngine (Linux)",
+            "name": "Debug PrismEngine (Linux)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/Debug/src/VoxyEngine",
+            "program": "${workspaceFolder}/build/Debug/src/PrismEngine",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/Debug/src/",
             "environment": [],
             "externalConsole": false,
-            "preLaunchTask": "Build VoxyEngine",
+            "preLaunchTask": "Build PrismEngine",
             "internalConsoleOptions": "openOnSessionStart",
             "MIMode": "gdb",
             "setupCommands": [
@@ -39,7 +39,7 @@
                 }
             ],
             "linux": {
-                "program": "${workspaceFolder}/build/Debug/src/VoxyEngine",
+                "program": "${workspaceFolder}/build/Debug/src/PrismEngine",
                 "cwd": "${workspaceFolder}/build/Debug/src/"
             }
         }

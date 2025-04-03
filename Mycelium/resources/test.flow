@@ -1,33 +1,112 @@
-type Header : Text
+component Row
 {
-    fontSize: 24
-    fontWeight: bold
-    align: center
+    direction: horizontal;
 }
 
-type TextInput : Element
+component Column
 {
-    @placeholder: "Enter text here"
-    @text: ""
+    direction: vertical;
+}
+
+component Header : Text
+{
+    fontSize: 24;
+    fontWeight: bold;
+    align: center;
+}
+
+component Button(string? label, string? icon, function action) : Element
+{
+    width: 100px;
+    height: 50px;
+
+    if (Hovered and MouseUp)
+    {
+        action();
+    }
+
+    Row
+    {
+        if (icon) Icon(icon);
+        if (label) Text(label);
+    }
+}
+
+component Slider(float @value, float min, float max) : Element
+{
+    width: 100%;
+    height: 10px + percent * 10px;
+
+    float percent: (value - min) / (max - min); // since this custom property is not bound we use : to set it and no @ sign (it is calculated on the fly)
     
+    if (Pressed and MouseMove)
+    {
+        CaptureMouse();
+
+        var width = Computed.width;
+        var x = MouseX - Computed.x;
+        var p = x / width;
+        p = clamp(p, 0, 1);
+        value = min + p * (max - min);
+    }
 }
 
-type LabeledInput(label: string) : Row
+component Window(string title, init float x, init float y) : Element
 {
-    Text(label)
-    TextInput()
+    width: 800px;
+    height: 600px;
+    floating: true;
+    relativeTo: root; // values: root, parent, window, container (container is the last ancestor marked with the "container")
+
+    @top = x; // because these are bound they are set once and then pulled from memory and accessed using @top and @left
+    @left = y;
+    
+    Row titleBar
+    {
+        background:rgb(24, 24, 24);
+        padding: 10px;
+        radius: 10px 0px; // top bottom
+        
+        Header(title);
+        
+        if (Pressed)
+        {
+            CaptureMouse();
+            @top += MouseDeltaX; // because top is bound we can modify it directly
+            @left += MouseDeltaY; 
+        }
+    }
+
+    Element
+    {
+        background: rgb(36, 36, 36);
+        padding: 10px;
+        radius: 0 0 10px 10px; // top-left top-right bottom-left bottom-right
+
+        content container Column // content inside the Window will go inside this element, container means relativeTo: container will position relative to this element
+        {
+            
+        }
+    }
 }
 
-
-Element
+root Window("Mycelium Test")
 {
-    Header("Login")
-    
+    Column
+    {
+        Header("Mycelium Test Window");
 
-    
+        Row
+        {
+            Button("Click Me", ~, () => print("Button clicked!"));
+            Button(~, "lucide/plus", () => { print("Button 2!"); });
+        }
 
+        Slider(float @value, 0, 100);
 
-
-
-
+        float @value = 0;
+        Slider(value, 0, 100);
+        Text("Value: " + value);
+    }
 }
+

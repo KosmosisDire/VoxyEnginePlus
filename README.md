@@ -1,6 +1,6 @@
-# VoxyEnginePlus
+# PrismEnginePlus
 
-A c++ rewrite of VoxyEngine (C#) using the Daxa vulkan abstraction library.
+A c++ rewrite of PrismEngine (C#) using the Daxa vulkan abstraction library.
 
 ## Screenshots
 

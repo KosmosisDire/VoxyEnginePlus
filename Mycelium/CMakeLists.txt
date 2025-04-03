@@ -1,12 +1,21 @@
-# Mycelium/CMakeLists.txt
-file(GLOB_RECURSE ENGINE_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp",
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/source/*.cpp"
+include("${CMAKE_CURRENT_LIST_DIR}/deps.cmake")
+
+set(ANTLR_GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/preprocessor)
+
+# Collect Engine Sources (Explicitly add ANTLR sources, avoid GLOB for them)
+file(GLOB_RECURSE ENGINE_ONLY_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
+    "${angelscript_SOURCE_DIR}/sdk/add_on/*.cpp"
+    "${antlr_SOURCE_DIR}/*.cpp"
 )
 
 # Create static library
-add_library(Mycelium STATIC ${ENGINE_SRC})
+add_library(Mycelium STATIC
+    ${ENGINE_ONLY_SRC}
+)
 
+# --- AngelScript MSVC x64 Assembly Handling ---
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     # Initialize a variable to hold the ml64 path
     set(ML64 "ML64-NOTFOUND")
@@ -85,46 +94,46 @@ if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
     
     # Check if we found ml64
     if(NOT ML64 OR NOT EXISTS "${ML64}")
-        message(STATUS "ML64 not found. Trying alternative approach with AS_MAX_PORTABILITY.")
-        # Fall back to using the portable approach that doesn't require assembly
-        add_definitions(-DAS_MAX_PORTABILITY)
+        message(STATUS "ML64 not found. Using AngelScript AS_MAX_PORTABILITY.")
+        target_compile_definitions(Mycelium PRIVATE AS_MAX_PORTABILITY)
     else()
         message(STATUS "Found ML64: ${ML64}")
-        
-        # Set the asm file path
-        set(ASM_FILE "${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/source/as_callfunc_x64_msvc_asm.asm")
-        
-        # Create a custom command to compile the assembly file
+        set(ASM_FILE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_msvc_asm.asm")
         set(ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_msvc_asm.obj")
+
+        # Ensure custom command uses correct paths and VERBATIM
         add_custom_command(
             OUTPUT ${ASM_OBJ}
             COMMAND ${ML64} /c /nologo /Fo${ASM_OBJ} /W3 /Zi /Ta ${ASM_FILE}
             DEPENDS ${ASM_FILE}
             COMMENT "Assembling ${ASM_FILE}"
+            VERBATIM
         )
-        
-        # Add the object file to your library
+        # Add the generated object file to the library sources
         target_sources(Mycelium PRIVATE ${ASM_OBJ})
     endif()
 endif()
+# --- End AngelScript MSVC ---
 
-# create a file that contains the project root directory
+# Configure project_paths.h
+# Assume project_paths.h.in is in Mycelium/include/
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
-    "${PROJECT_BINARY_DIR}/include/project_paths.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/project_paths.h"
 )
-include_directories("${PROJECT_BINARY_DIR}/include")
 
-# Add include directories
-target_include_directories(Mycelium 
-    PUBLIC 
+# Define Include Directories for Mycelium
+target_include_directories(Mycelium
+    PUBLIC # Things users of Mycelium need
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/angelscript/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_BINARY_DIR}/include
         ${PROJECT_BINARY_DIR}/include
+        ${ANTLR_GENERATED_DIR}
+        ${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src
+        ${angelscript_SOURCE_DIR}/sdk/angelscript/include
 )
 
 # Find and link dependencies
@@ -135,17 +144,12 @@ find_package(fmt CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 
 # Link dependencies
-target_link_libraries(Mycelium 
+target_link_libraries(Mycelium
     PUBLIC 
         glfw
         daxa::daxa
         glm::glm
         fmt::fmt
         imgui::imgui
-)
-
-# Create resources directories
-add_custom_command(TARGET Mycelium PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders"
-    COMMENT "Creating engine resource directories"
+        antlr
 )
