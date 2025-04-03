@@ -17,15 +17,15 @@ endif()
 # Define Include Directories for the executable
 target_include_directories(${PROJECT_NAME}
     PRIVATE
-        # Directory containing main.cpp etc.
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_BINARY_DIR}/include # Adjust if Mycelium build dir is elsewhere
+        ${CMAKE_BINARY_DIR}/include # For generated headers like project_paths.h
+        # ANTLR include dirs should be inherited via Mycelium PUBLIC linkage
 )
 
 # Link executable against libraries
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-        Mycelium # Link the engine library
+    PUBLIC # Changed from PRIVATE to inherit usage requirements
+        Mycelium # Link the engine library (which now includes ANTLR sources)
 )
 
 # --- Resource Handling ---

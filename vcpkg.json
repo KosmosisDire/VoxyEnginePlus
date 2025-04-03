@@ -13,9 +13,6 @@
         "utils-task-graph"
       ]
     },
-    {
-      "name": "glfw3"
-    },
     "glm",
     "fmt",
     {
@@ -24,6 +21,9 @@
         "glfw-binding",
         "docking-experimental"
       ]
+    },
+    {
+      "name": "glfw3"
     }
   ],
   "vcpkg-configuration": {

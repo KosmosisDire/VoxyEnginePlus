@@ -7,8 +7,8 @@
     },
     "configurePresets": [
         {
-            "name": "Debug",
-            "description": "Debug configuration",
+            "name": "Debug-Windows",
+            "description": "Debug configuration (Windows)",
             "hidden": false,
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/build/Debug",
@@ -18,12 +18,13 @@
                 "rhs": "Windows"
             },
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
-            "name": "Release",
-            "description": "Release configuration",
+            "name": "Release-Windows",
+            "description": "Release configuration (Windows)",
             "hidden": false,
             "generator": "Visual Studio 17 2022",
             "binaryDir": "${sourceDir}/build/Release",
@@ -33,12 +34,13 @@
                 "rhs": "Windows"
             },
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
-            "name": "Debug",
-            "description": "Debug configuration",
+            "name": "Debug-Linux",
+            "description": "Debug configuration (Linux)",
             "hidden": false,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/Debug",
@@ -52,8 +54,8 @@
             }
         },
         {
-            "name": "Release",
-            "description": "Release configuration",
+            "name": "Release-Linux",
+            "description": "Release configuration (Linux)",
             "hidden": false,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/Release",

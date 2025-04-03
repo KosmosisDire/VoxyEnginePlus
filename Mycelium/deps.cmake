@@ -1,11 +1,5 @@
 include(FetchContent)
-FetchContent_Declare(
-    antlr
-    GIT_REPOSITORY https://github.com/antlr/antlr4.git
-    GIT_TAG        4.13.2
-)
-FetchContent_MakeAvailable(antlr)
-message(STATUS "Mycelium: antlr_SOURCE_DIR = ${antlr_SOURCE_DIR}")
+# ANTLR is now fetched in the root CMakeLists.txt
 
 FetchContent_Declare(
     angelscript
@@ -53,13 +47,3 @@ else()
     endif()
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/../lib/vcpkg/scripts/buildsystems/vcpkg.cmake")
 endif()
-
-
-
-
-
-
-
-
-
-

@@ -1,5 +1,7 @@
 include("${CMAKE_CURRENT_LIST_DIR}/deps.cmake")
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "lib/vcpkg/installed/x64-windows/share/glfw3")
+
 set(ANTLR_GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/preprocessor)
 
 # Collect Engine Sources (Explicitly add ANTLR sources, avoid GLOB for them)
@@ -7,12 +9,16 @@ file(GLOB_RECURSE ENGINE_ONLY_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
     "${angelscript_SOURCE_DIR}/sdk/add_on/*.cpp"
-    "${antlr_SOURCE_DIR}/*.cpp"
+    "${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src/*.cpp" # Compile ANTLR sources directly
 )
+
+# Add ANTLR generated sources
+file(GLOB_RECURSE ANTLR_GENERATED_SRC "${ANTLR_GENERATED_DIR}/*.cpp")
 
 # Create static library
 add_library(Mycelium STATIC
     ${ENGINE_ONLY_SRC}
+    ${ANTLR_GENERATED_SRC} # Add generated parser/lexer sources
 )
 
 # --- AngelScript MSVC x64 Assembly Handling ---
@@ -132,9 +138,12 @@ target_include_directories(Mycelium
         ${CMAKE_CURRENT_BINARY_DIR}/include
         ${PROJECT_BINARY_DIR}/include
         ${ANTLR_GENERATED_DIR}
-        ${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src
+        ${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src # Ensure ANTLR include dir is public
         ${angelscript_SOURCE_DIR}/sdk/angelscript/include
 )
+
+# Add compile definition for static ANTLR build
+target_compile_definitions(Mycelium PUBLIC ANTLR4CPP_STATIC)
 
 # Find and link dependencies
 find_package(glfw3 CONFIG REQUIRED)
@@ -146,10 +155,10 @@ find_package(imgui CONFIG REQUIRED)
 # Link dependencies
 target_link_libraries(Mycelium
     PUBLIC 
-        glfw
-        daxa::daxa
-        glm::glm
-        fmt::fmt
-        imgui::imgui
-        antlr
+        glfw # Assuming glfw provides 'glfw' target
+        daxa::daxa # Standard target for daxa
+        glm::glm # Standard target for glm
+        fmt::fmt # Standard target for fmt
+        imgui::imgui # Standard target for imgui
+        # ANTLR linked via source files now
 )
