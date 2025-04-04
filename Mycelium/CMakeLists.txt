@@ -5,8 +5,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "lib/vcpkg/installed/x64-windows/shar
 set(ANTLR_GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/preprocessor)
 
 # Collect Engine Sources (Explicitly add ANTLR sources, avoid GLOB for them)
-file(GLOB_RECURSE ENGINE_ONLY_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+# Use **/*.cpp to recurse into subdirectories like src/scripting, src/ui, etc.
+file(GLOB_RECURSE ENGINE_ONLY_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/**/*.cpp"
     "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
     "${angelscript_SOURCE_DIR}/sdk/add_on/*.cpp"
     "${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src/*.cpp" # Compile ANTLR sources directly
@@ -145,6 +146,11 @@ target_include_directories(Mycelium
 
 # Add compile definition for static ANTLR build
 target_compile_definitions(Mycelium PUBLIC ANTLR4CPP_STATIC)
+
+# Force include <chrono> for MSVC to fix ANTLR build issues
+if(MSVC)
+    target_compile_options(Mycelium PRIVATE /FI"chrono")
+endif()
 
 # Find and link dependencies (Daxa is now built via FetchContent)
 find_package(glfw3 CONFIG REQUIRED)

@@ -15,7 +15,7 @@ rootComponent
     ;
 
 componentCall
-    : componentName=ID '(' parameterList? ')' '{' element* '}'
+    : componentName=ID ('(' parameterList? ')')? '{' element* '}' // Make the whole () group optional
     ;
 
 parameterList

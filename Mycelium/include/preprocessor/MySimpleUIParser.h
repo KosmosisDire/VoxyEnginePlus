@@ -1,5 +1,5 @@
 
-// Generated from MySimpleUI.g4 by ANTLR 4.13.2
+// Generated from ./MySimpleUI.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -113,14 +113,14 @@ public:
     antlr4::Token *componentName = nullptr;
     ComponentCallContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *LPAREN();
-    antlr4::tree::TerminalNode *RPAREN();
     antlr4::tree::TerminalNode *LBRACE();
     antlr4::tree::TerminalNode *RBRACE();
     antlr4::tree::TerminalNode *ID();
-    ParameterListContext *parameterList();
+    antlr4::tree::TerminalNode *LPAREN();
+    antlr4::tree::TerminalNode *RPAREN();
     std::vector<ElementContext *> element();
     ElementContext* element(size_t i);
+    ParameterListContext *parameterList();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;

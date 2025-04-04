@@ -1,5 +1,5 @@
 
-// Generated from MySimpleUI.g4 by ANTLR 4.13.2
+// Generated from ./MySimpleUI.g4 by ANTLR 4.13.2
 
 
 #include "MySimpleUIListener.h"
@@ -68,30 +68,31 @@ void mysimpleuiParserInitialize() {
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,16,86,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,7,
+  	4,1,16,88,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,7,
   	7,7,2,8,7,8,2,9,7,9,2,10,7,10,1,0,5,0,24,8,0,10,0,12,0,27,9,0,1,0,1,0,
-  	1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,2,1,3,1,3,1,3,3,3,44,8,3,1,3,1,
-  	3,1,3,5,3,49,8,3,10,3,12,3,52,9,3,1,3,1,3,1,4,1,4,1,4,5,4,59,8,4,10,4,
-  	12,4,62,9,4,1,5,3,5,65,8,5,1,5,1,5,1,6,1,6,3,6,71,8,6,1,7,1,7,1,7,1,7,
-  	1,7,1,8,1,8,3,8,80,8,8,1,9,1,9,1,10,1,10,1,10,0,0,11,0,2,4,6,8,10,12,
-  	14,16,18,20,0,2,1,0,3,4,1,0,5,6,81,0,25,1,0,0,0,2,31,1,0,0,0,4,38,1,0,
-  	0,0,6,40,1,0,0,0,8,55,1,0,0,0,10,64,1,0,0,0,12,70,1,0,0,0,14,72,1,0,0,
-  	0,16,79,1,0,0,0,18,81,1,0,0,0,20,83,1,0,0,0,22,24,3,2,1,0,23,22,1,0,0,
-  	0,24,27,1,0,0,0,25,23,1,0,0,0,25,26,1,0,0,0,26,28,1,0,0,0,27,25,1,0,0,
-  	0,28,29,3,4,2,0,29,30,5,0,0,1,30,1,1,0,0,0,31,32,5,1,0,0,32,33,5,5,0,
-  	0,33,34,5,5,0,0,34,35,5,13,0,0,35,36,3,16,8,0,36,37,5,12,0,0,37,3,1,0,
-  	0,0,38,39,3,6,3,0,39,5,1,0,0,0,40,41,5,5,0,0,41,43,5,7,0,0,42,44,3,8,
-  	4,0,43,42,1,0,0,0,43,44,1,0,0,0,44,45,1,0,0,0,45,46,5,8,0,0,46,50,5,9,
-  	0,0,47,49,3,12,6,0,48,47,1,0,0,0,49,52,1,0,0,0,50,48,1,0,0,0,50,51,1,
-  	0,0,0,51,53,1,0,0,0,52,50,1,0,0,0,53,54,5,10,0,0,54,7,1,0,0,0,55,60,3,
-  	10,5,0,56,57,5,14,0,0,57,59,3,10,5,0,58,56,1,0,0,0,59,62,1,0,0,0,60,58,
-  	1,0,0,0,60,61,1,0,0,0,61,9,1,0,0,0,62,60,1,0,0,0,63,65,5,2,0,0,64,63,
-  	1,0,0,0,64,65,1,0,0,0,65,66,1,0,0,0,66,67,3,16,8,0,67,11,1,0,0,0,68,71,
-  	3,14,7,0,69,71,3,6,3,0,70,68,1,0,0,0,70,69,1,0,0,0,71,13,1,0,0,0,72,73,
-  	5,5,0,0,73,74,5,11,0,0,74,75,3,16,8,0,75,76,5,12,0,0,76,15,1,0,0,0,77,
-  	80,3,18,9,0,78,80,3,20,10,0,79,77,1,0,0,0,79,78,1,0,0,0,80,17,1,0,0,0,
-  	81,82,7,0,0,0,82,19,1,0,0,0,83,84,7,1,0,0,84,21,1,0,0,0,7,25,43,50,60,
-  	64,70,79
+  	1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,1,2,1,3,1,3,1,3,3,3,44,8,3,1,3,3,
+  	3,47,8,3,1,3,1,3,5,3,51,8,3,10,3,12,3,54,9,3,1,3,1,3,1,4,1,4,1,4,5,4,
+  	61,8,4,10,4,12,4,64,9,4,1,5,3,5,67,8,5,1,5,1,5,1,6,1,6,3,6,73,8,6,1,7,
+  	1,7,1,7,1,7,1,7,1,8,1,8,3,8,82,8,8,1,9,1,9,1,10,1,10,1,10,0,0,11,0,2,
+  	4,6,8,10,12,14,16,18,20,0,2,1,0,3,4,1,0,5,6,84,0,25,1,0,0,0,2,31,1,0,
+  	0,0,4,38,1,0,0,0,6,40,1,0,0,0,8,57,1,0,0,0,10,66,1,0,0,0,12,72,1,0,0,
+  	0,14,74,1,0,0,0,16,81,1,0,0,0,18,83,1,0,0,0,20,85,1,0,0,0,22,24,3,2,1,
+  	0,23,22,1,0,0,0,24,27,1,0,0,0,25,23,1,0,0,0,25,26,1,0,0,0,26,28,1,0,0,
+  	0,27,25,1,0,0,0,28,29,3,4,2,0,29,30,5,0,0,1,30,1,1,0,0,0,31,32,5,1,0,
+  	0,32,33,5,5,0,0,33,34,5,5,0,0,34,35,5,13,0,0,35,36,3,16,8,0,36,37,5,12,
+  	0,0,37,3,1,0,0,0,38,39,3,6,3,0,39,5,1,0,0,0,40,46,5,5,0,0,41,43,5,7,0,
+  	0,42,44,3,8,4,0,43,42,1,0,0,0,43,44,1,0,0,0,44,45,1,0,0,0,45,47,5,8,0,
+  	0,46,41,1,0,0,0,46,47,1,0,0,0,47,48,1,0,0,0,48,52,5,9,0,0,49,51,3,12,
+  	6,0,50,49,1,0,0,0,51,54,1,0,0,0,52,50,1,0,0,0,52,53,1,0,0,0,53,55,1,0,
+  	0,0,54,52,1,0,0,0,55,56,5,10,0,0,56,7,1,0,0,0,57,62,3,10,5,0,58,59,5,
+  	14,0,0,59,61,3,10,5,0,60,58,1,0,0,0,61,64,1,0,0,0,62,60,1,0,0,0,62,63,
+  	1,0,0,0,63,9,1,0,0,0,64,62,1,0,0,0,65,67,5,2,0,0,66,65,1,0,0,0,66,67,
+  	1,0,0,0,67,68,1,0,0,0,68,69,3,16,8,0,69,11,1,0,0,0,70,73,3,14,7,0,71,
+  	73,3,6,3,0,72,70,1,0,0,0,72,71,1,0,0,0,73,13,1,0,0,0,74,75,5,5,0,0,75,
+  	76,5,11,0,0,76,77,3,16,8,0,77,78,5,12,0,0,78,15,1,0,0,0,79,82,3,18,9,
+  	0,80,82,3,20,10,0,81,79,1,0,0,0,81,80,1,0,0,0,82,17,1,0,0,0,83,84,7,0,
+  	0,0,84,19,1,0,0,0,85,86,7,1,0,0,86,21,1,0,0,0,8,25,43,46,52,62,66,72,
+  	81
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -384,14 +385,6 @@ MySimpleUIParser::ComponentCallContext::ComponentCallContext(ParserRuleContext *
   : ParserRuleContext(parent, invokingState) {
 }
 
-tree::TerminalNode* MySimpleUIParser::ComponentCallContext::LPAREN() {
-  return getToken(MySimpleUIParser::LPAREN, 0);
-}
-
-tree::TerminalNode* MySimpleUIParser::ComponentCallContext::RPAREN() {
-  return getToken(MySimpleUIParser::RPAREN, 0);
-}
-
 tree::TerminalNode* MySimpleUIParser::ComponentCallContext::LBRACE() {
   return getToken(MySimpleUIParser::LBRACE, 0);
 }
@@ -404,8 +397,12 @@ tree::TerminalNode* MySimpleUIParser::ComponentCallContext::ID() {
   return getToken(MySimpleUIParser::ID, 0);
 }
 
-MySimpleUIParser::ParameterListContext* MySimpleUIParser::ComponentCallContext::parameterList() {
-  return getRuleContext<MySimpleUIParser::ParameterListContext>(0);
+tree::TerminalNode* MySimpleUIParser::ComponentCallContext::LPAREN() {
+  return getToken(MySimpleUIParser::LPAREN, 0);
+}
+
+tree::TerminalNode* MySimpleUIParser::ComponentCallContext::RPAREN() {
+  return getToken(MySimpleUIParser::RPAREN, 0);
 }
 
 std::vector<MySimpleUIParser::ElementContext *> MySimpleUIParser::ComponentCallContext::element() {
@@ -414,6 +411,10 @@ std::vector<MySimpleUIParser::ElementContext *> MySimpleUIParser::ComponentCallC
 
 MySimpleUIParser::ElementContext* MySimpleUIParser::ComponentCallContext::element(size_t i) {
   return getRuleContext<MySimpleUIParser::ElementContext>(i);
+}
+
+MySimpleUIParser::ParameterListContext* MySimpleUIParser::ComponentCallContext::parameterList() {
+  return getRuleContext<MySimpleUIParser::ParameterListContext>(0);
 }
 
 
@@ -457,32 +458,38 @@ MySimpleUIParser::ComponentCallContext* MySimpleUIParser::componentCall() {
     enterOuterAlt(_localctx, 1);
     setState(40);
     antlrcpp::downCast<ComponentCallContext *>(_localctx)->componentName = match(MySimpleUIParser::ID);
-    setState(41);
-    match(MySimpleUIParser::LPAREN);
-    setState(43);
+    setState(46);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 124) != 0)) {
-      setState(42);
-      parameterList();
+    if (_la == MySimpleUIParser::LPAREN) {
+      setState(41);
+      match(MySimpleUIParser::LPAREN);
+      setState(43);
+      _errHandler->sync(this);
+
+      _la = _input->LA(1);
+      if ((((_la & ~ 0x3fULL) == 0) &&
+        ((1ULL << _la) & 124) != 0)) {
+        setState(42);
+        parameterList();
+      }
+      setState(45);
+      match(MySimpleUIParser::RPAREN);
     }
-    setState(45);
-    match(MySimpleUIParser::RPAREN);
-    setState(46);
+    setState(48);
     match(MySimpleUIParser::LBRACE);
-    setState(50);
+    setState(52);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == MySimpleUIParser::ID) {
-      setState(47);
+      setState(49);
       element();
-      setState(52);
+      setState(54);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(53);
+    setState(55);
     match(MySimpleUIParser::RBRACE);
    
   }
@@ -556,17 +563,17 @@ MySimpleUIParser::ParameterListContext* MySimpleUIParser::parameterList() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(55);
+    setState(57);
     parameter();
-    setState(60);
+    setState(62);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while (_la == MySimpleUIParser::COMMA) {
-      setState(56);
+      setState(58);
       match(MySimpleUIParser::COMMA);
-      setState(57);
+      setState(59);
       parameter();
-      setState(62);
+      setState(64);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
@@ -634,15 +641,15 @@ MySimpleUIParser::ParameterContext* MySimpleUIParser::parameter() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(64);
+    setState(66);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == MySimpleUIParser::BIND) {
-      setState(63);
+      setState(65);
       match(MySimpleUIParser::BIND);
     }
-    setState(66);
+    setState(68);
     expression();
    
   }
@@ -706,19 +713,19 @@ MySimpleUIParser::ElementContext* MySimpleUIParser::element() {
     exitRule();
   });
   try {
-    setState(70);
+    setState(72);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 5, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 6, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(68);
+      setState(70);
       propertyAssignment();
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(69);
+      setState(71);
       componentCall();
       break;
     }
@@ -797,13 +804,13 @@ MySimpleUIParser::PropertyAssignmentContext* MySimpleUIParser::propertyAssignmen
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(72);
-    antlrcpp::downCast<PropertyAssignmentContext *>(_localctx)->propertyName = match(MySimpleUIParser::ID);
-    setState(73);
-    match(MySimpleUIParser::COLON);
     setState(74);
-    antlrcpp::downCast<PropertyAssignmentContext *>(_localctx)->value = expression();
+    antlrcpp::downCast<PropertyAssignmentContext *>(_localctx)->propertyName = match(MySimpleUIParser::ID);
     setState(75);
+    match(MySimpleUIParser::COLON);
+    setState(76);
+    antlrcpp::downCast<PropertyAssignmentContext *>(_localctx)->value = expression();
+    setState(77);
     match(MySimpleUIParser::SEMI);
    
   }
@@ -867,13 +874,13 @@ MySimpleUIParser::ExpressionContext* MySimpleUIParser::expression() {
     exitRule();
   });
   try {
-    setState(79);
+    setState(81);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
       case MySimpleUIParser::NUMBER:
       case MySimpleUIParser::STRING: {
         enterOuterAlt(_localctx, 1);
-        setState(77);
+        setState(79);
         literal();
         break;
       }
@@ -881,7 +888,7 @@ MySimpleUIParser::ExpressionContext* MySimpleUIParser::expression() {
       case MySimpleUIParser::ID:
       case MySimpleUIParser::AT_ID: {
         enterOuterAlt(_localctx, 2);
-        setState(78);
+        setState(80);
         identifier();
         break;
       }
@@ -953,7 +960,7 @@ MySimpleUIParser::LiteralContext* MySimpleUIParser::literal() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(81);
+    setState(83);
     _la = _input->LA(1);
     if (!(_la == MySimpleUIParser::NUMBER
 
@@ -1028,7 +1035,7 @@ MySimpleUIParser::IdentifierContext* MySimpleUIParser::identifier() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(83);
+    setState(85);
     _la = _input->LA(1);
     if (!(_la == MySimpleUIParser::ID
 
