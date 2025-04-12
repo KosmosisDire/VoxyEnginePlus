@@ -2,31 +2,17 @@
 #include <filesystem>
 #include <string>
 
+#include <vector> // Added for std::vector
+
 namespace Resources
 {
-inline std::filesystem::path GetResourcePath(const std::string relativePath)
-{
-    std::filesystem::path path = std::filesystem::current_path() / "resources" / relativePath;
+    // Function to get the full path to a resource file, searching if necessary
+    std::filesystem::path GetResourcePath(const std::string& relativePath);
 
-    // check if the file exists, and do a search if it doesn't
-    if (!std::filesystem::exists(path))
-    {
-        for (const auto &entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
-        {
-            if (entry.path().filename() == relativePath)
-            {
-                path = entry.path();
-                break;
-            }
-        }
+    // Function to read a resource file into a binary buffer (vector of chars)
+    std::vector<char> ReadAsBinary(const std::string& relativePath);
 
-        // check if file exists and throw an error if it doesn't
-        if (!std::filesystem::exists(path))
-        {
-            throw std::runtime_error("Resource not found: " + path.string());
-        }
-    }
+    // Function to read a resource file into a string
+    std::string ReadAsString(const std::string& relativePath);
 
-    return path;
-}
 } // namespace Resources
