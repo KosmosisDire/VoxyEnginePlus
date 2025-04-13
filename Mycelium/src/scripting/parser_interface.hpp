@@ -18,6 +18,7 @@ namespace antlr4
 // Include generated lexer and parser headers directly
 #include "preprocessor/MySimpleUILexer.h"
 #include "preprocessor/MySimpleUIParser.h"
+#include "ast_converter.hpp" // Include the converter
 
 namespace Mycelium::Scripting
 {
@@ -32,12 +33,14 @@ namespace Mycelium::Scripting
              * @brief Parses the given script content using the MySimpleUI parser.
              *
              * @param scriptContent The string content of the script to parse.
-             * @return A shared pointer to the ANTLR ParseTree. Returns nullptr on error.
-             *         (Consider returning a more abstract representation or error info later)
+            /**
+             * @brief Parses the script and generates a C-API style string representation.
+             *
+             * @param scriptContent The string content of the script to parse and convert.
+             * @return A string containing the generated C-API calls. Returns an error message string on failure.
              */
-            static std::shared_ptr<antlr4::tree::ParseTree> parseScript(const std::string& scriptContent);
+            static std::string generateCApi(const std::string& scriptContent);
 
-            // Potentially add more methods here later, e.g., to walk the tree, extract specific info, etc.
 
         private:
             // Private constructor to prevent instantiation if only static methods are needed

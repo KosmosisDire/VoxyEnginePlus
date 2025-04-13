@@ -9,62 +9,80 @@
 #include "preprocessor/MySimpleUIParser.h"
 
 #include <iostream> // For potential error logging
+#include <sstream>  // For error messages
 
 namespace Mycelium::Scripting
 {
+    // Custom error listener (optional but recommended)
+    class ParserErrorListener : public antlr4::BaseErrorListener
+    {
+        public:
+            std::stringstream errorMessages;
+            bool hasErrors = false;
 
-    std::shared_ptr<antlr4::tree::ParseTree> ParserInterface::parseScript(const std::string& scriptContent)
+            void syntaxError(antlr4::Recognizer *recognizer, antlr4::Token *offendingSymbol, size_t line, size_t charPositionInLine,
+                             const std::string &msg, std::exception_ptr e) override
+            {
+                hasErrors = true;
+                // Prepend "// Error: " to make it clear in the output string
+                errorMessages << "// Error: line " << line << ":" << charPositionInLine << " " << msg << std::endl;
+            }
+    };
+
+
+    // --- Implementation for C-API Generation ---
+
+    std::string ParserInterface::generateCApi(const std::string& scriptContent)
     {
         antlr4::ANTLRInputStream inputStream(scriptContent);
         MySimpleUILexer lexer(&inputStream);
         antlr4::CommonTokenStream tokens(&lexer);
         MySimpleUIParser parser(&tokens);
 
-        // Optional: Add error listeners for more detailed diagnostics
-        // parser.removeErrorListeners(); // Remove default console listener
-        // parser.addErrorListener(...); // Add custom listener
+        // Add custom error listener
+        ParserErrorListener errorListener;
+        parser.removeErrorListeners(); // Remove default console listener
+        parser.addErrorListener(&errorListener);
+
+        antlr4::tree::ParseTree* tree = nullptr;
 
         try
         {
-            // Start parsing from the 'program' rule (assuming this is your grammar's entry point)
-            // Replace 'program' with your actual starting rule if different.
-            antlr4::tree::ParseTree* tree = parser.program();
+            // Start parsing from the 'program' rule
+            // This tree pointer is valid only within this function's scope
+            tree = parser.program();
 
-            if (parser.getNumberOfSyntaxErrors() > 0)
+            // Check for errors reported by the listener or the parser itself
+            if (errorListener.hasErrors || parser.getNumberOfSyntaxErrors() > 0 || !tree)
             {
-                // Handle parsing errors, e.g., log them or return nullptr
                 std::cerr << "Parser errors encountered!" << std::endl;
-                // Depending on requirements, you might still want to return the partial tree
-                // or guarantee nullptr on any error. For now, let's return nullptr.
-                return nullptr;
+                std::cerr << errorListener.errorMessages.str(); // Log errors to console
+                // Return the collected error messages
+                return "// Error: Failed to parse the script.\n" + errorListener.errorMessages.str();
             }
 
-            // TODO: Implement proper tree handling (e.g., visitor pattern or copying the tree)
-            //       to safely return the parsed structure instead of nullptr.
-            // For now, just print the tree structure for debugging.
-            if (tree)
-            {
-                // Print the tree structure to standard output
-                std::cout << "--- ANTLR Parse Tree ---" << std::endl;
-                std::cout << tree->toStringTree(&parser) << std::endl;
-                std::cout << "------------------------" << std::endl;
-            }
+            // Parsing succeeded, print the raw tree for debugging (optional)
+            // std::cout << "--- ANTLR Parse Tree ---" << std::endl;
+            // std::cout << tree->toStringTree(&parser) << std::endl;
+            // std::cout << "------------------------" << std::endl;
 
-            // Return nullptr for now, as the tree's lifetime is managed by the parser
-            // which is going out of scope. The caller should not use this pointer.
-            return nullptr;
 
+            // Now convert the valid tree using AstConverter
+            AstConverter converter;
+            return converter.generate(tree); // Pass the tree
 
         }
         catch (const std::exception& e)
         {
-            std::cerr << "ANTLR Parsing Exception: " << e.what() << std::endl;
-            return nullptr;
+            // Catch exceptions during parsing or conversion
+            std::cerr << "ANTLR Parsing/Conversion Exception: " << e.what() << std::endl;
+            return "// Error: Exception during parsing or C-API generation: " + std::string(e.what()) + "\n";
         }
         catch (...)
         {
-            std::cerr << "Unknown ANTLR Parsing Exception" << std::endl;
-            return nullptr;
+            // Catch unknown exceptions
+            std::cerr << "Unknown ANTLR Parsing/Conversion Exception" << std::endl;
+            return "// Error: Unknown exception during parsing or C-API generation.\n";
         }
     }
 

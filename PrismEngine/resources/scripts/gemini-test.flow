@@ -1,0 +1,278 @@
+
+
+component ProgressBar(state float value, float min = 0.0f, float max = 1.0f)
+{
+    prop float range = max - min;
+    prop float normalizedValue = clamp((value - min) / (range > 0.0f ? range : 1.0f), 0.0f, 1.0f);
+
+    style {
+        height: 20px;           
+        backgroundColor: color(0.2, 0.2, 0.2); 
+        borderRadius: 3px;          
+        overflow: hidden;
+    }
+
+    Element fill {
+        style {
+            width: Parent.normalizedValue * 100%;
+            height: 100%;          
+            backgroundColor: blue; 
+        }
+    }
+}
+
+component SegmentedProgressBar(state float value, float min = 0.0f, float max = 1.0f, int numSegments = 10)
+{
+    prop float range = max - min;
+    prop float valuePercentage = clamp((value - min) / (range > 0.0f ? range : 1.0f), 0.0f, 1.0f);
+
+    Row {
+        style {
+            gap: 3px;             
+            width: 100%;          
+            height: 100%;         
+        }
+
+        items (int i = 0; i < numSegments; i++) {
+            float segmentStartPercentage = i / float(numSegments);
+            float segmentFill = clamp((Parent.valuePercentage - segmentStartPercentage) * numSegments, 0.0f, 1.0f);
+
+            Element segment {
+                style {
+                    flex-grow: 1;     
+                    height: 100%;     
+                    backgroundColor: calculate { 
+                        Color emptyColor = color(0.3, 0.3, 0.3, 0.5);
+                        Color fullColor = blue;
+                        return lerp(emptyColor, fullColor, segmentFill);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+component Slider(state float value, float min = 0.0f, float max = 1.0f) : ProgressBar(value, min, max)
+{
+    event valueChanged(float newValue);
+    event dragStart();
+    event dragEnd();
+
+    style {
+        cursor: pointer;
+    }
+
+    
+    onPressed: (Context ctx) { /* ... AngelScript ... */ }
+    onMouseDrag: (Context ctx) { /* ... AngelScript ... */ }
+    onReleased: (Context ctx) { /* ... AngelScript ... */ }
+    void UpdateValueFromMouse(Context ctx) { /* ... AngelScript ... */ }
+}
+
+component Button(string labelText = "")
+{
+    event clicked();
+
+    
+    const Color DefaultBg = color(0.3, 0.3, 0.3);
+    const Color HoverBg = color(0.45, 0.45, 0.45);
+    const Color PressedBg = color(0.2, 0.2, 0.2);
+    const Color TextColor = white;
+
+    style {
+        padding: 8px 12px;      
+        cursor: pointer;
+        borderRadius: 4px;          
+        borderWidth: 0px;           
+        transition: background-color 0.15s ease, transform 0.1s ease; 
+
+        backgroundColor: calculate { 
+            if (Input.IsPressed) { return PressedBg; }
+            if (Input.IsHovered) { return HoverBg; }
+            return DefaultBg;
+        }
+
+        
+        transform: Input.IsPressed ? translateY(1px) : translateY(0px);
+
+        color: TextColor;       
+    }
+
+    Row {
+        style {
+            gap: 6px;             
+            align-items: center;  
+            justify-content: center; 
+        }
+
+        Image icon {
+            id: iconEl;
+            style {
+                 width: 16px;        
+                 height: 16px;       
+            }
+        }
+        Text label {
+            id: labelEl;
+            text: labelText;       
+            style {
+                font-size: 14px;    
+            }
+        }
+    }
+
+    
+    onClicked: (Context ctx) {
+        emit clicked();
+    }
+}
+
+
+component ToggleIconButton(string onIconPath, string offIconPath) : Button("")
+{
+    state bool isOn = false; 
+
+    
+    onClicked: (Context ctx) {
+        isOn = !isOn;
+        Image@ icon = findElementById("iconEl");
+        if (icon !is null) {
+             icon.path = isOn ? onIconPath : offIconPath;
+        }
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    
+}
+
+
+component Column() : Element
+{
+    
+    style { direction: column; }
+}
+
+component Row() : Element
+{
+    style { direction: row; }
+}
+
+
+
+
+void HandleHomeClick(Context ctx) { /* ... AngelScript ... */ }
+
+
+
+void DrawRoot() {
+    Column {
+        style {
+            width: 100%;        
+            height: 100%;       
+            backgroundColor: color(0.1, 0.1, 0.1);
+        }
+
+        Text header {
+            text: "Example Application";
+            style {
+                font-size: 24px;    
+                color: white;       
+                padding: 15px;      
+                background-color: color(0.15, 0.15, 0.15);
+                width: 100%;        
+                text-align: center; 
+            }
+        }
+
+        Row {
+            style { flex-grow: 1; } 
+
+            Column leftNav {
+                style {
+                    width: 200px;       
+                    height: 100%;       
+                    padding: 10px;      
+                    background-color: color(0.18, 0.18, 0.18);
+                    gap: 10px;          
+                }
+
+                Text {
+                    text: "Navigation";
+                    style {
+                        font-size: 18px;    
+                        color: darkgray;    
+                        margin-bottom: 10px; 
+                    }
+                }
+
+                Button homeButton {
+                    labelEl.text = "Home"; 
+                    iconEl.path = "icons/home.png";
+                    onClicked: ::HandleHomeClick; 
+                }
+
+                 Button settingsButton {
+                    labelEl.text = "Settings";
+                    iconEl.path = "icons/settings.png";
+                    onClicked: { print("Settings Clicked!"); } 
+                 }
+
+                 ToggleIconButton muteToggle {
+                     onIconPath: "icons/volume_on.png";
+                     offIconPath: "icons/volume_off.png";
+                 }
+            }
+
+            Column rightContent {
+                style {
+                    flex-grow: 1;       
+                    height: 100%;       
+                    padding: 20px;      
+                    gap: 15px;          
+                    background-color: color(0.22, 0.22, 0.22);
+                }
+
+                Text { text: "Content Area"; style { font-size: 20px; color: white; } }
+
+                Slider volumeSlider {
+                    id: mainVolume;
+                    value: 0.75; 
+                    min: 0.0; max: 1.0;
+                    onValueChanged: (float newValue) { 
+                        Text@ display = findElementById("volumeDisplay");
+                        if (display !is null) {
+                            display.text = "Volume: " + formatFloat(newValue * 100, "%.0f") + "%";
+                        }
+                    };
+                }
+
+                Text volumeDisplay {
+                     id: volumeDisplay;
+                     text: "Volume: " + formatFloat(mainVolume.value * 100, "%.0f") + "%"; 
+                     style { font-size: 14px; color: lightgray; }
+                }
+
+                SegmentedProgressBar downloadProgress {
+                     value: 0.65; 
+                     numSegments: 20;
+                     style { height: 10px; } 
+                }
+
+                 InteractiveBackgroundButton testButton {
+                     labelText = "Hover Me!";
+                     onClicked: { print("Interactive button clicked!"); }
+                 }
+            }
+        }
+    }
+}
+
+
+string formatFloat(float value, string fmt) { /* implementation */ return "" + value; }

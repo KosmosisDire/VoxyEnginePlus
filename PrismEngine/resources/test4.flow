@@ -1,0 +1,171 @@
+// --- Core Type Assumptions ---
+// Assumed types: Color, Length, Context, LayoutMetrics, ElementInputState
+// Assumed globals: color(), clamp(), print(), MasterVolume::setVolume(), black, white
+// Assumed InputState properties: PressDown, Pressing, PressUp, MouseRelativeX/Y, IsCaptured, Hovered, DragStart, Dragging, DragEnd
+
+component Button
+{
+    prop Color baseColor = Color(0.2, 0.2, 0.2);
+    prop string iconPath = "";
+    prop string labelText = "";
+    event clicked;
+
+    style
+    {
+        backgroundColor: select
+        {
+            this.input.Pressing: this.baseColor.adjustBrightness(1.2),
+            this.input.Hovered: this.baseColor.adjustBrightness(1.1),
+            default: this.baseColor
+        }
+        textColor: black; // Base color, potentially overridden
+        borderRadius: 10px; width: fit; padding: 10px; borderWidth: 0px; cursor: pointer;
+        transition: background-color 0.1s ease;
+    }
+
+    script
+    {
+        if (this.input.PressUp) { emit clicked(); }
+    }
+
+    Row { /* Assume Row centers children by default */
+        // Children implicitly access parent props via 'this' if needed & passed down
+        Image { path: this.iconPath; /* Add styling if needed */ }
+        Text { text: this.labelText; }
+    }
+}
+
+// --- Style Overrides ---
+
+Element override style
+{
+    textColor: white; // Default text color for all elements
+    margin: 0px;      // Default margin
+}
+
+Button override style
+{
+    // Override text color for buttons based on luminance (higher priority than Element override)
+    textColor: select
+    {
+        this.baseColor.luminance() < 0.5: white,
+        default: black
+    }
+}
+
+// --- Slider Component ---
+component Slider
+{
+    prop Color baseColor = Color(0.2, 0.2, 0.2);
+    prop Color fillColor = Color(1, 1, 1, 0.9);
+    prop float defaultValue = 0.5;
+    prop float min = 0;
+    prop float max = 1;
+    event onChanged(float newValue);
+
+    get prop float range => this.max - this.min;
+    get prop float fillPercent => this.range > 0.0001f ? clamp((this.state.value - this.min) / this.range, 0.0f, 1.0f) : 0.0f;
+
+    state { float value = this.defaultValue; } // Initialized once
+
+    style
+    {
+         width: 100%; backgroundColor: this.baseColor; borderRadius: 100px;
+         padding: 3px; height: 20px; cursor: pointer;
+    }
+
+    script
+    {
+        // Update value based on dragging or initial press
+        if (this.input.DragStart || this.input.Dragging || this.input.PressDown)
+        {
+            float trackWidth = this.layout.width - (this.style.padding.left + this.style.padding.right);
+            float relativeX = this.input.MouseRelativeX - this.style.padding.left;
+
+            if (trackWidth > 0.1f)
+            {
+                 float p = clamp(relativeX / trackWidth, 0.0, 1.0);
+                 float newValue = this.min + p * this.range;
+
+                 if (abs(newValue - this.state.value) > 0.001f)
+                 {
+                     this.state.value = newValue;
+                     emit onChanged(newValue);
+                 }
+            }
+        }
+        // Framework implicitly handles capture during drag
+    }
+
+    // Fill element representing the current value
+    Element fill
+    {
+        style
+        {
+            height: 100%;
+            width: this.fillPercent * 100%; // Uses parent's calculated prop
+            backgroundColor: this.fillColor;
+            borderRadius: 100px;
+        }
+    }
+}
+
+// --- Layout Component ---
+component Row
+{
+    prop Length gap = 0px;
+    style { gap: this.gap; direction: row; align-items: center; }
+}
+
+// --- Root Usage ---
+void Main()
+{
+    Text header
+    { 
+        text: "Settings"; 
+        style
+        { 
+            font-size: 24px; 
+            margin-bottom: 15px; 
+        } 
+    }
+
+    Row
+    {
+        gap: 10px; 
+        
+        style { padding: 5px; }
+
+        Text label { text: "Volume"; }
+
+        // Declare slider, 'volumeSlider' variable implicitly refers to this instance
+        Slider volumeSlider
+        {
+            min: 0; 
+            max: 100; 
+            defaultValue: 50;
+            onChanged: function(val) 
+            {
+                print("Volume via onChanged event: " + val);
+            }
+        }
+
+        Button submitButton
+        {
+            labelText: "Set";
+
+            clicked: function()
+            {
+                // Direct access to slider instance variable
+                print("Button clicked! Setting volume to: " + volumeSlider.state.value);
+                MasterVolume::setVolume(volumeSlider.state.value);
+            }
+
+            // Inline style for this specific button instance (highest priority)
+            style
+            {
+                baseColor: color(0.2, 0.5, 0.2);
+            }
+        }
+    }
+}

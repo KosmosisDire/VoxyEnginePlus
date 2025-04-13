@@ -3,7 +3,6 @@
 --indent-switches
 --indent-cases
 --indent-namespaces
---indent-classes
 --align-pointer=type
 --align-reference=type
 --break-blocks

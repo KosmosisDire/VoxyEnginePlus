@@ -1,0 +1,156 @@
+
+// Example of defining a progress bar component
+// all componenets inherently inherit the Element class in angelscript while contains all the property definitions and stuff;
+// state variables can be shorthand defined in the "constructor" defintition (or in the body like in the PlayPause exmaple)
+// state variables store their value across frames only taking back the value passed in if it changes
+component ProgressBar(state float value, float min = 0, float max = 1)
+{
+    // prop defines a variable that is recalculated on command.
+    prop float range = max - min;
+
+    // fill is the name of this child element
+    Element fill
+    {
+        // properties are basically built in variables related to style. Like an inline css.
+        // however they support full angelscript code inside them and are recalculated every frame.
+        width: ((value - min) / range) * 100%; // this is plain math in angelscript except 100% is just 1.0. Maybe in angelscript there can be a length type that defines the units of the measurment
+        height: 100%;
+        backgroundColor: blue;
+    }
+}
+
+// this is an example of procedurally created children
+component SegmentedProgressBar(state float value, float min = 0, float max = 1, int numSegments = 10)
+{
+    prop float range = max - min;
+    Element[] segments;
+
+    Row
+    {
+        gap: 3;
+
+        // basically just a for loop, but it actually returns a list of the elements created inside of 
+        // if two elements are created in the highest level them the list will be populated with all of them
+        // but they could be different types so we will have to handle type safety with this later.
+        // for now I am just assuming that only one element is created at the high level of the for loop and that is the type of the array that is returned
+        // assigning to segments allows this array to be acessed by the user of this component
+        segments = for (int i = 0; i < numSegments; i++)
+        {
+            float segmentPercentage = (i + 1) / (float)numSegments; // +1 so that the first segment represents "something" not "nothing"
+            float valuePercentage = (value - min) / range;
+
+            float segmentWidth = (Computed.innerWidth - (Computed.gap * (numSegments - 1))) / numSegments;
+
+            if (segmentPercentage > valuePercentage)
+            {
+                // This will create elements dynamically and insert them into the Row element, and store them in a list called segments
+                // since we create it conditionally the segments array will not be a fixed length
+                Element segment
+                {
+                    width: segmentWidth;
+                    backgroundColor: blue;
+                }
+            }
+        }
+    }
+}
+
+// this inherits the ProgressBar and calls the super function.
+component Slider(float startValue, float min = 0, float max = 1) : ProgressBar(startValue, min, max)
+{
+    // all this is just angelscript
+    if (Pressed) // pressed in an inherent property accessible inside the component context, not sure how this would show up in angelscript API
+    {
+        CaptureMouse(); // capture mouse forces it to keep handling this event even when the mouse is not hovering this element anymore
+        auto elementWidth = Computed.width;
+        auto mouseXRelative = MouseX - Computed.x;
+        auto p = clamp(mouseXRelative / elementWidth, 0.0, 1.0);
+        value = min + p * (range); // we are setting the state variable 'value' of the parent class here, and accessing the range property from the parent
+    }
+}
+
+component Button(string labelText = "")
+{
+    padding: 10px;
+
+    // every element already has click handling so no need to add explicit support for this in our button component
+
+    // adds an image and text element with default empty values (except text). The properties of these would have to be set by the user of this component.
+    Image icon; // you can leave off the parenthesis to just initialize an empty object.
+    Text label(labelText); // adds a text element called textEl with the text from the label argument. Modifying this after the component creation will override this value.
+}
+
+component ToggleIconButton(string onIcon, string offIcon) : Button("")
+{
+    state bool on = false; // initializes the variable to false which will stay across frames unless changed.
+
+    // angelscript
+    if (Clicked)
+    {
+        on = !on;
+    }
+
+    // sets the icon path in the parent
+    iconEl.path = on ? onIcon : offIcon;
+}
+
+component Column()
+{
+    direction: column;
+}
+
+component Row()
+{
+    direction: row;
+}
+
+void DrawRoot()
+{
+    Column // start an actual UI component in the root
+    {
+        Text header("Example") // text is a built in type
+        {
+            font-size: 24px;
+            font-color: black; // black would be a global variable in angelscript probably or it could be something inherent to this UI language
+        }
+
+        Row
+        {
+            Column left
+            {
+                width: 250px;
+                height: fill;
+                padding: 10px;
+
+                Text("Navigation") // again we can leave out the component name if we never reference it later
+                {
+                    font-color: color(0.78, 0.78, 0.78); // rgb could either be an angelscript global function to create a color object or it could be parsed by our parser and turned into a color object.
+                    font-size: 18px;
+                }
+
+                Button homeButton("Label")
+                {
+                    background-color: color(0.08, 0.08, 0.08, 0.8); // colors defined in percent notation
+                    if (Hovered)
+                    {
+                        background-color: background-color.alpha(1); // we can access the current value (not final computed value) and modify it
+                    }
+                }; // create a button with a label and some styles
+
+                // angelscript
+                homeButton.label.text = "Test"; // now we will never see that home button says "Label" even though it is being set every frame
+
+                if (homeButton.Clicked) // returns true the frame the mouse is let up while hovering this or while the mouse is captured on this element
+                {
+                    print("HOME!");
+                }
+            }
+
+            Column right
+            {
+                Slider volume(0.5);
+                print(volume.value);
+            }
+        }
+    }
+}

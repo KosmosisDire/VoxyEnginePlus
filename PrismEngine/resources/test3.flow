@@ -1,0 +1,155 @@
+component Button
+{
+    prop baseColor = Color(0.2, 0.2, 0.2);
+    prop iconPath = "";
+    prop labelText = "";
+
+    event clicked;
+
+    style
+    {
+        backgroundColor: select
+        {
+            this.Pressing: baseColor.adjustBrightness(1.2),
+            this.Hovered: baseColor.adjustBrightness(1.1),
+            default: baseColor
+        }
+        textColor: black;
+        borderRadius: 10px;
+        width: fit;
+        padding: 10px;
+    }
+
+    script
+    {
+
+    }
+}
+
+// makes every element have white text
+Element override style
+{
+    // this doesn't apply to the button because the button already has explicitly set a value for text color
+    textColor: white;
+    margin: 0px; // this does apply tob the button
+}
+
+// makes every button have a luminance based text color
+Button override style
+{
+    // this overrides the element override because element is lower in the inheritance chain
+    // it also overrides the text color set in the original button definition
+    textColor: select
+    {
+        baseColor.luminance() < 0.5: white, // I can only access this property because I am explicitly overriding Button
+        default: black
+    }
+}
+
+component Slider
+{
+    prop baseColor = Color(0.2, 0.2, 0.2);
+    prop fillColor = Color(1, 1, 1, 0.9);
+    prop defaultValue = 0.5;
+    prop min = 0;
+    prop max = 1;
+    event onChanged(float newValue);
+    get prop fillPercent => (state.value - min) / (max - min);
+
+    state
+    {
+        float value = startValue; // state is initialized only once!
+    }
+
+    style
+    {
+        width 100%;
+        backgroundColor: baseColor;
+        borderRadius: 100px;
+        padding: 3px;
+    }
+
+    script
+    {
+        if (this.input.Pressed)
+        {
+            CaptureMouse();
+            auto elementWidth = Computed.width;
+            auto mouseXRelative = MouseX - Computed.x;
+            auto p = clamp(mouseXRelative / elementWidth, 0.0, 1.0);
+            auto newValue = min + p * (range);
+
+            if (newValue != value)
+            {
+                emit onChanged(newValue);
+                state.value = newValue;
+            }
+        }
+    }
+
+    Element fill
+    {
+        style
+        {
+            height: 100%;
+            width: fillPercent * 100%;
+            borderRadius: 100px;
+        }
+    }
+}
+
+component Row
+{
+    prop gap = 0px;
+
+    style
+    {
+        gap: gap;
+        direction: row;
+    }
+}
+
+void Main()
+{
+    Text header
+    {
+        text: "Settings"; // this is also a member prop
+    }
+
+    Row
+    {
+        gap: 10px; // this is only available because we exposed it as a property of the object itself
+
+        Text label
+        {
+            text: "Volume";
+        }
+
+        Silder volumeSlider
+        {
+            // setting props is optional
+            min: 0;
+            max: 100;
+            defaultValue: 50;
+
+            get prop volume => state.value; // we can define new get properties in our usage of the component
+
+            onChanged: function(val)
+            {
+                // these will be implemented in angelscript, not as anonymous functions, but as inline code if possible.
+                // this is because anonymous functions cannot access outside variables yet in angelscript.
+                // the onChanged events can just be stored internally as booleans and their arguments can be stored as auto named public variables
+                print("Volume: " + val);
+            }
+        }
+
+        Button submitButton
+        {
+            labelText: "Set";
+            clicked: function
+            {
+                MasterVolume::setVolume(volumeSlider.volume) // We could also use volumeSlider.state.value
+            }
+        }
+    }
+} 

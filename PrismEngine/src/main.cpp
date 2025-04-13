@@ -3,84 +3,48 @@
 #include <engine/apis/Resources.hpp>
 #include <scripting/scripting.hpp>
 #include <scripting/parser_interface.hpp> // Include the new parser interface
-#include <iostream> // For test output
+#include <iostream> // For console output
+#include <filesystem> // For file system operations (hot reloading)
+#include <chrono>     // For time points (hot reloading)
+#include <fstream>    // For file writing
+
+namespace fs = std::filesystem;
 
 auto main() -> int
 {
-    // --- Test ANTLR Parser Interface ---
-    std::cout << "--- Testing ANTLR Parser ---" << std::endl;
-    std::string testScript =
-        "// test.mysimpleui - Example for MySimpleUI subset parser\n"
-        "\n"
-        "// --- State Declarations ---\n"
-        "// Test different types and initial values\n"
-        "state string appTitle = \"My Simple UI Test\";\n"
-        "state float defaultWidth = 200.0;\n"
-        "state int counter = 0;\n"
-        "state bool showDetails = true;\n"
-        "\n"
-        "// --- Root UI Definition ---\n"
-        "// A single Column component at the root\n"
-        "Column { // Root component call, no parameters, has body\n"
-        "\n"
-        "    // --- Property Assignments ---\n"
-        "    // Using number and identifier values\n"
-        "    padding: 10;\n"
-        "    background: grey; // 'grey' treated as an identifier keyword value\n"
-        "\n"
-        "    // --- Nested Component Call with Parameters and Body ---\n"
-        "    // Uses string literal, state variable identifier, and @delegate identifier\n"
-        "    Header(appTitle, @OnHeaderClick) {\n"
-        "        fontSize: 24; // Property using number\n"
-        "        color: white; // Property using identifier keyword\n"
-        "    }\n"
-        "\n"
-        "    // --- Nested Component with different parameter types ---\n"
-        "    // Uses bind, number literals\n"
-        "    Slider(bind counter, 0, 100) { // Note: 'bind' is a keyword before the identifier\n"
-        "        width: defaultWidth; // Property using state variable identifier\n"
-        "        height: 20;\n"
-        "    }\n"
-        "\n"
-        "    // --- Nested Component with only literal parameters ---\n"
-        "    Text(\"Current Count:\") {\n"
-        "        align: left; // Property using identifier keyword\n"
-        "    }\n"
-        "\n"
-        "    // --- Nested Component using state variable in parameter ---\n"
-        "    DisplayValue(counter) { // Passing state variable 'counter' as parameter\n"
-        "        format: decimal;\n"
-        "    }\n"
-        "\n"
-        "    // --- Nested Component with no parameters, but with body ---\n"
-        "    Panel() {\n"
-        "        borderWidth: 1;\n"
-        "        borderColor: black;\n"
-        "\n"
-        "        // --- Deeper Nesting ---\n"
-        "        Button(\"Toggle Details\", @ToggleDetails) {\n"
-        "             // Properties inside the nested button\n"
-        "             margin: 5;\n"
-        "             enabled: showDetails; // Property using state variable\n"
-        "        }\n"
-        "    }\n"
-        "\n"
-        "    // --- Nested Component with parameters, but no body ---\n"
-        "    // Note the empty {} required by this specific grammar design\n"
-        "    Separator(vertical) {} // Parameter is an identifier keyword\n"
-        "\n"
-        "    // --- Nested Component with no parameters and no body ---\n"
-        "    // Still requires () and {}\n"
-        "    Icon() {}\n"
-        "\n"
-        "} // End of root Column component\n";
+    // --- Initial Script Parsing ---
+    std::string scriptPathStr = Resources::GetResourcePath("test.flow").string();
+    fs::path scriptPath(scriptPathStr);
+    std::string outputFilePathStr = scriptPathStr + ".c_api.txt"; // Define output file path
+    std::string testScript = Resources::ReadAsString("test.flow");
 
-    std::cout << "Parsing script 1: '" << testScript << "'" << std::endl;
-    auto tree1 = Mycelium::Scripting::ParserInterface::parseScript(testScript);
-    std::cout << "Parse result 1 (expecting tree output above if successful): " << (tree1 ? "Success (Pointer returned)" : "Failure (nullptr returned)") << std::endl; // Note: Currently always returns nullptr
+    // --- Generate C-API from script and write to file ---
+    std::cout << "--- Generating C-API for: " << scriptPathStr << " ---" << std::endl;
+    std::string cApiOutput = Mycelium::Scripting::ParserInterface::generateCApi(testScript);
 
-    std::cout << "--- End ANTLR Parser Test ---" << std::endl << std::endl;
-    // --- End Test ---
+    try
+    {
+        std::ofstream outFile(outputFilePathStr);
+
+        if (outFile.is_open())
+        {
+            outFile << cApiOutput;
+            outFile.close();
+            std::cout << "--- C-API output written to: " << outputFilePathStr << " ---" << std::endl;
+        }
+        else
+        {
+            std::cerr << "Error: Could not open output file: " << outputFilePathStr << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error writing C-API output file: " << e.what() << std::endl;
+    }
+
+    // ----------------------------------------------------
+    auto lastWriteTime = fs::last_write_time(scriptPath);
+    // -----------------------------
 
     scriptingEngine.registerStdLib();
     scriptingEngine.registerEngineAPI();
@@ -92,7 +56,56 @@ auto main() -> int
 
     while (true)
     {
-        scriptingEngine.checkHotReload();
+        // --- Hot Reload Check for ANTLR Script ---
+        try
+        {
+            auto currentWriteTime = fs::last_write_time(scriptPath);
+
+            if (currentWriteTime > lastWriteTime)
+            {
+                std::cout << "Detected change in " << scriptPathStr << ". Reloading and generating C-API..." << std::endl;
+                testScript = Resources::ReadAsString("test.flow"); // Re-read the file
+
+                // --- Generate C-API from reloaded script and write to file ---
+                std::cout << "--- Generating C-API (Hot Reload) ---" << std::endl;
+                cApiOutput = Mycelium::Scripting::ParserInterface::generateCApi(testScript); // Re-generate
+
+                try
+                {
+                    std::ofstream outFile(outputFilePathStr);
+
+                    if (outFile.is_open())
+                    {
+                        outFile << cApiOutput;
+                        outFile.close();
+                        std::cout << "--- C-API output written to: " << outputFilePathStr << " ---" << std::endl;
+                    }
+                    else
+                    {
+                        std::cerr << "Error: Could not open output file: " << outputFilePathStr << std::endl;
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    std::cerr << "Error writing C-API output file (Hot Reload): " << e.what() << std::endl;
+                }
+
+                // -----------------------------------------------------------
+                lastWriteTime = currentWriteTime; // Update the last write time
+                std::cout << "Hot reload processing complete." << std::endl;
+                // Optionally: Trigger UI update or other actions based on the new cApiOutput
+            }
+        }
+        catch (const fs::filesystem_error& e)
+        {
+            // Handle potential errors like file not found, though it should exist
+            std::cerr << "Error checking file time: " << e.what() << std::endl;
+            // Maybe add a delay before retrying or handle differently
+        }
+
+        // -----------------------------------------
+
+        scriptingEngine.checkHotReload(); // Existing hot reload check (assuming for AngelScript?)
 
         if (app.Update())
         {
