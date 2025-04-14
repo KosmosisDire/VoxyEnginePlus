@@ -25,7 +25,10 @@ component Button
 
     script
     {
-        if (this.input.PressUp) { emit clicked(); }
+        if (this.input.PressUp)
+        { 
+            emit clicked();
+        }
     }
 
     Row { /* Assume Row centers children by default */
@@ -114,7 +117,12 @@ component Slider
 component Row
 {
     prop Length gap = 0px;
-    style { gap: this.gap; direction: row; align-items: center; }
+    style
+    { 
+        gap: this.gap; 
+        direction: row; 
+        align-items: center;
+    }
 }
 
 // --- Root Usage ---
@@ -122,19 +130,22 @@ void Main()
 {
     Text header
     { 
-        text: "Settings"; 
-        style
+        text: "Settings";
+        style 
         { 
-            font-size: 24px; 
+            font-size: 24px;
             margin-bottom: 15px; 
-        } 
+        }
     }
 
-    Row
+    Row 
     {
-        gap: 10px; 
+        gap: 10px;
         
-        style { padding: 5px; }
+        style 
+        { 
+            padding: 5px;
+        }
 
         Text label { text: "Volume"; }
 
@@ -144,26 +155,26 @@ void Main()
             min: 0; 
             max: 100; 
             defaultValue: 50;
-            onChanged: function(val) 
-            {
+            onChanged: function(val)
+            { 
                 print("Volume via onChanged event: " + val);
-            }
+            };
         }
 
         Button submitButton
         {
             labelText: "Set";
 
-            clicked: function()
+            clicked: function
             {
                 // Direct access to slider instance variable
                 print("Button clicked! Setting volume to: " + volumeSlider.state.value);
                 MasterVolume::setVolume(volumeSlider.state.value);
-            }
+            };
 
             // Inline style for this specific button instance (highest priority)
             style
-            {
+            { 
                 baseColor: color(0.2, 0.5, 0.2);
             }
         }

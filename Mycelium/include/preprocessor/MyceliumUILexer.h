@@ -1,5 +1,5 @@
 
-// Generated from ./MySimpleUI.g4 by ANTLR 4.13.2
+// Generated from ./MyceliumUI.g4 by ANTLR 4.13.2
 
 #pragma once
 
@@ -9,17 +9,23 @@
 
 
 
-class  MySimpleUILexer : public antlr4::Lexer {
+class  MyceliumUILexer : public antlr4::Lexer {
 public:
   enum {
-    STATE = 1, BIND = 2, NUMBER = 3, STRING = 4, ID = 5, AT_ID = 6, LPAREN = 7, 
-    RPAREN = 8, LBRACE = 9, RBRACE = 10, COLON = 11, SEMI = 12, ASSIGN = 13, 
-    COMMA = 14, WS = 15, LINE_COMMENT = 16
+    COMPONENT = 1, PROP = 2, GET = 3, STATE = 4, EVENT = 5, STYLE = 6, OVERRIDE = 7, 
+    SELECT = 8, DEFAULT = 9, SCRIPT = 10, THIS = 11, FUNCTION = 12, VOID = 13, 
+    MAIN = 14, TRUE = 15, FALSE = 16, CALCULATE = 17, ON = 18, ID = 19, 
+    NUMBER = 20, STRING = 21, PX = 22, PERCENT = 23, SECONDS = 24, LPAREN = 25, 
+    RPAREN = 26, LBRACE = 27, RBRACE = 28, SEMI = 29, COLON = 30, QUESTION = 31, 
+    ASSIGN = 32, COMMA = 33, DOT = 34, ARROW = 35, DBL_COLON = 36, MINUS = 37, 
+    ADD = 38, MUL = 39, DIV = 40, AND = 41, OR = 42, NOT = 43, EQ = 44, 
+    NEQ = 45, LT = 46, LTE = 47, GT = 48, GTE = 49, WS = 50, LINE_COMMENT = 51, 
+    BLOCK_COMMENT = 52
   };
 
-  explicit MySimpleUILexer(antlr4::CharStream *input);
+  explicit MyceliumUILexer(antlr4::CharStream *input);
 
-  ~MySimpleUILexer() override;
+  ~MyceliumUILexer() override;
 
 
   std::string getGrammarFileName() const override;

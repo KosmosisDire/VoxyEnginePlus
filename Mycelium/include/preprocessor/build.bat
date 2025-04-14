@@ -1,1 +1,1 @@
-java -jar antlr-4.13.2-complete.jar -Dlanguage=Cpp -visitor -o ./ ./MySimpleUI.g4
+java -jar antlr-4.13.2-complete.jar -Dlanguage=Cpp -visitor -o ./ ./MyceliumUI.g4

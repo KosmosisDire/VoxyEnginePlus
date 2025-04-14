@@ -1,0 +1,83 @@
+Can you create a simple angelscript preprocessor in c++ that takes a string of angelscript code, axcept that all there is a new way to define classes using the "component" keyword which has a nested state like this:
+
+```
+component Button(Color background)
+{
+    style
+    {
+        fontSize: 15px;
+        borderRadius: 10%;
+        backgroundColor: background;
+    }
+
+    state
+    {
+        bool on = False;
+        float value = 0.5;
+        Color bColor = background;
+    }
+
+    // arbitrary code here where state is referenced as this.state
+    // and style as this.style
+
+    void DoSomething()
+    {
+        // some function code
+    }
+
+    print(this.state.on);
+
+    if (this.Hovered) // pretend this.Hovered exists
+    {
+        style.backgroundColor = Color(0.5, 0.5, 0.5);
+    }
+
+    if (this.Clicked)
+    {
+        DoSomething();
+    }
+}
+```
+
+And this should output angelscript code something like this as an example:
+```
+class ButtonState
+{
+    bool on = false;
+    float vlaue = 0.5;
+}
+
+class Button : Element
+{
+    ButtonState state;
+    Style style; // pretend the style class exists already
+
+    void DoSomething()
+    {
+        // some function code
+    }
+
+    Button(Color background)
+    {
+        this.style.fontSize = Length(15, LengthUnits::Pixels);
+        this.style.borderRadius = Length(10, LengthUnits::Percent);
+        this.style.backgroundColor = background;
+        this.state.bColor = background;
+    }
+
+    void Eval()
+    {
+        print(this.state.on);
+
+        if (this.Hovered) // pretend this.Hovered exists
+        {
+            this.style.backgroundColor = Color(0.5, 0.5, 0.5);
+        }
+
+        if (this.Clicked)
+        {
+            DoSomething();
+        }
+    }
+}
+```
