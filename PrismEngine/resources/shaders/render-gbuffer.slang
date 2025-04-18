@@ -305,13 +305,35 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // Initialize atmosphere
         var atmosphere = initAtmosphere(lightDir, p.stateBuffer.sunDir);
         float3 sunColor = saturate(getSunColor(atmosphere));
-        
-        // Shadow calculation
+
+        // Shadow calculation (Per-Voxel Face)
+        // Calculate the center of the voxel containing the hit point
+        float3 voxelBaseCorner = floor(worldPos / WORLD_VOXEL_SIZE) * WORLD_VOXEL_SIZE;
+        float3 voxelCenterPos = voxelBaseCorner + float3(0.5f * WORLD_VOXEL_SIZE);
+
+        // Calculate the center of the specific face hit by the ray
+        float3 faceCenter = voxelCenterPos;
+        float3 absNormal = abs(worldNormal);
+
+        // Determine the position of the face boundary along the normal's primary axis
+        float faceBoundaryCoord;
+        if (absNormal.x > absNormal.y && absNormal.x > absNormal.z) { // X-face
+            faceBoundaryCoord = round(worldPos.x / WORLD_VOXEL_SIZE) * WORLD_VOXEL_SIZE;
+            faceCenter.x = faceBoundaryCoord;
+        } else if (absNormal.y > absNormal.z) { // Y-face
+            faceBoundaryCoord = round(worldPos.y / WORLD_VOXEL_SIZE) * WORLD_VOXEL_SIZE;
+            faceCenter.y = faceBoundaryCoord;
+        } else { // Z-face
+            faceBoundaryCoord = round(worldPos.z / WORLD_VOXEL_SIZE) * WORLD_VOXEL_SIZE;
+            faceCenter.z = faceBoundaryCoord;
+        }
+
         Ray shadowRay;
-        shadowRay.origin = worldPos + worldNormal * 0.0001f; // Offset to avoid self-intersection
+        // Originate shadow ray from the calculated face center, offset slightly along the normal
+        shadowRay.origin = faceCenter + worldNormal * 0.0001f;
         shadowRay.direction = lightDir;
         var shadowHit = traceScene(shadowRay, 0, false);
-        
+
         // Add subtle normal variation using blue noise for more natural lighting
         uint uniqueIndex = hash(hit.voxelIndex ^ (hit.brickIndex << 16));
         uint blueNoiseIndex = uniqueIndex % 128;
