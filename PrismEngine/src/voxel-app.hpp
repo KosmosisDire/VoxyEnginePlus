@@ -20,7 +20,7 @@ struct VoxyApp : public Application
         daxa::TaskImage task_render_image;
 
         VoxyApp()
-            : Application("Voxy", {PROJECT_ROOT_DIR "/PrismEngine/src/vox/shaders"}), // use this path instead for dist: "resources/shaders"
+            : Application("Voxy", {"resources/shaders"}), // use this path instead for dist: "resources/shaders"
 
         voxelRenderer(renderer),
         uiState({.renderData = &voxelRenderer.stateData})

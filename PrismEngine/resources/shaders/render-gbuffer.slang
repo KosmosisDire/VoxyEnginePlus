@@ -17,13 +17,6 @@ static const float PARALLEL_THRESHOLD = 0.9999f;
 static const float TAA_BLEND_FACTOR = 0.1f;
 static const float TAA_MOTION_REJECTION_THRESHOLD = 0.5f;
 
-// AO configuration 
-static const int AO_SAMPLE_COUNT = 1;  // Increased from 1 for better quality
-static const float AO_RADIUS = 4.0f;
-static const float AO_INTENSITY = 1.0f;
-static const float AO_BIAS = 0.001f;
-static const float AO_DISTANCE_SCALING = 0.8f;
-
 // Lighting parameters
 static const float SPECULAR_POWER = 32.0f;
 static const float SPECULAR_INTENSITY = 0.5f;
@@ -167,63 +160,6 @@ float3x3 createRotationFromNormal(float3 normal)
         right.z, normal.z, forward.z);
 }
 
-float calculateAmbientOcclusion(float3 position, float distance, float3 normal, float4 noiseVec)
-{
-    float occlusion = 0.0f;
-    float adaptiveRadius = AO_RADIUS * min(1.0f, AO_RADIUS / distance);
-    
-    // Adaptively reduce sample count based on distance for better performance
-    int sampleCount = AO_SAMPLE_COUNT;
-    if (distance > 20) sampleCount = max(2, sampleCount / 2);
-    if (distance > 40) sampleCount = max(1, sampleCount / 2);
-    
-    float3x3 rotation = createRotationFromNormal(normal);
-    
-    for (int i = 0; i < sampleCount; i++)
-    {
-        // Generate sample direction using blue noise for better distribution
-        float3 sampleDir = noiseVec.xyz;
-        sampleDir = float3(sampleDir.x * 2.0f - 1.0f, sampleDir.y - 0.2f, sampleDir.z * 2.0f - 1.0f);
-        sampleDir = normalize(sampleDir);
-        
-        // Rotate sample direction to create better distribution
-        float angle = noiseVec.w * 2 * PI * float(i) / float(sampleCount);
-        float s = sin(angle);
-        float c = cos(angle);
-        sampleDir = float3(sampleDir.x * c - sampleDir.z * s, sampleDir.y, sampleDir.x * s + sampleDir.z * c);
-        
-        // Transform sample to align with normal
-        sampleDir = mul(rotation, sampleDir);
-        
-        // Create ray for occlusion testing
-        Ray aoRay;
-        aoRay.origin = position + normal * AO_BIAS;
-        aoRay.direction = sampleDir;
-        
-        // Use adaptive ray length based on distance
-        aoRay.maxIterations = 8;
-        if (distance > 10) aoRay.maxIterations = 6;
-        if (distance > 40) aoRay.maxIterations = 4;
-        
-        // Trace the ray
-        var aoHit = traceScene(aoRay, 0, false, false);
-        
-        // Accumulate occlusion with distance-based falloff
-        if (aoHit.hit && aoHit.distance < adaptiveRadius)
-        {
-            float weight = 1.0f - pow(aoHit.distance / adaptiveRadius, AO_DISTANCE_SCALING);
-            occlusion += weight;
-        }
-    }
-    
-    // Normalize and apply intensity
-    occlusion = occlusion / float(sampleCount);
-    occlusion = pow(occlusion, 1.5f); // Adjusts occlusion curve for better appearance
-    occlusion *= AO_INTENSITY;
-    
-    // Return visibility factor
-    return saturate(1.0f - occlusion);
-}
 
 uint hash(uint x) {
     x ^= x >> 16;
@@ -243,6 +179,50 @@ float3 calculateSpecular(float3 viewDirection, float3 normal, float3 lightDirect
     float specularFactor = pow(NdotH, specularPower);
     
     return float3(specularIntensity * specularFactor);
+}
+
+// Normal Distribution Function (Trowbridge-Reitz GGX)
+float DistributionGGX(float3 N, float3 H, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0f);
+    float NdotH2 = NdotH * NdotH;
+
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0f) + 1.0f);
+    denom = PI * denom * denom;
+
+    return num / max(denom, EPSILON); // Avoid division by zero
+}
+
+// Geometry Function (Schlick-GGX)
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0f);
+    float k = (r * r) / 8.0f; // Direct lighting
+
+    float num   = NdotV;
+    float denom = NdotV * (1.0f - k) + k;
+
+    return num / max(denom, EPSILON); // Avoid division by zero
+}
+
+// Geometry Function (Smith's method) - Combines Schlick-GGX for light and view directions
+float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0f);
+    float NdotL = max(dot(N, L), 0.0f);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+// Fresnel Function (Schlick approximation)
+float3 FresnelSchlick(float cosTheta, float3 F0)
+{
+    return F0 + (1.0f - F0) * pow(clamp(1.0f - cosTheta, 0.0f, 1.0f), 5.0f);
 }
 
 //------------------------------------------------------------------------------
@@ -311,8 +291,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         depth[pixel] = hit.distance;
 
         // Get material properties
-        float3 baseColor = getMaterial(hit.materialId).albedo;
-        float specularStrength = 1.0f; // Can be adjusted from material properties
+        Material mat = getMaterial(hit.materialId);
+        float3 albedoColor = mat.albedo;
+        float metallic = mat.metallic;
+        float roughness = mat.roughness;
+        // Ensure roughness is not zero to avoid division by zero in PBR functions
+        roughness = max(roughness, 0.01f); 
 
         // View and light directions
         float3 lightDir = normalize(p.stateBuffer.sunDir);
@@ -335,47 +319,58 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
             
         // Calculate lighting
-        float3 diffuseColor;
-        float3 specularColor = float3(0, 0, 0);
+        // Calculate base ambient light (always present)
+        float3 ambientLight = albedoColor * AMBIENT_LIGHT_LEVEL;
+        float3 directLight = float3(0, 0, 0); // Initialize direct contribution to zero
         
-        // Direct lighting calculation (diffuse + specular)
-        if (shadowHit.hit)
-        {
-            // In shadow - only ambient light
-            diffuseColor = baseColor * AMBIENT_LIGHT_LEVEL;
-        }
-        else
-        {
-            // Direct light - diffuse term
-            float NdotL = max(dot(perturbedNormal, lightDir), 0.0);
-            diffuseColor = baseColor * NdotL * sunColor;
-            
-            // Add specular highlight for non-shadowed areas
-            specularColor = calculateSpecular(viewDir, perturbedNormal, lightDir, 
-                SPECULAR_POWER, SPECULAR_INTENSITY * specularStrength) * sunColor;
-        }
-
-        // Calculate ambient occlusion
-        float ao = calculateAmbientOcclusion(worldPos, hit.distance, worldNormal, noiseVec);
-        
-        // Apply AO and atmosphere for better visual quality
+        // Calculate direct sun light only if not shadowed
         if (!shadowHit.hit)
         {
-            // Blend atmosphere influence based on AO
-            float aoFactor = 1.5 - ao;
-            ao = lerp(1.0f, aoFactor, 0.5); // Keep ao as a scalar value
+            // Direct light - PBR calculation
+            float3 N = perturbedNormal; // Use perturbed normal for lighting
+            float3 V = viewDir;
+            float3 L = lightDir;
+            float3 H = normalize(V + L); // Halfway vector
+
+            // Calculate PBR terms
+            float NdotL = max(dot(N, L), 0.0f); // Calculate NdotL once here
+            float NdotV = max(dot(N, V), 0.0f);
+            float NdotH = max(dot(N, H), 0.0f);
+            float HdotV = max(dot(H, V), 0.0f);
+
+            // Reflectance at normal incidence (F0)
+            // For non-metals (metallic = 0), F0 is typically low (e.g., 0.04 for dielectrics)
+            // For metals (metallic = 1), F0 is the albedo color
+            float3 F0 = lerp(float3(0.04f), albedoColor, metallic);
+
+            // Cook-Torrance BRDF components
+            float NDF = DistributionGGX(N, H, roughness);       
+            float G   = GeometrySmith(N, V, L, roughness);      
+            float3 F  = FresnelSchlick(HdotV, F0); // Use HdotV for Fresnel
+
+            // Specular BRDF term
+            float3 numerator    = NDF * G * F;
+            float denominator = 4.0f * NdotV * NdotL + EPSILON; // Add epsilon to prevent division by zero
+            float3 specular     = numerator / denominator;
+
+            // Diffuse BRDF term (Lambertian, energy conserving with Fresnel)
+            float3 kS = F; // Specular reflection fraction
+            float3 kD = float3(1.0f) - kS; // Diffuse reflection fraction
+            kD *= (1.0f - metallic); // Metals have no diffuse reflection
+
+            float3 diffuse = kD * albedoColor / PI;
+
+            // Final radiance calculation (Lo) = (kD * albedo / PI + specular) * NdotL * lightColor
+            // Note: lightColor is sunColor here
+            float3 Lo = (diffuse + specular) * NdotL * sunColor;
+
+            // Assign PBR result as the direct light contribution
+            directLight = Lo; 
         }
 
-        // Combine all lighting components
-        float3 finalColor;
-        if (!shadowHit.hit) {
-            // Apply AO to diffuse and add atmosphere influence
-            finalColor = (diffuseColor * ao * sunColor) + specularColor;
-        } else {
-            // In shadow - just apply AO to ambient light
-            finalColor = diffuseColor * ao;
-        }
-        
+        // Final color assignment: Combine ambient and direct light
+        float3 finalColor = ambientLight + directLight; 
+
         // Store result
         currentFrame[pixel] = finalColor;
     }
@@ -400,9 +395,22 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         float2 prevPixel = float2(pixel) + motionPixels;
         
-        // Validate reprojection
-        bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && 
-                                validateReprojection(worldPos, position[uint2(prevPixel)]);
+        // Validate reprojection using depth comparison
+        bool validReprojection = false;
+        if (all(prevPixel >= 0 && prevPixel < p.screenSize))
+        {
+            float currentDepth = depth[pixel];
+            float previousDepth = depth[uint2(prevPixel)]; // Sample depth at reprojected location
+            
+            // Use a relative depth threshold to account for varying distances
+            // Allow a small difference (e.g., 2% of current depth, plus a small fixed tolerance)
+            float depthThreshold = max(currentDepth * 0.02f, 0.1f); 
+            
+            if (abs(currentDepth - previousDepth) < depthThreshold)
+            {
+                validReprojection = true;
+            }
+        }
 
         // Apply TAA only if reprojection is valid
         float3 finalColor = currentColor;
