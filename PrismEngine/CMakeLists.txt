@@ -19,6 +19,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/include # For generated headers like project_paths.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
         # ANTLR include dirs should be inherited via Mycelium PUBLIC linkage
 )
 

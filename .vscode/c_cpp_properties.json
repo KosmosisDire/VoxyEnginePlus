@@ -5,11 +5,11 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/PrismEngine/src/**",
+                "${workspaceFolder}/PrismEngine/resources/**",
                 "${vcpkgRoot}/x64-windows/include",
                 "${workspaceFolder}/build/Debug/vcpkg_installed/x64-windows/include",
                 "${workspaceFolder}/Mycelium/src/**",
                 "${workspaceFolder}/Mycelium/include/**",
-                "${workspaceFolder}/Mycelium/include/angelscript/include"
             ],
             "defines": [
                 "_DEBUG",

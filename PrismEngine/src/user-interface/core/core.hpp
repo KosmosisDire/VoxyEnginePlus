@@ -7,7 +7,7 @@
 #include <daxa/daxa.hpp>
 #include <algorithm>
 #include <vector>
-#include "../../vox/shaders/shared.inl"
+#include <shaders/shared.inl>
 
 using namespace daxa::types;
 using namespace std;

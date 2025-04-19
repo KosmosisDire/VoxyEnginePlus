@@ -17,6 +17,13 @@ static const float PARALLEL_THRESHOLD = 0.9999f;
 static const float TAA_BLEND_FACTOR = 0.1f;
 static const float TAA_MOTION_REJECTION_THRESHOLD = 0.5f;
 
+// AO configuration 
+static const int AO_SAMPLE_COUNT = 1;  // Increased from 1 for better quality
+static const float AO_RADIUS = 4.0f;
+static const float AO_INTENSITY = 1.0f;
+static const float AO_BIAS = 0.001f;
+static const float AO_DISTANCE_SCALING = 0.8f;
+
 // Lighting parameters
 static const float SPECULAR_POWER = 32.0f;
 static const float SPECULAR_INTENSITY = 0.5f;
@@ -30,7 +37,7 @@ static const float NORMAL_NOISE_AMOUNT = 0.03f;
 bool validateReprojection(float3 currentPosition, float3 previousPosition)
 {
     float3 diff = abs(currentPosition - previousPosition);
-    return all(diff < WORLD_VOXEL_SIZE);
+    return all(diff < WORLD_VOXEL_SIZE * 4);
 }
 
 float2 calculateMotionVector(float3 worldPos, float4x4 viewProj, float4x4 lastViewProj, 
@@ -160,6 +167,63 @@ float3x3 createRotationFromNormal(float3 normal)
         right.z, normal.z, forward.z);
 }
 
+float calculateAmbientOcclusion(float3 position, float distance, float3 normal, float4 noiseVec)
+{
+    float occlusion = 0.0f;
+    float adaptiveRadius = AO_RADIUS * min(1.0f, AO_RADIUS / distance);
+    
+    // Adaptively reduce sample count based on distance for better performance
+    int sampleCount = AO_SAMPLE_COUNT;
+    if (distance > 20) sampleCount = max(2, sampleCount / 2);
+    if (distance > 40) sampleCount = max(1, sampleCount / 2);
+    
+    float3x3 rotation = createRotationFromNormal(normal);
+    
+    for (int i = 0; i < sampleCount; i++)
+    {
+        // Generate sample direction using blue noise for better distribution
+        float3 sampleDir = noiseVec.xyz;
+        sampleDir = float3(sampleDir.x * 2.0f - 1.0f, sampleDir.y - 0.2f, sampleDir.z * 2.0f - 1.0f);
+        sampleDir = normalize(sampleDir);
+        
+        // Rotate sample direction to create better distribution
+        float angle = noiseVec.w * 2 * PI * float(i) / float(sampleCount);
+        float s = sin(angle);
+        float c = cos(angle);
+        sampleDir = float3(sampleDir.x * c - sampleDir.z * s, sampleDir.y, sampleDir.x * s + sampleDir.z * c);
+        
+        // Transform sample to align with normal
+        sampleDir = mul(rotation, sampleDir);
+        
+        // Create ray for occlusion testing
+        Ray aoRay;
+        aoRay.origin = position + normal * AO_BIAS;
+        aoRay.direction = sampleDir;
+        
+        // Use adaptive ray length based on distance
+        aoRay.maxIterations = 8;
+        if (distance > 10) aoRay.maxIterations = 6;
+        if (distance > 40) aoRay.maxIterations = 4;
+        
+        // Trace the ray
+        var aoHit = traceScene(aoRay, 0, false, false);
+        
+        // Accumulate occlusion with distance-based falloff
+        if (aoHit.hit && aoHit.distance < adaptiveRadius)
+        {
+            float weight = 1.0f - pow(aoHit.distance / adaptiveRadius, AO_DISTANCE_SCALING);
+            occlusion += weight;
+        }
+    }
+    
+    // Normalize and apply intensity
+    occlusion = occlusion / float(sampleCount);
+    occlusion = pow(occlusion, 1.5f); // Adjusts occlusion curve for better appearance
+    occlusion *= AO_INTENSITY;
+    
+    // Return visibility factor
+    return saturate(1.0f - occlusion);
+}
 
 uint hash(uint x) {
     x ^= x >> 16;
@@ -339,10 +403,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         uint blueNoiseIndex = uniqueIndex % 128;
         float3 perturbedNormal = normalize(worldNormal + 
             (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
+
+        float ao = calculateAmbientOcclusion(worldPos, hit.distance, perturbedNormal, noiseVec);
             
         // Calculate lighting
         // Calculate base ambient light (always present)
-        float3 ambientLight = albedoColor * AMBIENT_LIGHT_LEVEL;
+        float3 ambientLight = albedoColor * AMBIENT_LIGHT_LEVEL * ao;
         float3 directLight = float3(0, 0, 0); // Initialize direct contribution to zero
         
         // Calculate direct sun light only if not shadowed
@@ -417,22 +483,9 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         float2 prevPixel = float2(pixel) + motionPixels;
         
-        // Validate reprojection using depth comparison
-        bool validReprojection = false;
-        if (all(prevPixel >= 0 && prevPixel < p.screenSize))
-        {
-            float currentDepth = depth[pixel];
-            float previousDepth = depth[uint2(prevPixel)]; // Sample depth at reprojected location
-            
-            // Use a relative depth threshold to account for varying distances
-            // Allow a small difference (e.g., 2% of current depth, plus a small fixed tolerance)
-            float depthThreshold = max(currentDepth * 0.02f, 0.1f); 
-            
-            if (abs(currentDepth - previousDepth) < depthThreshold)
-            {
-                validReprojection = true;
-            }
-        }
+        // Validate reprojection
+        bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && 
+                                validateReprojection(worldPos, position[uint2(prevPixel)]);
 
         // Apply TAA only if reprojection is valid
         float3 finalColor = currentColor;

@@ -4,7 +4,7 @@
 
 // Terrain generation parameters
 static const float noiseScale = 0.07f; 
-static const uint blockSize = 6;
+static const uint blockSize = 12;
 static const float baseHeight = 90.0f;
 
 // Global scroll variable for terrain exploration
