@@ -34,9 +34,9 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
     // Adjust start position if needed
     if (tMin > EPSILON)
     {
-        ray.origin += ray.direction * (tMin + EPSILON);
-        normal = -sign(ray.direction);
+        ray.origin += ray.direction * (tMin + 0.01);
     }
+
 
     // Begin DDA traversal
     DDAState chunkDDA = initDDA(ray.origin, ray.direction, invDir);

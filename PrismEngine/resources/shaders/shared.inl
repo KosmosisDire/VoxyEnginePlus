@@ -14,7 +14,7 @@ struct Ray
 #ifndef __cplusplus
     // Add these constants for jittering
     static const int HALTON_SEQUENCE_LENGTH = 16; // Number of jitter patterns to cycle through
-    static const float JITTER_SCALE = 0.51f; // Size of jitter (0.5 = half a pixel)
+    static const float JITTER_SCALE = 0.6f; // Size of jitter (0.5 = half a pixel)
 
     // Halton sequence for jittering (base 2 and 3)
     // These provide a well-distributed sampling pattern
@@ -250,6 +250,10 @@ struct GBuffer
     daxa_ImageViewId voxelIDs; // global brick id and local voxel id
     daxa_ImageViewId voxelFaceIDs; // material id
     daxa_ImageViewId materialIDs; // material id
+    daxa_ImageViewId ao; // ambient occlusion
+    daxa_ImageViewId aoDenoised; // ambient occlusion denoised
+    daxa_ImageViewId indirectLight; // indirect light
+    daxa_ImageViewId directLight; // direct light
 
     daxa_ImageViewId history;
     daxa_ImageViewId currentFrame;

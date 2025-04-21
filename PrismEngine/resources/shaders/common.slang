@@ -177,7 +177,7 @@ bool intersectBoxNormal(float3 origin, float3 invDir, float3 boxMin, float3 boxM
     tMax = min(min(tmaxv.x, tmaxv.y), tmaxv.z);
 
     // Initialize normal
-    normal = float3(0, 0, 0);
+    normal = 0;
 
     if (tMin <= tMax && tMax > 0.0)
     {

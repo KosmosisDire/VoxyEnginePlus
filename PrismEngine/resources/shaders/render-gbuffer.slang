@@ -15,14 +15,13 @@ static const float PARALLEL_THRESHOLD = 0.9999f;
 
 // TAA constants
 static const float TAA_BLEND_FACTOR = 0.1f;
-static const float TAA_MOTION_REJECTION_THRESHOLD = 0.5f;
 
 // AO configuration 
 static const int AO_SAMPLE_COUNT = 1;  // Increased from 1 for better quality
-static const float AO_RADIUS = 4.0f;
-static const float AO_INTENSITY = 1.0f;
-static const float AO_BIAS = 0.001f;
-static const float AO_DISTANCE_SCALING = 0.8f;
+static const float AO_RADIUS = 8.0;
+static const float AO_INTENSITY = 0.6;
+static const float AO_BIAS = 0.01;
+static const float AO_DISTANCE_SCALING = 1.0;
 
 // Lighting parameters
 static const float SPECULAR_POWER = 32.0f;
@@ -37,20 +36,16 @@ static const float NORMAL_NOISE_AMOUNT = 0.03f;
 bool validateReprojection(float3 currentPosition, float3 previousPosition)
 {
     float3 diff = abs(currentPosition - previousPosition);
-    return all(diff < WORLD_VOXEL_SIZE * 4);
+    return all(diff < WORLD_VOXEL_SIZE * 30);
 }
 
-float2 calculateMotionVector(float3 worldPos, float4x4 viewProj, float4x4 lastViewProj, 
-                            float2 currentJitter, float2 previousJitter)
+float2 calculateMotionClip(float3 worldPos, float4x4 viewProj, float4x4 lastViewProj)
 {
     float4 currentClip = mul(viewProj, float4(worldPos, 1.0));
     float4 previousClip = mul(lastViewProj, float4(worldPos, 1.0));
 
     float2 currentPos = currentClip.xy / currentClip.w;
     float2 previousPos = previousClip.xy / previousClip.w;
-
-    // Add jitter offset difference
-    float2 jitterOffset = (previousJitter - currentJitter) / float2(p.screenSize) * 2.0f;
     
     return (previousPos - currentPos);
 }
@@ -130,10 +125,10 @@ float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history,
     float3 previousColor = sampleHistoryBilinear(history, previousPixel, dimensions);
     
     // Find neighborhood bounds for color clamping
-    ColorBounds bounds = findNeighborhoodBounds(current, pixel, uint2(dimensions));
+    // ColorBounds bounds = findNeighborhoodBounds(current, pixel, uint2(dimensions));
     
     // Clamp history color to reduce ghosting
-    previousColor = clamp(previousColor, bounds.min, bounds.max);
+    // previousColor = clamp(previousColor, bounds.min, bounds.max);
     
     // Blend between current and history colors
     return lerp(previousColor, currentColor, TAA_BLEND_FACTOR);
@@ -174,8 +169,6 @@ float calculateAmbientOcclusion(float3 position, float distance, float3 normal, 
     
     // Adaptively reduce sample count based on distance for better performance
     int sampleCount = AO_SAMPLE_COUNT;
-    if (distance > 20) sampleCount = max(2, sampleCount / 2);
-    if (distance > 40) sampleCount = max(1, sampleCount / 2);
     
     float3x3 rotation = createRotationFromNormal(normal);
     
@@ -201,9 +194,10 @@ float calculateAmbientOcclusion(float3 position, float distance, float3 normal, 
         aoRay.direction = sampleDir;
         
         // Use adaptive ray length based on distance
-        aoRay.maxIterations = 8;
-        if (distance > 10) aoRay.maxIterations = 6;
-        if (distance > 40) aoRay.maxIterations = 4;
+        const int rangeMultiplier = 2;
+        aoRay.maxIterations = 8 * rangeMultiplier;
+        if (distance > 10) aoRay.maxIterations = 6 * rangeMultiplier;
+        if (distance > 40) aoRay.maxIterations = 4 * rangeMultiplier;
         
         // Trace the ray
         var aoHit = traceScene(aoRay, 0, false, false);
@@ -212,6 +206,14 @@ float calculateAmbientOcclusion(float3 position, float distance, float3 normal, 
         if (aoHit.hit && aoHit.distance < adaptiveRadius)
         {
             float weight = 1.0f - pow(aoHit.distance / adaptiveRadius, AO_DISTANCE_SCALING);
+
+            Material aoMaterial = getMaterial(aoHit.materialId);
+            if (any(aoMaterial.emission != 0.0f))
+            {
+                occlusion = 0.0f; // Ignore occlusion for emissive materials
+                continue;
+            }
+
             occlusion += weight;
         }
     }
@@ -308,8 +310,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     RWTexture2D<float> depth = RWTexture2D<float>.get(p.gbuffer.depth);
     RWTexture2D<float3> history = RWTexture2D<float3>.get(p.gbuffer.history);
     RWTexture2D<float3> currentFrame = RWTexture2D<float3>.get(p.gbuffer.currentFrame);
+    RWTexture2D<float3> indirectLightTex = RWTexture2D<float3>.get(p.gbuffer.indirectLight);
+    RWTexture2D<float3> directLightTex = RWTexture2D<float3>.get(p.gbuffer.directLight);
     RWTexture2D<float4> blueNoise = RWTexture2D<float4>.get(p.blueNoise);
     RWTexture2D<float4> blueNoiseStatic = RWTexture2D<float4>.get(p.blueNoiseStatic);
+    RWTexture2D<float> ambientOcclusionTex = RWTexture2D<float>.get(p.gbuffer.ao);
+    RWTexture2D<float> ambientOcclusionDenoisedTex = RWTexture2D<float>.get(p.gbuffer.aoDenoised);
 
     float4 noiseVec = blueNoise[pixel % 128];
 
@@ -341,17 +347,18 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         position[pixel] = worldPos;
         
         // Calculate motion vectors for TAA
-        float2 currentJitter = Ray.getJitterOffset(p.stateBuffer.frame);
-        float2 previousJitter = Ray.getJitterOffset(p.stateBuffer.frame - 1);
-        float2 motionVector = calculateMotionVector(
+        float2 motionClip = calculateMotionClip(
             worldPos, 
             p.stateBuffer.camera.viewProj, 
-            p.stateBuffer.lastCamera.viewProj, 
-            currentJitter, 
-            previousJitter
+            p.stateBuffer.lastCamera.viewProj
         );
+        float2 motionPixels = motionClip * (p.screenSize * 0.5);
+        if (length(motionPixels) < 0.0001 || isnan(motionPixels.x) || isnan(motionPixels.y))
+        {
+            motionPixels = float2(0, 0);
+        }
 
-        motion[pixel] = motionVector;
+        motion[pixel] = motionPixels;
         depth[pixel] = hit.distance;
 
         // Get material properties
@@ -361,6 +368,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float roughness = mat.roughness;
         // Ensure roughness is not zero to avoid division by zero in PBR functions
         roughness = max(roughness, 0.01f); 
+
+        albedo[pixel] = albedoColor;
 
         // View and light directions
         float3 lightDir = normalize(p.stateBuffer.sunDir);
@@ -403,12 +412,14 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         uint blueNoiseIndex = uniqueIndex % 128;
         float3 perturbedNormal = normalize(worldNormal + 
             (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
-
-        float ao = calculateAmbientOcclusion(worldPos, hit.distance, perturbedNormal, noiseVec);
+        
+        if (all(pixel % 2 == 0))
+        {
+            float ao = calculateAmbientOcclusion(worldPos, hit.distance, perturbedNormal, noiseVec);
+            ambientOcclusionTex[pixel / 2] = ao;
+        }
             
         // Calculate lighting
-        // Calculate base ambient light (always present)
-        float3 ambientLight = albedoColor * AMBIENT_LIGHT_LEVEL * ao;
         float3 directLight = float3(0, 0, 0); // Initialize direct contribution to zero
         
         // Calculate direct sun light only if not shadowed
@@ -456,46 +467,52 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             directLight = Lo; 
         }
 
-        // Final color assignment: Combine ambient and direct light
-        float3 finalColor = ambientLight + directLight; 
-
-        // Store result
-        currentFrame[pixel] = finalColor;
+        indirectLightTex[pixel] = AMBIENT_LIGHT_LEVEL;
+        directLightTex[pixel] = directLight;
     }
-    
+
     //--------------------------------------------------------------------------
-    // Pass 1: Apply temporal anti-aliasing
+    // Pass 1: Combine gbuffer
     //--------------------------------------------------------------------------
     else if (p.passNum == 1)
     {
+        // Read GBuffer data
+        float3 albedoColor = albedo[pixel];
+        float3 indirectLightColor = indirectLightTex[pixel];
+        float3 directLightColor = directLightTex[pixel];
+        float aoColor = ambientOcclusionDenoisedTex[pixel / 2];
+        
+        if (any(directLightColor != 0)) aoColor = (1 / aoColor);
+
+        albedo[pixel] = albedoColor * (indirectLightColor + directLightColor);
+        currentFrame[pixel] = aoColor;
+    }
+    
+    //--------------------------------------------------------------------------
+    // Pass 2: Apply temporal anti-aliasing
+    //--------------------------------------------------------------------------
+    else if (p.passNum == 2)
+    {
         float3 worldPos = position[pixel];
         float2 motionVector = motion[pixel];
-        float3 currentColor = currentFrame[pixel];
+        float3 ao = currentFrame[pixel];
 
-        // Calculate previous pixel position
-        float2 motionPixels = motionVector * (p.screenSize * 0.5);
-        
-        // Check for invalid motion vectors
-        if (length(motionPixels) < 0.0001 || any(isnan(motionPixels)))
-        {
-            motionPixels = float2(0, 0);
-        }
-
-        float2 prevPixel = float2(pixel) + motionPixels;
+        float2 prevPixel = float2(pixel) + motionVector;
         
         // Validate reprojection
         bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && 
                                 validateReprojection(worldPos, position[uint2(prevPixel)]);
 
         // Apply TAA only if reprojection is valid
-        float3 finalColor = currentColor;
+        float3 finalColor = ao;
         if (validReprojection)
         {
-            finalColor = applyTAA(currentFrame, history, pixel, prevPixel, p.screenSize, currentColor);
+            finalColor = applyTAA(currentFrame, history, pixel, prevPixel, p.screenSize, ao);
         }
 
+
         // Write final color
-        albedo[pixel] = finalColor;
+        albedo[pixel] *= finalColor;
         currentFrame[pixel] = finalColor;
     }
 }
