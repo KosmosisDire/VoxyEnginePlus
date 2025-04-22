@@ -8,7 +8,7 @@
 #include <engine/apis/Math.hpp>
 #include <engine/apis/Daxa.hpp>
 #include <engine/objects/Renderer.hpp>
-#include "vox-camera.hpp"
+#include <engine/objects/Camera.hpp>
 
 using namespace daxa::types;
 
@@ -168,7 +168,7 @@ class VoxelRenderer
         ComputePush pushData;
 
     public:
-        VoxCamera camera;
+        Camera camera;
         RenderData stateData =
         {
             .sunDir = {1.0f, 0.2f, 0.1f},

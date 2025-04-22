@@ -9,6 +9,7 @@
                 "${vcpkgRoot}/x64-windows/include",
                 "${workspaceFolder}/build/Debug/vcpkg_installed/x64-windows/include",
                 "${workspaceFolder}/Mycelium/src/**",
+                "${workspaceFolder}/Mycelium/resources/**",
                 "${workspaceFolder}/Mycelium/include/**",
             ],
             "defines": [

@@ -4,7 +4,6 @@
 #include <shaders/shared.inl>
 #include <scripting/scripting.hpp>
 
-#include "voxels/vox-camera.hpp"
 #include "voxels/vox-renderer.hpp"
 #include <engine/objects/Application.hpp>
 #include <engine/apis/Input.hpp>

@@ -136,6 +136,8 @@ target_include_directories(Mycelium
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders
         ${CMAKE_CURRENT_BINARY_DIR}/include
         ${PROJECT_BINARY_DIR}/include
         ${ANTLR_GENERATED_DIR}

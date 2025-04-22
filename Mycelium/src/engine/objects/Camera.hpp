@@ -4,6 +4,7 @@
 #include <engine/data/Matrix4x4.hpp>
 #include <engine/apis/Math.hpp>
 #include <engine/data/Vector3.hpp>
+#include "shaders/shared.inl"
 
 using namespace daxa::types;
 
@@ -177,6 +178,26 @@ class Camera
             }
 
             updateCameraVectors();
+        }
+
+        CameraData getCameraData()
+        {
+            CameraData data;
+            auto proj = getProjectionMatrix();
+            auto view = getViewMatrix();
+
+            // Combine view and projection
+            auto viewProj = proj * view;
+
+            data.viewProj = viewProj.toDaxa();
+            data.view = view.toDaxa();
+            data.proj = proj.toDaxa();
+            data.invViewProj = viewProj.inverse().toDaxa();
+            data.position = getPosition().toDaxa();
+            data.near = getNearPlane();
+            data.far = getFarPlane();
+            data.fov = getFOV();
+            return data;
         }
 
     private:
