@@ -4,12 +4,11 @@
 
 #include <engine/apis/Fonts.hpp>
 #include <stdarg.h>
-#include <stdio.h>
 
 // Static member definitions
 uint32_t ClayState::lastHoveredElement = 0;
 uint32_t ClayState::capturedElement = 0;
-std::unordered_map<std::string, string_alloc> ClayState::currentStrings;
+std::unordered_map<std::string, StringAlloc> ClayState::currentStrings;
 std::unordered_map<uint32_t, ComputedProps> ClayState::computedProperties;
 
 UIInputs ClayState::inputs = {};
@@ -21,8 +20,7 @@ float ClayState::pointerDeltaY = 0;
 
 double ClayState::uiFrameTime;
 std::chrono::time_point<std::chrono::high_resolution_clock> ClayState::frameStart;
-
-void ClayState::SetComputedProps(ComputedProps *props, Clay_RenderCommand *command)
+void ClayState::set_computed_props(ComputedProps *props, Clay_RenderCommand *command)
 {
     auto bb = command->boundingBox;
     props->width = bb.width;
@@ -32,28 +30,28 @@ void ClayState::SetComputedProps(ComputedProps *props, Clay_RenderCommand *comma
     props->parent = &ClayState::computedProperties[props->parentId];
 }
 
-void ClayState::FillComputedProperties(Clay_RenderCommandArray commands)
+void ClayState::fill_computed_properties(Clay_RenderCommandArray commands)
 {
     ClayState::computedProperties.clear();
 
     for (int i = 0; i < commands.length; ++i)
     {
         Clay_RenderCommand *command = Clay_RenderCommandArray_Get(&commands, i);
-        SetComputedProps(&ClayState::computedProperties[command->id], command);
+        set_computed_props(&ClayState::computedProperties[command->id], command);
     }
 }
 
-float ClayState::GetPointerDeltaX()
+float ClayState::get_pointer_delta_x()
 {
     return pointerDeltaX;
 }
 
-float ClayState::GetPointerDeltaY()
+float ClayState::get_pointer_delta_y()
 {
     return pointerDeltaY;
 }
 
-char* ClayState::AllocateString(const std::string &str)
+char* ClayState::allocate_string(const std::string &str)
 {
     if (currentStrings.find(str) != currentStrings.end())
     {
@@ -67,7 +65,7 @@ char* ClayState::AllocateString(const std::string &str)
     return newStr;
 }
 
-void ClayState::FreeStrings()
+void ClayState::free_strings()
 {
     for (const auto &[key, value] : currentStrings)
     {
@@ -84,7 +82,7 @@ void ClayState::FreeStrings()
     }
 }
 
-void ClayState::FreeAllStrings()
+void ClayState::free_all_strings()
 {
     for (const auto &[key, value] : currentStrings)
     {

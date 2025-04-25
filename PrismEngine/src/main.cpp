@@ -8,7 +8,7 @@ auto main() -> int
 
     while (true)
     {
-        if (app.Update())
+        if (app.update())
         {
             break;
         }

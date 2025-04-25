@@ -13,17 +13,17 @@ struct VoxyApp : Application
         }
 
     protected:
-        void OnStart() override
+        void on_start() override
         {
             // Initialize the application
         }
 
-        void OnUpdate(float dt) override
+        void on_update(float dt) override
         {
             // Update the application state
         }
 
-        void OnResize(u32 sx, u32 sy) override
+        void on_resize(u32 sx, u32 sy) override
         {
             // Handle window resize events
         }

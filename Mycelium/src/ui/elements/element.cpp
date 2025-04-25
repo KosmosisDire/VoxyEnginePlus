@@ -7,47 +7,47 @@
 Element *Element::currentElement = nullptr;
 std::vector<Element *> Element::elementStack;
 
-void Element::PushStack(Element &element)
+void Element::push_stack(Element &element)
 {
     element.props.computed.elementDepth = elementStack.size();
     currentElement = &element;
     elementStack.push_back(&element);
 }
 
-void Element::PopStack()
+void Element::pop_stack()
 {
     elementStack.pop_back();
     currentElement = elementStack.size() > 0 ? elementStack.back() : nullptr;
 }
 
-Element *Element::PeekStack()
+Element *Element::peek_stack()
 {
     return elementStack.size() > 0 ? elementStack.back() : nullptr;
 }
 
-void Element::ClearStack()
+void Element::clear_stack()
 {
     elementStack.clear();
 }
 
-int Element::GetElementDepth()
+int Element::get_element_depth()
 {
     return elementStack.size();
 }
 
-Element &Element::GetCurrentElement()
+Element &Element::get_current_element()
 {
     return *Element::currentElement;
 }
 
-ComputedProps Element::GetComputedProperties()
+ComputedProps Element::get_computed_properties()
 {
     return ClayState::computedProperties[props.clay.clayId.id];
 }
 
 Element::Element(std::string id)
 {
-    parent = Element::PeekStack();
+    parent = Element::peek_stack();
 
     if (parent != nullptr)
     {
@@ -55,22 +55,22 @@ Element::Element(std::string id)
     }
 
     props.id = std::move(id);
-    props.clay.clayId = Element::HashId(props.id);
+    props.clay.clayId = Element::hash_id(props.id);
 
-    Element::PushStack(*this);
+    Element::push_stack(*this);
 }
 
-uint32_t Element::GetCurrentOpenId()
+uint32_t Element::get_current_open_id()
 {
     return Clay__GetOpenLayoutElement()->id;
 }
 
-Clay_ElementId Element::HashId(const std::string &id)
+Clay_ElementId Element::hash_id(const std::string &id)
 {
     return Clay__HashString(Clay_String
     {
         static_cast<int32_t>(id.length()),
-        ClayState::AllocateString(id.c_str()),
+        ClayState::allocate_string(id.c_str()),
     },
     0, 0);
 }
@@ -159,7 +159,7 @@ Element &Element::height(float height)
 
 Element &Element::direction(FlowDirection dir)
 {
-    props.clay.layout.layoutDirection = ToClay(dir);
+    props.clay.layout.layoutDirection = to_clay(dir);
     return *this;
 }
 
@@ -171,25 +171,25 @@ Element &Element::gap(float gap)
 
 Element &Element::align(AlignmentX x, AlignmentY y)
 {
-    props.clay.layout.childAlignment.x = ToClay(x);
-    props.clay.layout.childAlignment.y = ToClay(y);
+    props.clay.layout.childAlignment.x = to_clay(x);
+    props.clay.layout.childAlignment.y = to_clay(y);
     return *this;
 }
 
-Element &Element::centerContent()
+Element &Element::center_content()
 {
     props.clay.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
     props.clay.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
     return *this;
 }
 
-Element &Element::centerContentX()
+Element &Element::center_content_x()
 {
     props.clay.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
     return *this;
 }
 
-Element &Element::centerContentY()
+Element &Element::center_content_y()
 {
     props.clay.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
     return *this;
@@ -219,17 +219,17 @@ Element &Element::color(const ThemeColor imguiColor)
 
 Element &Element::color(const Color &normalColor, const Color &hoverColor, const Color &pressColor)
 {
-    this->color(IsPressed() ? pressColor : (IsHovered() ? hoverColor : normalColor));
+    this->color(is_pressed() ? pressColor : (is_hovered() ? hoverColor : normalColor));
     return *this;
 }
 
 Element &Element::color(const ThemeColor normalColor, const ThemeColor hoverColor, const ThemeColor pressColor)
 {
-    this->color(IsPressed() ? pressColor : (IsHovered() ? hoverColor : normalColor));
+    this->color(is_pressed() ? pressColor : (is_hovered() ? hoverColor : normalColor));
     return *this;
 }
 
-Element &Element::cornerRadius(float radius)
+Element &Element::corner_radius(float radius)
 {
     props.clay.rectangle.cornerRadius = {radius, radius, radius, radius};
     props.clay.border.cornerRadius = {radius, radius, radius, radius};
@@ -256,7 +256,7 @@ Element &Element::border(float width, const Color &color)
     return *this;
 }
 
-Element &Element::borderWidth(float width)
+Element &Element::border_width(float width)
 {
     props.clay.border.bottom.width = (uint32_t)width;
     props.clay.border.top.width = (uint32_t)width;
@@ -266,7 +266,7 @@ Element &Element::borderWidth(float width)
     return *this;
 }
 
-Element &Element::borderColor(const Color &color)
+Element &Element::border_color(const Color &color)
 {
     auto col = Clay_Color{color.r * 255, color.g * 255, color.b * 255, color.a * 255};
     props.clay.border.bottom.color = col;
@@ -277,28 +277,28 @@ Element &Element::borderColor(const Color &color)
     return *this;
 }
 
-Element &Element::gapBorder(float width, const Color &color)
+Element &Element::gap_border(float width, const Color &color)
 {
     props.clay.border.betweenChildren = {(uint32_t)width, {color.r * 255, color.g * 255, color.b * 255, color.a * 255}};
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER;
     return *this;
 }
 
-Element &Element::gapBorderWidth(float width)
+Element &Element::gap_border_width(float width)
 {
     props.clay.border.betweenChildren.width = (uint32_t)width;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER;
     return *this;
 }
 
-Element &Element::gapBorderColor(const Color &color)
+Element &Element::gap_border_color(const Color &color)
 {
     props.clay.border.betweenChildren.color = {color.r * 255, color.g * 255, color.b * 255, color.a * 255};
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_BORDER_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingOffset(float offsetX, float offsetY)
+Element &Element::floating_offset(float offsetX, float offsetY)
 {
     props.clay.floating.offset.x = offsetX;
     props.clay.floating.offset.y = offsetY;
@@ -306,21 +306,21 @@ Element &Element::floatingOffset(float offsetX, float offsetY)
     return *this;
 }
 
-Element &Element::floatingOffsetX(float offsetX)
+Element &Element::floating_offset_x(float offsetX)
 {
     props.clay.floating.offset.x = offsetX;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingOffsetY(float offsetY)
+Element &Element::floating_offset_y(float offsetY)
 {
     props.clay.floating.offset.y = offsetY;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingExpand(float expandX, float expandY)
+Element &Element::floating_expand(float expandX, float expandY)
 {
     props.clay.floating.expand.width = expandX;
     props.clay.floating.expand.height = expandY;
@@ -328,74 +328,74 @@ Element &Element::floatingExpand(float expandX, float expandY)
     return *this;
 }
 
-Element &Element::floatingExpandX(float expandX)
+Element &Element::floating_expand_x(float expandX)
 {
     props.clay.floating.expand.width = expandX;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingExpandY(float expandY)
+Element &Element::floating_expand_y(float expandY)
 {
     props.clay.floating.expand.height = expandY;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingZIndex(int zIndex)
+Element &Element::floating_z_index(int zIndex)
 {
     props.clay.floating.zIndex = zIndex;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingParent(std::string parentId)
+Element &Element::floating_parent(std::string parentId)
 {
-    props.clay.floating.parentId = ElementIdFromString(parentId);
+    props.clay.floating.parentId = element_id_from_string(parentId);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingParent(int parentId)
+Element &Element::floating_parent(int parentId)
 {
     props.clay.floating.parentId = parentId;
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingAttachPoint(AttachPointType attach)
+Element &Element::floating_attach_point(AttachPointType attach)
 {
-    props.clay.floating.attachment.element = ToClay(attach);
-    props.clay.floating.attachment.parent = ToClay(attach);
+    props.clay.floating.attachment.element = to_clay(attach);
+    props.clay.floating.attachment.parent = to_clay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingAttachPointSelf(AttachPointType attach)
+Element &Element::floating_attach_point_self(AttachPointType attach)
 {
-    props.clay.floating.attachment.element = ToClay(attach);
+    props.clay.floating.attachment.element = to_clay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
 
-Element &Element::floatingAttachPointParent(AttachPointType attach)
+Element &Element::floating_attach_point_parent(AttachPointType attach)
 {
-    props.clay.floating.attachment.parent = ToClay(attach);
+    props.clay.floating.attachment.parent = to_clay(attach);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::floatingPointerMode(PointerEventMode captureMode)
+Element &Element::floating_pointer_mode(PointerEventMode captureMode)
 {
-    props.clay.floating.pointerCaptureMode = ToClay(captureMode);
+    props.clay.floating.pointerCaptureMode = to_clay(captureMode);
     props.clay.activeConfigs |= CLAY__ELEMENT_CONFIG_TYPE_FLOATING_CONTAINER;
     return *this;
 }
 
-Element &Element::CaptureDrag()
+Element &Element::capture_drag()
 {
-    if (Element::IsAnyCaptured())
+    if (Element::is_any_captured())
     {
         return *this;
     }
@@ -404,7 +404,7 @@ Element &Element::CaptureDrag()
     return *this;
 }
 
-Element &Element::StopCaptureDrag()
+Element &Element::stop_capture_drag()
 {
     if (ClayState::capturedElement == props.clay.clayId.id)
     {
@@ -424,7 +424,7 @@ Element &Element::fit()
     return size(SizingType::Fit);
 }
 
-void Element::_Begin()
+void Element::internal_begin()
 {
     Clay__OpenElement();
 
@@ -472,30 +472,30 @@ void Element::_Begin()
     Clay__ElementPostConfiguration();
 }
 
-void Element::_End()
+void Element::internal_end()
 {
-    if (GetElementDepth() == 0)
+    if (get_element_depth() == 0)
     {
         throw std::runtime_error("Cannot close root element");
     }
 
     Clay__CloseElement();
 
-    Element::PopStack();
+    Element::pop_stack();
 }
 
 /// @brief Checks if the current element is hovered by the mouse.
-bool Element::IsHovered()
+bool Element::is_hovered()
 {
     if (Clay__booleanWarnings.maxElementsExceeded)
     {
         return false;
     }
 
-    if (IsOtherCaptured())
+    if (is_other_captured())
         return false;
 
-    uint32_t openElement = Element::GetCurrentElement().props.clay.clayId.id;
+    uint32_t openElement = Element::get_current_element().props.clay.clayId.id;
 
     for (int32_t i = 0; i < Clay__pointerOverIds.length; ++i)
     {
@@ -517,64 +517,64 @@ bool Element::IsHovered()
 }
 
 /// @brief Checks if the current element is being pressed by the mouse.
-bool Element::IsPressed()
+bool Element::is_pressed()
 {
-    return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_PRESSED;
+    return is_hovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_PRESSED;
 }
 
 /// @brief Checks if the current element was clicked this frame.
-bool Element::ClickedThisFrame()
+bool Element::clicked_this_frame()
 {
-    return IsHovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_RELEASED_THIS_FRAME;
+    return is_hovered() && Clay__pointerInfo.state == CLAY_POINTER_DATA_RELEASED_THIS_FRAME;
 }
 
 /// @brief Checks if the current element started being hovered this frame.
-bool Element::HoveredThisFrame()
+bool Element::hovered_this_frame()
 {
-    return IsHovered() && (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == GetCurrentElement().props.clay.clayId.id);
+    return is_hovered() && (ClayState::lastHoveredElement != 0 && ClayState::lastHoveredElement == get_current_element().props.clay.clayId.id);
 }
 
 /// @brief Checks if the mouse moved while over the current element this frame.
-bool Element::MouseMovedThisFrame()
+bool Element::mouse_moved_this_frame()
 {
-    return IsHovered() && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0);
+    return is_hovered() && (ClayState::get_pointer_delta_x() != 0 || ClayState::get_pointer_delta_y() != 0);
 }
 
 /// @brief Checks if the mouse was scrolled while over the current element this frame.
-bool Element::MouseScrolledThisFrame()
+bool Element::mouse_scrolled_this_frame()
 {
-    return IsHovered() && ClayState::inputs.scrollDeltaX != 0 || ClayState::inputs.scrollDeltaY != 0;
+    return is_hovered() && (ClayState::inputs.scrollDeltaX != 0 || ClayState::inputs.scrollDeltaY != 0);
 }
 
 /// @brief Checks if the current element is being captured by the mouse.
-bool Element::IsSelfCaptured()
+bool Element::is_self_captured()
 {
-    if (!Element::IsAnyCaptured())
+    if (!Element::is_any_captured())
     {
         return false;
     }
 
-    return ClayState::capturedElement == GetCurrentElement().props.clay.clayId.id;
+    return ClayState::capturedElement == get_current_element().props.clay.clayId.id;
 }
 
 /// @brief Checks if there is any element being captured by the mouse.
-bool Element::IsAnyCaptured()
+bool Element::is_any_captured()
 {
     return ClayState::capturedElement != 0;
 }
 
 /// @brief Checks if an element other than the current one is being captured by the mouse.
-bool Element::IsOtherCaptured()
+bool Element::is_other_captured()
 {
-    return Element::IsAnyCaptured() && !Element::IsSelfCaptured();
+    return Element::is_any_captured() && !Element::is_self_captured();
 }
 
 /// @brief Checks if the mouse was dragged while over the current element this frame.
-bool Element::MouseDraggedThisFrame()
+bool Element::mouse_dragged_this_frame()
 {
-    bool selfCap = IsSelfCaptured();
-    bool pressed = IsPressed();
-    bool result = selfCap || (pressed && (ClayState::GetPointerDeltaX() != 0 || ClayState::GetPointerDeltaY() != 0));
+    bool selfCap = is_self_captured();
+    bool pressed = is_pressed();
+    bool result = selfCap || (pressed && (ClayState::get_pointer_delta_x() != 0 || ClayState::get_pointer_delta_y() != 0));
 
     // Release capture if mouse is not pressed
     if (selfCap && !ClayState::inputs.pointerDown)
@@ -586,12 +586,12 @@ bool Element::MouseDraggedThisFrame()
     return result;
 }
 
-ComputedProps Element::Computed()
+ComputedProps Element::computed()
 {
-    return Element::GetCurrentElement().GetComputedProperties();
+    return Element::get_current_element().get_computed_properties();
 }
 
-uint32_t Element::ElementIdFromString(std::string id)
+uint32_t Element::element_id_from_string(std::string id)
 {
-    return HashId(id).id;
+    return hash_id(id).id;
 }

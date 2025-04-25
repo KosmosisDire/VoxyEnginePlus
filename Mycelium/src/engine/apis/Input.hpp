@@ -124,44 +124,44 @@ class Input
         ~Input();
 
         // Key state queries
-        static bool IsKeyPressed(Key key);
-        static bool WasKeyPressed(Key key);
-        static bool WasKeyReleased(Key key);
+        static bool is_key_pressed(Key key);
+        static bool was_key_pressed(Key key);
+        static bool was_key_released(Key key);
 
         // Mouse button state queries
-        static bool IsMouseButtonPressed(MouseButton button);
-        static bool WasMouseButtonPressed(MouseButton button);
-        static bool WasMouseButtonReleased(MouseButton button);
+        static bool is_mouse_button_pressed(MouseButton button);
+        static bool was_mouse_button_pressed(MouseButton button);
+        static bool was_mouse_button_released(MouseButton button);
 
         // Mouse position and movement
-        static Vector2 GetMousePosition();
-        static Vector2 GetMouseDelta();
-        static Vector2 GetMouseScrollDelta();
+        static Vector2 get_mouse_position();
+        static Vector2 get_mouse_delta();
+        static Vector2 get_mouse_scroll_delta();
 
-        static void SetMousePosition(float x, float y);
-        static void ResetMouseDelta();
-        static void CaptureMouse(bool capture);
-        static void CaptureMouseResetDelta(bool capture);
-        static bool IsMouseCaptured();
+        static void set_mouse_position(float x, float y);
+        static void reset_mouse_delta();
+        static void capture_mouse(bool capture);
+        static void capture_mouse_reset_delta(bool capture);
+        static bool is_mouse_captured();
 
         // Callback registration - need instance access
-        void RegisterKeyCallback(KeyCallbackFn callback);
-        void RegisterMouseButtonCallback(MouseButtonCallbackFn callback);
-        void RegisterMouseMoveCallback(MouseMoveCallbackFn callback);
-        void RegisterMouseScrollCallback(MouseScrollCallbackFn callback);
+        void register_key_callback(KeyCallbackFn callback);
+        void register_mouse_button_callback(MouseButtonCallbackFn callback);
+        void register_mouse_move_callback(MouseMoveCallbackFn callback);
+        void register_mouse_scroll_callback(MouseScrollCallbackFn callback);
 
         // Update state (call once per frame) - static since it updates global state
-        static void Update();
+        static void update();
 
     private:
         // Static callbacks for GLFW
-        static void KeyCallback(GLFWwindow *glfwWindow, Key key, int scancode, int action, int mods);
-        static void MouseButtonCallback(GLFWwindow *glfwWindow, int button, int action, int mods);
-        static void MouseMoveCallback(GLFWwindow *glfwWindow, float xpos, float ypos);
-        static void ScrollCallback(GLFWwindow *glfwWindow, float xoffset, float yoffset);
-        static GLFWwindow *GetGlfwWindow() { return instance->glfwWindow; }
+        static void key_callback(GLFWwindow *glfwWindow, Key key, int scancode, int action, int mods);
+        static void mouse_button_callback(GLFWwindow *glfwWindow, int button, int action, int mods);
+        static void mouse_move_callback(GLFWwindow *glfwWindow, float xpos, float ypos);
+        static void scroll_callback(GLFWwindow *glfwWindow, float xoffset, float yoffset);
+        static GLFWwindow *get_glfw_window() { return instance->glfwWindow; }
 
-        static std::shared_ptr<GameWindow> GetWindow() { return instance->window; }
+        static std::shared_ptr<GameWindow> get_window() { return instance->window; }
 
         // Static state storage
         static Input *instance;
@@ -199,7 +199,7 @@ float Input::scrollDeltaX = 0.0;
 float Input::scrollDeltaY = 0.0;
 bool Input::mouseCaptured = false;
 
-Input::Input(std::shared_ptr<GameWindow> window) : glfwWindow(window->GetGlfwWindow()), window(window)
+Input::Input(std::shared_ptr<GameWindow> window) : glfwWindow(window->get_glfw_window()), window(window) // Update call
 {
     if (instance != nullptr)
     {
@@ -208,12 +208,12 @@ Input::Input(std::shared_ptr<GameWindow> window) : glfwWindow(window->GetGlfwWin
 
     instance = this;
 
-    glfwSetKeyCallback(glfwWindow, [](GLFWwindow * glfwWindow, int key, int scancode, int action, int mods) { KeyCallback(glfwWindow, static_cast<Key>(key), scancode, action, mods); });
+    glfwSetKeyCallback(glfwWindow, [](GLFWwindow * glfwWindow, int key, int scancode, int action, int mods) { key_callback(glfwWindow, static_cast<Key>(key), scancode, action, mods); });
 
-    glfwSetMouseButtonCallback(glfwWindow, MouseButtonCallback);
-    glfwSetCursorPosCallback(glfwWindow, [](GLFWwindow * glfwWindow, double xpos, double ypos) { MouseMoveCallback(glfwWindow, static_cast<float>(xpos), static_cast<float>(ypos)); });
+    glfwSetMouseButtonCallback(glfwWindow, mouse_button_callback);
+    glfwSetCursorPosCallback(glfwWindow, [](GLFWwindow * glfwWindow, double xpos, double ypos) { mouse_move_callback(glfwWindow, static_cast<float>(xpos), static_cast<float>(ypos)); });
 
-    glfwSetScrollCallback(glfwWindow, [](GLFWwindow * glfwWindow, double xoffset, double yoffset) { ScrollCallback(glfwWindow, static_cast<float>(xoffset), static_cast<float>(yoffset)); });
+    glfwSetScrollCallback(glfwWindow, [](GLFWwindow * glfwWindow, double xoffset, double yoffset) { scroll_callback(glfwWindow, static_cast<float>(xoffset), static_cast<float>(yoffset)); });
 
     // Initialize mouse position
     double tempX, tempY;
@@ -236,7 +236,7 @@ Input::~Input()
     }
 }
 
-void Input::Update()
+void Input::update()
 {
     if (!instance)
     {
@@ -261,13 +261,13 @@ void Input::Update()
     scrollDeltaY = 0.0;
 }
 
-bool Input::IsKeyPressed(Key key)
+bool Input::is_key_pressed(Key key)
 {
     auto it = currentKeyStates.find(key);
     return it != currentKeyStates.end() && it->second;
 }
 
-bool Input::WasKeyPressed(Key key)
+bool Input::was_key_pressed(Key key)
 {
     auto curr = currentKeyStates.find(key);
     auto prev = previousKeyStates.find(key);
@@ -275,7 +275,7 @@ bool Input::WasKeyPressed(Key key)
            (prev == previousKeyStates.end() || !prev->second);
 }
 
-bool Input::WasKeyReleased(Key key)
+bool Input::was_key_released(Key key)
 {
     auto curr = currentKeyStates.find(key);
     auto prev = previousKeyStates.find(key);
@@ -283,13 +283,13 @@ bool Input::WasKeyReleased(Key key)
            prev != previousKeyStates.end() && prev->second;
 }
 
-bool Input::IsMouseButtonPressed(MouseButton button)
+bool Input::is_mouse_button_pressed(MouseButton button)
 {
     auto it = currentMouseButtonStates.find(static_cast<int>(button));
     return it != currentMouseButtonStates.end() && it->second;
 }
 
-bool Input::WasMouseButtonPressed(MouseButton button)
+bool Input::was_mouse_button_pressed(MouseButton button)
 {
     auto curr = currentMouseButtonStates.find(static_cast<int>(button));
     auto prev = previousMouseButtonStates.find(static_cast<int>(button));
@@ -297,7 +297,7 @@ bool Input::WasMouseButtonPressed(MouseButton button)
            (prev == previousMouseButtonStates.end() || !prev->second);
 }
 
-bool Input::WasMouseButtonReleased(MouseButton button)
+bool Input::was_mouse_button_released(MouseButton button)
 {
     auto curr = currentMouseButtonStates.find(static_cast<int>(button));
     auto prev = previousMouseButtonStates.find(static_cast<int>(button));
@@ -305,80 +305,80 @@ bool Input::WasMouseButtonReleased(MouseButton button)
            prev != previousMouseButtonStates.end() && prev->second;
 }
 
-Vector2 Input::GetMousePosition()
+Vector2 Input::get_mouse_position()
 {
     return Vector2(mouseX, mouseY);
 }
 
-Vector2 Input::GetMouseDelta()
+Vector2 Input::get_mouse_delta()
 {
     return Vector2(mouseX - previousMouseX, mouseY - previousMouseY);
 }
 
-Vector2 Input::GetMouseScrollDelta()
+Vector2 Input::get_mouse_scroll_delta()
 {
     return Vector2(scrollDeltaX, scrollDeltaY);
 }
 
-void Input::SetMousePosition(float x, float y)
+void Input::set_mouse_position(float x, float y)
 {
     mouseX = x;
     mouseY = y;
     previousMouseX = x;
     previousMouseY = y;
-    glfwSetCursorPos(GetGlfwWindow(), x, y);
+    glfwSetCursorPos(get_glfw_window(), x, y);
 }
 
-void Input::ResetMouseDelta()
+void Input::reset_mouse_delta()
 {
     previousMouseX = mouseX;
     previousMouseY = mouseY;
 }
 
-void Input::CaptureMouse(bool capture)
+void Input::capture_mouse(bool capture)
 {
-    SetMousePosition(GetWindow()->GetWidth() / 2.0f, GetWindow()->GetHeight() / 2.0f);
-    glfwSetInputMode(GetGlfwWindow(), GLFW_CURSOR, capture ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
-    glfwSetInputMode(GetGlfwWindow(), GLFW_RAW_MOUSE_MOTION, capture);
+    set_mouse_position(get_window()->get_width() / 2.0f, get_window()->get_height() / 2.0f); // Update calls
+    glfwSetInputMode(get_glfw_window(), GLFW_CURSOR, capture ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    glfwSetInputMode(get_glfw_window(), GLFW_RAW_MOUSE_MOTION, capture);
 
     mouseCaptured = capture;
 }
 
 /// @brief Sets the mouse capture and also resets the input mouse delta so that systems relying on delta values will not be affected by the sudden change in mouse position.
 /// @param capture Whether to capture the mouse or not
-void Input::CaptureMouseResetDelta(bool capture)
+void Input::capture_mouse_reset_delta(bool capture)
 {
-    CaptureMouse(capture);
-    Input::ResetMouseDelta();
+    capture_mouse(capture);
+    Input::reset_mouse_delta();
 }
 
-bool Input::IsMouseCaptured()
+bool Input::is_mouse_captured()
 {
     return mouseCaptured;
 }
 
-void Input::RegisterKeyCallback(KeyCallbackFn callback)
+void Input::register_key_callback(KeyCallbackFn callback)
 {
     keyCallbacks.push_back(callback);
 }
 
-void Input::RegisterMouseButtonCallback(MouseButtonCallbackFn callback)
+void Input::register_mouse_button_callback(MouseButtonCallbackFn callback)
 {
     mouseButtonCallbacks.push_back(callback);
 }
 
-void Input::RegisterMouseMoveCallback(MouseMoveCallbackFn callback)
+void Input::register_mouse_move_callback(MouseMoveCallbackFn callback)
 {
     mouseMoveCallbacks.push_back(callback);
 }
 
-void Input::RegisterMouseScrollCallback(MouseScrollCallbackFn callback)
+void Input::register_mouse_scroll_callback(MouseScrollCallbackFn callback)
 {
     mouseScrollCallbacks.push_back(callback);
 }
 
 // Static callback implementations
-void Input::KeyCallback(GLFWwindow *glfwWindow, Key key, int scancode, int action, int mods)
+void Input::key_callback(GLFWwindow *glfwWindow, Key key, int scancode, int action, int mods)
 {
     if (instance)
     {
@@ -391,7 +391,7 @@ void Input::KeyCallback(GLFWwindow *glfwWindow, Key key, int scancode, int actio
     }
 }
 
-void Input::MouseButtonCallback(GLFWwindow *glfwWindow, int button, int action, int mods)
+void Input::mouse_button_callback(GLFWwindow *glfwWindow, int button, int action, int mods)
 {
     if (instance)
     {
@@ -404,7 +404,7 @@ void Input::MouseButtonCallback(GLFWwindow *glfwWindow, int button, int action, 
     }
 }
 
-void Input::MouseMoveCallback(GLFWwindow *glfwWindow, float xpos, float ypos)
+void Input::mouse_move_callback(GLFWwindow *glfwWindow, float xpos, float ypos)
 {
     if (instance)
     {
@@ -418,7 +418,7 @@ void Input::MouseMoveCallback(GLFWwindow *glfwWindow, float xpos, float ypos)
     }
 }
 
-void Input::ScrollCallback(GLFWwindow *glfwWindow, float xoffset, float yoffset)
+void Input::scroll_callback(GLFWwindow *glfwWindow, float xoffset, float yoffset)
 {
     if (instance)
     {

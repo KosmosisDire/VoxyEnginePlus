@@ -2,7 +2,8 @@
 #include <daxa/daxa.hpp>
 using namespace daxa::types;
 #include <engine/data/Image.hpp>
-#include "window.hpp"
+#include "Window.hpp"
+#include <engine/apis/Fonts.hpp> // Add include for FontManager
 #include <daxa/utils/imgui.hpp>
 #include <daxa/utils/pipeline_manager.hpp>
 #include <daxa/utils/task_graph.hpp>
@@ -24,45 +25,45 @@ struct InlineTask
         }
 
         // make builder interface
-        InlineTask &AddAttachment(daxa::TaskAttachmentInfo attachment)
+        InlineTask &add_attachment(daxa::TaskAttachmentInfo attachment)
         {
             attachments.push_back(attachment);
             return *this;
         }
 
-        InlineTask &AddAttachment(daxa::TaskImageAccess access, daxa::TaskImageView view)
+        InlineTask &add_attachment(daxa::TaskImageAccess access, daxa::TaskImageView view)
         {
             attachments.push_back(daxa::inl_attachment(access, view));
             return *this;
         }
 
-        InlineTask &AddAttachment(daxa::TaskBufferAccess access, daxa::TaskBuffer buffer)
+        InlineTask &add_attachment(daxa::TaskBufferAccess access, daxa::TaskBuffer buffer)
         {
             attachments.push_back(daxa::inl_attachment(access, buffer));
             return *this;
         }
 
-        InlineTask &SetTask(std::function<void(daxa::TaskInterface)> task)
+        InlineTask &set_task(std::function<void(daxa::TaskInterface)> task)
         {
             this->task = task;
             return *this;
         }
 
-        InlineTask &AddAllAttachments(daxa::TaskImageAccess access, std::vector<daxa::TaskImage> images)
+        InlineTask &add_all_attachments(daxa::TaskImageAccess access, std::vector<daxa::TaskImage> images)
         {
             for (auto image : images)
             {
-                AddAttachment(access, image);
+                add_attachment(access, image); // Update call
             }
 
             return *this;
         }
 
-        InlineTask &AddAllAttachments(daxa::TaskBufferAccess access, std::vector<daxa::TaskBuffer> buffers)
+        InlineTask &add_all_attachments(daxa::TaskBufferAccess access, std::vector<daxa::TaskBuffer> buffers)
         {
             for (auto buffer : buffers)
             {
-                AddAttachment(access, buffer);
+                add_attachment(access, buffer); // Update call
             }
 
             return *this;
@@ -70,7 +71,7 @@ struct InlineTask
 
     private:
         friend class Renderer;
-        daxa::InlineTaskInfo build()
+        daxa::InlineTaskInfo build() // Keep build as is, it's private and called specifically
         {
             return {.attachments = attachments, .task = task, .name = name};
         }
@@ -98,13 +99,13 @@ class Renderer
         {
             daxa_instance = daxa::create_instance({});
             device = daxa_instance.create_device_2(daxa_instance.choose_device(daxa::ImplicitFeatureFlagBits::SHADER_FLOAT16, {}));
-            swapchain = CreateSwapchain(device, window, "swapchain");
-            task_swap_image = CreateSwapchainImage(swapchain, "swapchain_image");
-            pipeline_manager = CreatePipelineManager(device, shaderDirectories, "pipeline_manager");
-            imgui_renderer = CreateImguiRenderer();
+            swapchain = create_swapchain(device, window, "swapchain"); // Update call
+            task_swap_image = create_swapchain_image(swapchain, "swapchain_image"); // Update call
+            pipeline_manager = create_pipeline_manager(device, shaderDirectories, "pipeline_manager"); // Update call
+            imgui_renderer = create_imgui_renderer(); // Update call
 
-            Resize(window->GetWidth(), window->GetHeight());
-            InitializeGraph();
+            resize(window->get_width(), window->get_height()); // Update call
+            initialize_graph(); // Update call
         }
 
         ~Renderer()
@@ -114,12 +115,12 @@ class Renderer
             ImGui_ImplGlfw_Shutdown();
         }
 
-        void Render()
+        void render()
         {
             if (!task_graph_complete)
             {
                 printf("Task graph not completed before frame start!!\n");
-                Complete();
+                complete(); // Update call
             }
 
             auto reloaded_result = pipeline_manager.reload_all();
@@ -148,14 +149,14 @@ class Renderer
             render_loop_graph.execute({});
         }
 
-        void Resize(u32 width, u32 height)
+        void resize(u32 width, u32 height)
         {
             swapchain.resize();
             surface_width = swapchain.get_surface_extent().x;
             surface_height = swapchain.get_surface_extent().y;
         }
 
-        inline void Complete()
+        inline void complete()
         {
             auto imgui_task_info = daxa::InlineTaskInfo
             {
@@ -181,47 +182,47 @@ class Renderer
         /// @brief Add a task to the render loop
         /// @param task The task to add. This can be a new insteance of InlineTask.
         /// @param defer_completion If true, the task graph will not be rebuilt (but will be reinitialized). This only matters if the graph was already completed before this task was added.
-        inline void AddTask(InlineTask task, bool defer_completion = false)
+        inline void add_task(InlineTask task, bool defer_completion = false)
         {
-            AddTask(task.build(), defer_completion);
+            add_task(task.build(), defer_completion); // Update recursive call
         }
 
         /// @brief Add a task to the render loop
         /// @param task The task to add as an InlineTaskInfo.
         /// @param defer_completion If true, the task graph will not be rebuilt (but will be reinitialized). This only matters if the graph was already completed before this task was added.
-        inline void AddTask(daxa::InlineTaskInfo task, bool defer_completion = false)
+        inline void add_task(daxa::InlineTaskInfo task, bool defer_completion = false)
         {
             if (task_graph_complete)
             {
-                InitializeGraph();
+                initialize_graph(); // Update call
             }
 
             render_loop_graph.add_task(task);
 
             if (!defer_completion && task_graph_complete)
             {
-                Complete();
+                complete(); // Update call
             }
         }
 
-        inline void DestroyImage(daxa::ImageId image)
+        inline void destroy_image(daxa::ImageId image)
         {
             device.destroy_image(image);
         }
 
-        inline void DestroyBuffer(daxa::BufferId buffer)
+        inline void destroy_buffer(daxa::BufferId buffer)
         {
             device.destroy_buffer(buffer);
         }
 
-        inline daxa::ImageId CreateImage(daxa::ImageInfo info)
+        inline daxa::ImageId create_image(daxa::ImageInfo info)
         {
             return device.create_image(info);
         }
 
-        inline daxa::ImageId CreateImage(std::string name, Image &image)
+        inline daxa::ImageId create_image(std::string name, Image &image)
         {
-            auto id = CreateImage(daxa::ImageInfo
+            auto id = create_image(daxa::ImageInfo // Update call
             {
                 .format = daxa::Format::R8G8B8A8_UNORM,
                 .size = {(unsigned int)image.width(), (unsigned int)image.height(), 1},
@@ -289,7 +290,7 @@ class Renderer
             device.wait_idle();
             device.collect_garbage();
 
-            device.destroy_buffer(buffer);
+            destroy_buffer(buffer); // Update call
 
             return id;
         }
@@ -298,9 +299,9 @@ class Renderer
         static constexpr daxa::ImageUsageFlags depth_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::DEPTH_STENCIL_ATTACHMENT | daxa::ImageUsageFlagBits::TRANSFER_SRC | daxa::ImageUsageFlagBits::TRANSFER_DST;
         static constexpr daxa::ImageUsageFlags transfer_image_flags = daxa::ImageUsageFlagBits::SHADER_STORAGE | daxa::ImageUsageFlagBits::TRANSFER_SRC | daxa::ImageUsageFlagBits::TRANSFER_DST;
 
-        inline daxa::ImageId CreateRenderImage(std::string name, daxa::ImageUsageFlags flags = color_image_flags)
+        inline daxa::ImageId create_render_image(std::string name, daxa::ImageUsageFlags flags = color_image_flags)
         {
-            return CreateImage(
+            return create_image( // Update call
             {
                 .format = swapchain.get_format(),
                 .size = {surface_width, surface_height, 1},
@@ -309,9 +310,9 @@ class Renderer
             });
         }
 
-        inline daxa::ImageId CreateRenderImage(std::string name, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
+        inline daxa::ImageId create_render_image(std::string name, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
         {
-            return CreateImage(
+            return create_image( // Update call
             {
                 .format = format,
                 .size = {static_cast<u32>(surface_width * scale), static_cast<u32>(surface_height * scale), 1},
@@ -320,7 +321,7 @@ class Renderer
             });
         }
 
-        inline void SetTaskImage(std::string name, daxa::ImageId image, daxa::TaskImage *out_task_image)
+        inline void set_task_image(std::string name, daxa::ImageId image, daxa::TaskImage *out_task_image)
         {
             if (out_task_image->is_valid())
             {
@@ -332,29 +333,29 @@ class Renderer
             }
         }
 
-        inline daxa::ImageId CreateRenderImage(std::string name, daxa::TaskImage *out_task_image, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
+        inline daxa::ImageId create_render_image(std::string name, daxa::TaskImage *out_task_image, daxa::Format format, float scale = 1.0, daxa::ImageUsageFlags flags = color_image_flags)
         {
-            auto id = CreateRenderImage(name, format, scale, flags);
-            SetTaskImage(name, id, out_task_image);
+            auto id = create_render_image(name, format, scale, flags); // Update call
+            set_task_image(name, id, out_task_image); // Update call
             return id;
         }
 
-        inline daxa::ImageId CreateImage(daxa::ImageInfo info, daxa::TaskImage *out_task_image)
+        inline daxa::ImageId create_image(daxa::ImageInfo info, daxa::TaskImage *out_task_image)
         {
-            auto id = CreateImage(info);
-            SetTaskImage(std::string(info.name.view()), id, out_task_image);
+            auto id = create_image(info); // Update call
+            set_task_image(std::string(info.name.view()), id, out_task_image); // Update call
             return id;
         }
 
-        inline daxa::ImageId CreateRenderImage(std::string name, daxa::TaskImage *out_task_image, daxa::ImageUsageFlags flags = color_image_flags)
+        inline daxa::ImageId create_render_image(std::string name, daxa::TaskImage *out_task_image, daxa::ImageUsageFlags flags = color_image_flags)
         {
-            auto id = CreateRenderImage(name, flags);
-            SetTaskImage(name, id, out_task_image);
+            auto id = create_render_image(name, flags); // Update call
+            set_task_image(name, id, out_task_image); // Update call
             return id;
         }
 
         template <typename PushConstant>
-        inline std::shared_ptr<daxa::ComputePipeline> AddComputePipeline(std::string name, std::filesystem::path shaderPath)
+        inline std::shared_ptr<daxa::ComputePipeline> add_compute_pipeline(std::string name, std::filesystem::path shaderPath)
         {
             return pipeline_manager.add_compute_pipeline(
             {
@@ -365,7 +366,7 @@ class Renderer
         }
 
 
-        inline void CreateBuffer(std::string name, usize bytes, daxa::BufferId & out_buffer, daxa::TaskBuffer & out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
+        inline void create_buffer(std::string name, usize bytes, daxa::BufferId & out_buffer, daxa::TaskBuffer & out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
         {
             out_buffer = device.create_buffer(
             {
@@ -377,18 +378,18 @@ class Renderer
         }
 
         template <typename T>
-        inline void CreateBuffer(std::string name, daxa::BufferId & out_buffer, daxa::TaskBuffer & out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
+        inline void create_buffer(std::string name, daxa::BufferId & out_buffer, daxa::TaskBuffer & out_task_buffer, daxa::MemoryFlags flags = daxa::MemoryFlagBits::NONE)
         {
-            CreateBuffer(name, sizeof(T), out_buffer, out_task_buffer, flags);
+            create_buffer(name, sizeof(T), out_buffer, out_task_buffer, flags); // Update call
         }
 
         template <typename T>
-        inline T *MapBufferAs(daxa::BufferId buffer)
+        inline T *map_buffer_as(daxa::BufferId buffer)
         {
             return device.buffer_host_address_as<T>(buffer).value();
         }
 
-        inline daxa::InlineTaskInfo CreateBlitTask(daxa::TaskImage src, daxa::TaskImage dst)
+        inline daxa::InlineTaskInfo create_blit_task(daxa::TaskImage src, daxa::TaskImage dst)
         {
             return
             {
@@ -413,15 +414,15 @@ class Renderer
             };
         }
 
-        inline daxa::InlineTaskInfo CreateSwapchainBlitTask(daxa::TaskImage src)
+        inline daxa::InlineTaskInfo create_swapchain_blit_task(daxa::TaskImage src)
         {
-            return CreateBlitTask(src, task_swap_image);
+            return create_blit_task(src, task_swap_image); // Update call
         }
 
     private:
         std::shared_ptr<GameWindow> window;
 
-        void InitializeGraph()
+        void initialize_graph()
         {
             task_graph_complete = false;
             render_loop_graph = daxa::TaskGraph(
@@ -437,13 +438,13 @@ class Renderer
             render_loop_graph.use_persistent_image(task_swap_image);
         }
 
-        inline daxa::ImGuiRenderer CreateImguiRenderer()
+        inline daxa::ImGuiRenderer create_imgui_renderer()
         {
             auto ctx = ImGui::CreateContext();
 
-            FontManager::LoadDefaults();
+            FontManager::load_defaults(); // Update call
 
-            ImGui_ImplGlfw_InitForVulkan(window->GetGlfwWindow(), true);
+            ImGui_ImplGlfw_InitForVulkan(window->get_glfw_window(), true); // Fix call
             return daxa::ImGuiRenderer(
             {
                 .device = device,
@@ -454,7 +455,7 @@ class Renderer
 
     public:
         template <typename T>
-        static inline void CopyToBuffer(daxa::TaskInterface ti, T src, daxa::TaskBufferAttachmentInfo dst, u32 dst_offset = 0)
+        static inline void copy_to_buffer(daxa::TaskInterface ti, T src, daxa::TaskBufferAttachmentInfo dst, u32 dst_offset = 0)
         {
             auto alloc = ti.allocator->allocate_fill(src).value();
             ti.recorder.copy_buffer_to_buffer(
@@ -467,7 +468,7 @@ class Renderer
             });
         }
 
-        static inline void CopyBuffer(daxa::TaskInterface ti, daxa::TaskBuffer src, daxa::TaskBuffer dst, u32 dst_offset = 0)
+        static inline void copy_buffer(daxa::TaskInterface ti, daxa::TaskBuffer src, daxa::TaskBuffer dst, u32 dst_offset = 0)
         {
             ti.recorder.copy_buffer_to_buffer(
             {
@@ -479,7 +480,7 @@ class Renderer
             });
         }
 
-        static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBufferAttachmentInfo buffer, u32 value = 0)
+        static inline void clear_buffer(daxa::TaskInterface ti, daxa::TaskBufferAttachmentInfo buffer, u32 value = 0)
         {
             ti.recorder.clear_buffer(
             {
@@ -490,26 +491,26 @@ class Renderer
             });
         }
 
-        static inline void ClearBuffer(daxa::TaskInterface ti, daxa::TaskBuffer buffer, u32 value = 0)
+        static inline void clear_buffer(daxa::TaskInterface ti, daxa::TaskBuffer buffer, u32 value = 0)
         {
-            ClearBuffer(ti, ti.get(buffer), value);
+            clear_buffer(ti, ti.get(buffer), value); // Update call
         }
 
-        static inline void CopyImage(daxa::TaskInterface ti, daxa::TaskImage src, daxa::TaskImage dst)
+        static inline void copy_image(daxa::TaskInterface ti, daxa::TaskImage src, daxa::TaskImage dst)
         {
             ti.recorder.copy_image_to_image({.src_image = ti.get(src).ids[0],
                                              .dst_image = ti.get(dst).ids[0]});
         }
 
-        static inline DeviceAddress GetDeviceAddress(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex = 0)
+        static inline DeviceAddress get_device_address(daxa::TaskInterface ti, daxa::TaskBuffer buffer, usize bufferIndex = 0)
         {
             return ti.device.buffer_device_address(ti.get(buffer).ids[bufferIndex]).value();
         }
 
-        static inline daxa::Swapchain CreateSwapchain(daxa::Device & device, std::shared_ptr<GameWindow> window, std::string name)
+        static inline daxa::Swapchain create_swapchain(daxa::Device & device, std::shared_ptr<GameWindow> window, std::string name)
         {
-            auto native_handle = window->GetNativeHandle();
-            auto platform = window->GetNativePlatform();
+            auto native_handle = window->get_native_handle(); // Fix call
+            auto platform = window->get_native_platform(); // Fix call
 
             std::cout << "Creating swapchain with:" << std::endl;
             std::cout << "  Platform: " << static_cast<int>(platform) << std::endl;
@@ -528,12 +529,12 @@ class Renderer
                                             .name = name});
         }
 
-        static inline daxa::TaskImage CreateSwapchainImage(daxa::Swapchain & swapchain, std::string name)
+        static inline daxa::TaskImage create_swapchain_image(daxa::Swapchain & swapchain, std::string name)
         {
             return daxa::TaskImage{{.swapchain_image = true, .name = name}};
         }
 
-        static inline daxa::PipelineManager CreatePipelineManager(daxa::Device & device, std::vector<std::filesystem::path> shaderDirectories, std::string name)
+        static inline daxa::PipelineManager create_pipeline_manager(daxa::Device & device, std::vector<std::filesystem::path> shaderDirectories, std::string name)
         {
             shaderDirectories.push_back(DAXA_SHADER_INCLUDE_DIR);
             return daxa::PipelineManager(

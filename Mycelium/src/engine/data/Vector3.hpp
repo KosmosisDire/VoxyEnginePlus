@@ -108,10 +108,10 @@ struct Vector3
     // Utility methods
     [[nodiscard]] float magnitude() const
     {
-        return std::sqrt(sqrMagnitude());
+        return std::sqrt(sqr_magnitude()); // Update call
     }
 
-    [[nodiscard]] constexpr float sqrMagnitude() const
+    [[nodiscard]] constexpr float sqr_magnitude() const
     {
         return x * x + y * y + z * z;
     }
@@ -157,7 +157,7 @@ struct Vector3
 
     [[nodiscard]] static float angle(const Vector3& from, const Vector3& to)
     {
-        float denominator = std::sqrt(from.sqrMagnitude() * to.sqrMagnitude());
+        float denominator = std::sqrt(from.sqr_magnitude() * to.sqr_magnitude()); // Update calls
 
         if (denominator < 1e-15f)
         {
@@ -170,9 +170,9 @@ struct Vector3
         return std::acos(dot) * 57.29578f; // Convert to degrees
     }
 
-    [[nodiscard]] static float signedAngle(const Vector3& from, const Vector3& to, const Vector3& axis)
+    [[nodiscard]] static float signed_angle(const Vector3& from, const Vector3& to, const Vector3& axis)
     {
-        float unsignedAngle = angle(from, to);
+        float unsignedAngle = angle(from, to); // Keep call
 
         float sign = from.cross(to).dot(axis) < 0.0f ? -1.0f : 1.0f;
         return unsignedAngle * sign;
@@ -195,7 +195,7 @@ struct Vector3
                );
     }
 
-    [[nodiscard]] static Vector3 lerpUnclamped(const Vector3& a, const Vector3& b, float t)
+    [[nodiscard]] static Vector3 lerp_unclamped(const Vector3& a, const Vector3& b, float t)
     {
         return Vector3(
 
@@ -205,7 +205,7 @@ struct Vector3
                );
     }
 
-    [[nodiscard]] static Vector3 moveTowards(const Vector3& current, const Vector3& target, float maxDistanceDelta)
+    [[nodiscard]] static Vector3 move_towards(const Vector3& current, const Vector3& target, float maxDistanceDelta)
     {
         Vector3 toVector = target - current;
 
@@ -236,7 +236,7 @@ struct Vector3
 
     [[nodiscard]] static Vector3 project(const Vector3& vector, const Vector3& onNormal)
     {
-        float sqrMag = onNormal.sqrMagnitude();
+        float sqrMag = onNormal.sqr_magnitude(); // Update call
 
         if (sqrMag < 1e-15f)
         {
@@ -247,9 +247,9 @@ struct Vector3
         return onNormal * dot / sqrMag;
     }
 
-    [[nodiscard]] static Vector3 projectOnPlane(const Vector3& vector, const Vector3& planeNormal)
+    [[nodiscard]] static Vector3 project_on_plane(const Vector3& vector, const Vector3& planeNormal)
     {
-        return vector - project(vector, planeNormal);
+        return vector - project(vector, planeNormal); // Update call
 
     }
 
@@ -268,19 +268,19 @@ struct Vector3
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string to_string() const
     {
         return "(" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ")";
     }
 
     // Daxa conversions
-    [[nodiscard]] daxa_f32vec3 toDaxa() const
+    [[nodiscard]] daxa_f32vec3 to_daxa() const
     {
         return daxa_f32vec3{x, y, z};
 
     }
 
-    static Vector3 fromDaxa(const daxa_f32vec3& v)
+    static Vector3 from_daxa(const daxa_f32vec3& v)
     {
         return Vector3(v.x, v.y, v.z);
 

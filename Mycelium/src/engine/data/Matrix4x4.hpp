@@ -4,7 +4,6 @@
 #include "vector3.hpp"
 #include "vector4.hpp"
 #include <array>
-#include <cmath>
 #include <daxa/daxa.hpp>
 #include <string>
 
@@ -52,61 +51,61 @@ struct Matrix4x4
         static Matrix4x4 translation(const Vector3 &translation)
         {
             glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(translation.x, translation.y, translation.z));
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
         static Matrix4x4 rotation(const Quaternion &rotation)
         {
             glm::mat4 m = glm::mat4_cast(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
         static Matrix4x4 scale(const Vector3 &scale)
         {
             glm::mat4 m = glm::scale(glm::mat4(1.0f), glm::vec3(scale.x, scale.y, scale.z));
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
-        static Matrix4x4 TRS(const Vector3 &translation, const Quaternion &rotation, const Vector3 &scale)
+        static Matrix4x4 trs(const Vector3 &translation, const Quaternion &rotation, const Vector3 &scale)
         {
             glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(translation.x, translation.y, translation.z));
             glm::mat4 r = glm::mat4_cast(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
             glm::mat4 s = glm::scale(glm::mat4(1.0f), glm::vec3(scale.x, scale.y, scale.z));
-            return fromGLM(t * r * s);
+            return from_glm(t * r * s); // Update call
         }
 
         static Matrix4x4 perspective(float fovY, float aspect, float nearPlane, float farPlane)
         {
             glm::mat4 m = glm::perspective(glm::radians(fovY), aspect, nearPlane, farPlane);
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
         static Matrix4x4 orthographic(float left, float right, float bottom, float top, float nearPlane, float farPlane)
         {
             glm::mat4 m = glm::ortho(left, right, bottom, top, nearPlane, farPlane);
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
-        static Matrix4x4 lookAt(const Vector3 &position, const Vector3 &target, const Vector3 &up)
+        static Matrix4x4 look_at(const Vector3 &position, const Vector3 &target, const Vector3 &up)
         {
             glm::mat4 m = glm::lookAt(
                               glm::vec3(position.x, position.y, position.z),
                               glm::vec3(target.x, target.y, target.z),
                               glm::vec3(up.x, up.y, up.z));
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
         // Basic operators
         Matrix4x4 operator*(const Matrix4x4 &rhs) const
         {
-            glm::mat4 a = toGLM(*this);
-            glm::mat4 b = toGLM(rhs);
-            return fromGLM(a * b);
+            glm::mat4 a = to_glm(*this); // Update call
+            glm::mat4 b = to_glm(rhs); // Update call
+            return from_glm(a * b); // Update call
         }
 
         Vector4 operator*(const Vector4 &v) const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             glm::vec4 gv(v.x, v.y, v.z, v.w);
             glm::vec4 result = m * gv;
             return Vector4(result.x, result.y, result.z, result.w);
@@ -130,7 +129,7 @@ struct Matrix4x4
             return !(*this == rhs);
         }
 
-        Vector3 multiplyPoint(const Vector3 &v) const
+        Vector3 multiply_point(const Vector3 &v) const
         {
 
         }
@@ -138,25 +137,25 @@ struct Matrix4x4
         // Matrix operations
         Matrix4x4 inverse() const
         {
-            glm::mat4 m = toGLM(*this);
-            return fromGLM(glm::inverse(m));
+            glm::mat4 m = to_glm(*this); // Update call
+            return from_glm(glm::inverse(m)); // Update call
         }
 
         Matrix4x4 transpose() const
         {
-            glm::mat4 m = toGLM(*this);
-            return fromGLM(glm::transpose(m));
+            glm::mat4 m = to_glm(*this); // Update call
+            return from_glm(glm::transpose(m)); // Update call
         }
 
         float determinant() const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             return glm::determinant(m);
         }
 
         void decompose(Vector3 &translation, Quaternion &rotation, Vector3 &scale) const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             glm::vec3 t, s;
             glm::quat r;
 
@@ -179,14 +178,14 @@ struct Matrix4x4
         }
 
         // Access to raw data for graphics APIs
-        const float* getData() const
+        const float* get_data() const
         {
             return data.data();
         }
 
         // Helper methods for GLM conversion
     private:
-        static Matrix4x4 fromGLM(const glm::mat4 &m)
+        static Matrix4x4 from_glm(const glm::mat4 &m)
         {
             return Matrix4x4({m[0][0], m[0][1], m[0][2], m[0][3],
                               m[1][0], m[1][1], m[1][2], m[1][3],
@@ -194,14 +193,14 @@ struct Matrix4x4
                               m[3][0], m[3][1], m[3][2], m[3][3]});
         }
 
-        static glm::mat4 toGLM(const Matrix4x4 &m)
+        static glm::mat4 to_glm(const Matrix4x4 &m)
         {
             return glm::make_mat4(m.data.data());
         }
 
     public:
         // String conversion
-        std::string toString() const
+        std::string to_string() const
         {
             std::string result;
 
@@ -226,7 +225,7 @@ struct Matrix4x4
         }
 
         // Daxa conversions
-        [[nodiscard]] daxa_f32mat4x4 toDaxa() const
+        [[nodiscard]] daxa_f32mat4x4 to_daxa() const
         {
             return daxa_f32mat4x4
             {
@@ -236,7 +235,7 @@ struct Matrix4x4
                 {data[12], data[13], data[14], data[15]}};
         }
 
-        static Matrix4x4 fromDaxa(const daxa_f32mat4x4 &mat)
+        static Matrix4x4 from_daxa(const daxa_f32mat4x4 &mat)
         {
             return Matrix4x4({mat.x.x, mat.x.y, mat.x.z, mat.x.w,
                               mat.y.x, mat.y.y, mat.y.z, mat.y.w,
@@ -245,16 +244,16 @@ struct Matrix4x4
         }
 
         // Utility functions using our custom types
-        static Matrix4x4 fromAxisAngle(const Vector3 &axis, float angle)
+        static Matrix4x4 from_axis_angle(const Vector3 &axis, float angle)
         {
             glm::mat4 m = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(axis.x, axis.y, axis.z));
-            return fromGLM(m);
+            return from_glm(m); // Update call
         }
 
         // Transform a point with perspective division (handles projective transformations)
-        Vector3 transformPoint(const Vector3 &point) const
+        Vector3 transform_point(const Vector3 &point) const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             glm::vec4 result = m * glm::vec4(point.x, point.y, point.z, 1.0f);
 
             // Apply perspective division
@@ -267,26 +266,26 @@ struct Matrix4x4
         }
 
         // Transform a point without perspective division (for affine transformations)
-        Vector3 transformPointAffine(const Vector3 &point) const
+        Vector3 transform_point_affine(const Vector3 &point) const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             glm::vec4 result = m * glm::vec4(point.x, point.y, point.z, 1.0f);
             return Vector3(result.x, result.y, result.z);
         }
 
         // Transform a direction vector (ignores translation, preserves direction)
-        Vector3 transformDirection(const Vector3 &direction) const
+        Vector3 transform_direction(const Vector3 &direction) const
         {
-            glm::mat4 m = toGLM(*this);
+            glm::mat4 m = to_glm(*this); // Update call
             glm::vec4 result = m * glm::vec4(direction.x, direction.y, direction.z, 0.0f);
             return Vector3(result.x, result.y, result.z);
         }
 
         // Transform a normal vector (uses inverse transpose to maintain perpendicularity)
-        Vector3 transformNormal(const Vector3 &normal) const
+        Vector3 transform_normal(const Vector3 &normal) const
         {
             // Use the inverse transpose of the upper 3x3 portion of the matrix
-            glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(toGLM(*this))));
+            glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(to_glm(*this)))); // Update call
             glm::vec3 result = normalMatrix * glm::vec3(normal.x, normal.y, normal.z);
             return Vector3(result.x, result.y, result.z);
         }

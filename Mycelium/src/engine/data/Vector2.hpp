@@ -101,10 +101,10 @@ struct Vector2
     // Utility methods
     [[nodiscard]] float magnitude() const
     {
-        return std::sqrt(sqrMagnitude());
+        return std::sqrt(sqr_magnitude()); // Updated call
     }
 
-    [[nodiscard]] constexpr float sqrMagnitude() const
+    [[nodiscard]] constexpr float sqr_magnitude() const
     {
         return x * x + y * y;
     }
@@ -141,7 +141,7 @@ struct Vector2
     // Returns the signed angle in degrees between from and to
     [[nodiscard]] static float angle(const Vector2& from, const Vector2& to)
     {
-        float denominator = std::sqrt(from.sqrMagnitude() * to.sqrMagnitude());
+        float denominator = std::sqrt(from.sqr_magnitude() * to.sqr_magnitude()); // Updated calls
 
         if (denominator < 1e-15f)
         {
@@ -168,12 +168,12 @@ struct Vector2
         return Vector2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
     }
 
-    [[nodiscard]] static Vector2 lerpUnclamped(const Vector2& a, const Vector2& b, float t)
+    [[nodiscard]] static Vector2 lerp_unclamped(const Vector2& a, const Vector2& b, float t)
     {
         return Vector2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
     }
 
-    [[nodiscard]] static Vector2 moveTowards(const Vector2& current, const Vector2& target, float maxDistanceDelta)
+    [[nodiscard]] static Vector2 move_towards(const Vector2& current, const Vector2& target, float maxDistanceDelta)
     {
         Vector2 toVector = target - current;
 
@@ -204,19 +204,19 @@ struct Vector2
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string to_string() const
     {
         return "(" + std::to_string(x) + ", " + std::to_string(y) + ")";
     }
 
     // Daxa conversions
-    [[nodiscard]] daxa_f32vec2 toDaxa() const
+    [[nodiscard]] daxa_f32vec2 to_daxa() const
     {
         return daxa_f32vec2{x, y};
 
     }
 
-    static Vector2 fromDaxa(const daxa_f32vec2& v)
+    static Vector2 from_daxa(const daxa_f32vec2& v)
     {
         return Vector2(v.x, v.y);
 

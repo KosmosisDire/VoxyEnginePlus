@@ -19,11 +19,11 @@ struct Vector4
     constexpr Vector4(const Vector4 &other) = default;
 
     // Static factory methods
-    static constexpr Vector4 zero() { return Vector4(0.0f, 0.0f, 0.0f, 0.0f); }
+    static constexpr Vector4 zero() { return Vector4(0.0f, 0.0f, 0.0f, 0.0f); } // Keep as is
 
-    static constexpr Vector4 one() { return Vector4(1.0f, 1.0f, 1.0f, 1.0f); }
+    static constexpr Vector4 one() { return Vector4(1.0f, 1.0f, 1.0f, 1.0f); } // Keep as is
 
-    static constexpr Vector4 identity() { return Vector4(0.0f, 0.0f, 0.0f, 1.0f); }
+    static constexpr Vector4 identity() { return Vector4(0.0f, 0.0f, 0.0f, 1.0f); } // Keep as is
 
     // Basic operators
     constexpr Vector4 operator+(const Vector4 &rhs) const
@@ -103,29 +103,29 @@ struct Vector4
     // Utility methods
     [[nodiscard]] float magnitude() const
     {
-        return std::sqrt(sqrMagnitude());
+        return std::sqrt(sqr_magnitude()); // Update call
     }
 
-    [[nodiscard]] constexpr float sqrMagnitude() const
+    [[nodiscard]] constexpr float sqr_magnitude() const
     {
         return x * x + y * y + z * z + w * w;
     }
 
     [[nodiscard]] Vector4 normalized() const
     {
-        float mag = magnitude();
+        float mag = magnitude(); // Keep call
 
         if (mag > 1e-6f)
         {
             return *this / mag;
         }
 
-        return Vector4::zero();
+        return Vector4::zero(); // Keep call
     }
 
     void normalize()
     {
-        float mag = magnitude();
+        float mag = magnitude(); // Keep call
 
         if (mag > 1e-6f)
         {
@@ -137,17 +137,17 @@ struct Vector4
         }
     }
 
-    [[nodiscard]] constexpr float dot(const Vector4 &rhs) const
+    [[nodiscard]] constexpr float dot(const Vector4 &rhs) const // Keep as is
     {
         return x * rhs.x + y * rhs.y + z * rhs.z + w * rhs.w;
     }
 
-    [[nodiscard]] static float distance(const Vector4 &a, const Vector4 &b)
+    [[nodiscard]] static float distance(const Vector4 &a, const Vector4 &b) // Keep as is
     {
-        return (b - a).magnitude();
+        return (b - a).magnitude(); // Keep call
     }
 
-    [[nodiscard]] static Vector4 lerp(const Vector4 &a, const Vector4 &b, float t)
+    [[nodiscard]] static Vector4 lerp(const Vector4 &a, const Vector4 &b, float t) // Keep as is
     {
         t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
         return Vector4(
@@ -157,7 +157,7 @@ struct Vector4
                    a.w + (b.w - a.w) * t);
     }
 
-    [[nodiscard]] static Vector4 lerpUnclamped(const Vector4 &a, const Vector4 &b, float t)
+    [[nodiscard]] static Vector4 lerp_unclamped(const Vector4 &a, const Vector4 &b, float t)
     {
         return Vector4(
                    a.x + (b.x - a.x) * t,
@@ -166,10 +166,10 @@ struct Vector4
                    a.w + (b.w - a.w) * t);
     }
 
-    [[nodiscard]] static Vector4 moveTowards(const Vector4 &current, const Vector4 &target, float maxDistanceDelta)
+    [[nodiscard]] static Vector4 move_towards(const Vector4 &current, const Vector4 &target, float maxDistanceDelta)
     {
         Vector4 toVector = target - current;
-        float dist = toVector.magnitude();
+        float dist = toVector.magnitude(); // Keep call
 
         if (dist <= maxDistanceDelta || dist < 1e-6f)
         {
@@ -179,12 +179,12 @@ struct Vector4
         return current + toVector / dist * maxDistanceDelta;
     }
 
-    [[nodiscard]] static Vector4 scale(const Vector4 &a, const Vector4 &b)
+    [[nodiscard]] static Vector4 scale(const Vector4 &a, const Vector4 &b) // Keep as is
     {
         return Vector4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
     }
 
-    void scale(const Vector4 &scale)
+    void scale(const Vector4 &scale) // Keep as is
     {
         x *= scale.x;
         y *= scale.y;
@@ -192,32 +192,32 @@ struct Vector4
         w *= scale.w;
     }
 
-    [[nodiscard]] static Vector4 project(const Vector4 &vector, const Vector4 &onNormal)
+    [[nodiscard]] static Vector4 project(const Vector4 &vector, const Vector4 &onNormal) // Keep as is
     {
-        float sqrMag = onNormal.sqrMagnitude();
+        float sqrMag = onNormal.sqr_magnitude(); // Update call
 
         if (sqrMag < 1e-15f)
         {
-            return Vector4::zero();
+            return Vector4::zero(); // Keep call
         }
 
-        float dot = vector.dot(onNormal);
-        return onNormal * dot / sqrMag;
+        float dot_val = vector.dot(onNormal); // Update call
+        return onNormal * dot_val / sqrMag;
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string to_string() const
     {
         return "(" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ", " + std::to_string(w) + ")";
     }
 
     // Daxa conversions
-    [[nodiscard]] daxa_f32vec4 toDaxa() const
+    [[nodiscard]] daxa_f32vec4 to_daxa() const
     {
         return daxa_f32vec4{x, y, z, w};
     }
 
-    static Vector4 fromDaxa(const daxa_f32vec4 &v)
+    static Vector4 from_daxa(const daxa_f32vec4 &v)
     {
         return Vector4(v.x, v.y, v.z, v.w);
     }

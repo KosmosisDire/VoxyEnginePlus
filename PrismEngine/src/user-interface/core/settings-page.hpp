@@ -10,7 +10,7 @@ void draw_settings_page(UIData& state, UIInputs input)
        .color({0,0,0,0.5})
        .padding(10, 10)
        .gap(10)
-       .cornerRadius(10)
+       .corner_radius(10)
        .direction(FlowDirection::TopToBottom))
     {
 

@@ -82,7 +82,7 @@ namespace Math
         return std::ceil(f);
     }
 
-    inline int ceilToInt(float f)
+    inline int ceil_to_int(float f)
     {
         return static_cast<int>(std::ceil(f));
     }
@@ -92,7 +92,7 @@ namespace Math
         return std::floor(f);
     }
 
-    inline int floorToInt(float f)
+    inline int floor_to_int(float f)
     {
         return static_cast<int>(std::floor(f));
     }
@@ -102,7 +102,7 @@ namespace Math
         return std::round(f);
     }
 
-    inline int roundToInt(float f)
+    inline int round_to_int(float f)
     {
         return static_cast<int>(std::round(f));
     }
@@ -124,9 +124,9 @@ namespace Math
         return std::clamp(t - std::floor(t / length) * length, 0.0f, length);
     }
 
-    inline float pingPong(float t, float length)
+    inline float ping_pong(float t, float length)
     {
-        t = repeat(t, length * 2.0f);
+        t = repeat(t, length * 2.0f); // Keep call
         return length - std::abs(t - length);
     }
 
@@ -136,14 +136,14 @@ namespace Math
         return a + (b - a) * std::clamp(t, 0.0f, 1.0f);
     }
 
-    inline float lerpUnclamped(float a, float b, float t)
+    inline float lerp_unclamped(float a, float b, float t)
     {
         return a + (b - a) * t;
     }
 
-    inline float lerpAngle(float a, float b, float t)
+    inline float lerp_angle(float a, float b, float t)
     {
-        float delta = repeat((b - a), 360.0f);
+        float delta = repeat((b - a), 360.0f); // Keep call
 
         if (delta > 180.0f)
         {
@@ -153,7 +153,7 @@ namespace Math
         return a + delta * std::clamp(t, 0.0f, 1.0f);
     }
 
-    inline float inverseLerp(float a, float b, float value)
+    inline float inverse_lerp(float a, float b, float value)
     {
         if (a != b)
         {
@@ -164,9 +164,9 @@ namespace Math
     }
 
     // Angle functions
-    inline float deltaAngle(float current, float target)
+    inline float delta_angle(float current, float target)
     {
-        float delta = repeat((target - current), 360.0f);
+        float delta = repeat((target - current), 360.0f); // Keep call
 
         if (delta > 180.0f)
         {
@@ -178,7 +178,7 @@ namespace Math
 
 
     // Movement functions
-    inline float moveTowards(float current, float target, float maxDelta)
+    inline float move_towards(float current, float target, float maxDelta)
     {
         if (std::abs(target - current) <= maxDelta)
         {
@@ -188,9 +188,9 @@ namespace Math
         return current + std::copysign(maxDelta, target - current);
     }
 
-    inline float moveTowardsAngle(float current, float target, float maxDelta)
+    inline float move_towards_angle(float current, float target, float maxDelta)
     {
-        float delta = deltaAngle(current, target);
+        float delta = delta_angle(current, target); // Update call
 
         if (-maxDelta < delta && delta < maxDelta)
         {
@@ -198,19 +198,19 @@ namespace Math
         }
 
         target = current + delta;
-        return moveTowards(current, target, maxDelta);
+        return move_towards(current, target, maxDelta); // Update call
     }
 
     // Smoothing functions
-    inline float smoothStep(float from, float to, float t)
+    inline float smooth_step(float from, float to, float t)
     {
         t = std::clamp(t, 0.0f, 1.0f);
         t = t * t * (3.0f - 2.0f * t);
         return to * t + from * (1.0f - t);
     }
 
-    inline float smoothDamp(float current, float target, float& currentVelocity,
-                            float smoothTime, float maxSpeed = Infinity, float deltaTime = 0.02f)
+    inline float smooth_damp(float current, float target, float& currentVelocity,
+                             float smoothTime, float maxSpeed = Infinity, float deltaTime = 0.02f)
     {
         smoothTime = std::max(0.0001f, smoothTime);
         float omega = 2.0f / smoothTime;
@@ -237,11 +237,11 @@ namespace Math
         return output;
     }
 
-    inline float smoothDampAngle(float current, float target, float& currentVelocity,
-                                 float smoothTime, float maxSpeed = Infinity, float deltaTime = 0.02f)
+    inline float smooth_damp_angle(float current, float target, float& currentVelocity,
+                                   float smoothTime, float maxSpeed = Infinity, float deltaTime = 0.02f)
     {
-        target = current + deltaAngle(current, target);
-        return smoothDamp(current, target, currentVelocity, smoothTime, maxSpeed, deltaTime);
+        target = current + delta_angle(current, target); // Keep call
+        return smooth_damp(current, target, currentVelocity, smoothTime, maxSpeed, deltaTime); // Update call
     }
 
     // Comparison functions
@@ -251,12 +251,12 @@ namespace Math
     }
 
     // Power of two functions
-    inline bool isPowerOfTwo(int value)
+    inline bool is_power_of_two(int value)
     {
         return value > 0 && (value & (value - 1)) == 0;
     }
 
-    inline int nextPowerOfTwo(int value)
+    inline int next_power_of_two(int value)
     {
         value--;
         value |= value >> 1;
@@ -268,15 +268,15 @@ namespace Math
         return value;
     }
 
-    inline int closestPowerOfTwo(int value)
+    inline int closest_power_of_two(int value)
     {
-        int next = nextPowerOfTwo(value);
+        int next = next_power_of_two(value); // Update call
         int prev = next >> 1;
         return (value - prev) < (next - value) ? prev : next;
     }
 
     // Color space conversion
-    inline float gammaToLinearSpace(float value)
+    inline float gamma_to_linear_space(float value)
     {
         if (value <= 0.04045f)
         {
@@ -286,7 +286,7 @@ namespace Math
         return std::pow((value + 0.055f) / 1.055f, 2.4f);
     }
 
-    inline float linearToGammaSpace(float value)
+    inline float linear_to_gamma_space(float value)
     {
         if (value <= 0.0031308f)
         {

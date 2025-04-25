@@ -22,25 +22,25 @@ struct Color
     constexpr Color(const Color& other) = default;
 
     // Static factory methods for common colors
-    static constexpr Color Black() { return Color(0.0f, 0.0f, 0.0f); }
+    static constexpr Color black() { return Color(0.0f, 0.0f, 0.0f); }
 
-    static constexpr Color White() { return Color(1.0f, 1.0f, 1.0f); }
+    static constexpr Color white() { return Color(1.0f, 1.0f, 1.0f); }
 
-    static constexpr Color Red() { return Color(1.0f, 0.0f, 0.0f); }
+    static constexpr Color red() { return Color(1.0f, 0.0f, 0.0f); }
 
-    static constexpr Color Green() { return Color(0.0f, 1.0f, 0.0f); }
+    static constexpr Color green() { return Color(0.0f, 1.0f, 0.0f); }
 
-    static constexpr Color Blue() { return Color(0.0f, 0.0f, 1.0f); }
+    static constexpr Color blue() { return Color(0.0f, 0.0f, 1.0f); }
 
-    static constexpr Color Yellow() { return Color(1.0f, 1.0f, 0.0f); }
+    static constexpr Color yellow() { return Color(1.0f, 1.0f, 0.0f); }
 
-    static constexpr Color Cyan() { return Color(0.0f, 1.0f, 1.0f); }
+    static constexpr Color cyan() { return Color(0.0f, 1.0f, 1.0f); }
 
-    static constexpr Color Magenta() { return Color(1.0f, 0.0f, 1.0f); }
+    static constexpr Color magenta() { return Color(1.0f, 0.0f, 1.0f); }
 
-    static constexpr Color Gray() { return Color(0.5f, 0.5f, 0.5f); }
+    static constexpr Color gray() { return Color(0.5f, 0.5f, 0.5f); }
 
-    static constexpr Color Transparent() { return Color(0.0f, 0.0f, 0.0f, 0.0f); }
+    static constexpr Color transparent() { return Color(0.0f, 0.0f, 0.0f, 0.0f); }
 
     // Basic operators
     constexpr Color operator+(const Color& rhs) const
@@ -127,7 +127,7 @@ struct Color
     }
 
     // Utility methods
-    [[nodiscard]] constexpr Color Clamped() const
+    [[nodiscard]] constexpr Color clamped() const
     {
         return Color(
                    std::clamp(r, 0.0f, 1.0f),
@@ -137,7 +137,7 @@ struct Color
                );
     }
 
-    void Clamp()
+    void clamp()
     {
         r = std::clamp(r, 0.0f, 1.0f);
         g = std::clamp(g, 0.0f, 1.0f);
@@ -146,7 +146,7 @@ struct Color
     }
 
     // Color space conversions
-    [[nodiscard]] static Color FromHSV(float h, float s, float v, float a = 1.0f)
+    [[nodiscard]] static Color from_hsv(float h, float s, float v, float a = 1.0f)
     {
         h = std::fmod(h, 360.0f);
 
@@ -189,7 +189,7 @@ struct Color
         return Color(r + m, g + m, b + m, a);
     }
 
-    [[nodiscard]] void ToHSV(float& h, float& s, float& v) const
+    void to_hsv(float& h, float& s, float& v) const
     {
         float cmax = std::max(std::max(r, g), b);
         float cmin = std::min(std::min(r, g), b);
@@ -223,7 +223,7 @@ struct Color
     }
 
     // Color blending
-    [[nodiscard]] static Color Lerp(const Color& a, const Color& b, float t)
+    [[nodiscard]] static Color lerp(const Color& a, const Color& b, float t)
     {
         t = std::clamp(t, 0.0f, 1.0f);
         return Color(
@@ -234,7 +234,7 @@ struct Color
                );
     }
 
-    [[nodiscard]] static Color LerpUnclamped(const Color& a, const Color& b, float t)
+    [[nodiscard]] static Color lerp_unclamped(const Color& a, const Color& b, float t)
     {
         return Color(
                    a.r + (b.r - a.r) * t,
@@ -245,13 +245,13 @@ struct Color
     }
 
     // Alpha blending
-    [[nodiscard]] Color alphaBlend(const Color& background) const
+    [[nodiscard]] Color alpha_blend(const Color& background) const
     {
         float outAlpha = a + background.a * (1.0f - a);
 
         if (outAlpha < 1e-6f)
         {
-            return Color::Transparent();
+            return Color::transparent();
         }
 
         float invOutAlpha = 1.0f / outAlpha;
@@ -277,19 +277,19 @@ struct Color
         return Color(1.0f - r, 1.0f - g, 1.0f - b, a);
     }
 
-    [[nodiscard]] Color withAlpha(float newAlpha) const
+    [[nodiscard]] Color with_alpha(float newAlpha) const
     {
         return Color(r, g, b, newAlpha);
     }
 
     // Color adjustment methods
-    [[nodiscard]] Color adjustBrightness(float factor) const
+    [[nodiscard]] Color adjust_brightness(float factor) const
     {
         factor = std::max(0.0f, factor); // Ensure factor is not negative
         return Color(r * factor, g * factor, b * factor, a);
     }
 
-    [[nodiscard]] Color adjustSaturation(float factor) const
+    [[nodiscard]] Color adjust_saturation(float factor) const
     {
         float gray = r * 0.299f + g * 0.587f + b * 0.114f;
 
@@ -301,10 +301,10 @@ struct Color
                );
     }
 
-    [[nodiscard]] Color adjustHue(float degrees) const
+    [[nodiscard]] Color adjust_hue(float degrees) const
     {
         float h, s, v;
-        ToHSV(h, s, v);
+        to_hsv(h, s, v); // Update call
 
         h += degrees;
 
@@ -312,11 +312,11 @@ struct Color
 
         while (h < 0.0f) h += 360.0f;
 
-        return FromHSV(h, s, v, a);
+        return from_hsv(h, s, v, a); // Update call
     }
 
     // Integer color conversions
-    [[nodiscard]] static Color fromRGBA8(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
+    [[nodiscard]] static Color from_rgba8(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
     {
         return Color(
                    static_cast<float>(r) / 255.0f,
@@ -326,7 +326,7 @@ struct Color
                );
     }
 
-    [[nodiscard]] static Color fromHex(uint32_t hexValue)
+    [[nodiscard]] static Color from_hex(uint32_t hexValue)
     {
         return Color(
                    static_cast<float>((hexValue >> 16) & 0xFF) / 255.0f,
@@ -336,7 +336,7 @@ struct Color
                );
     }
 
-    [[nodiscard]] uint32_t toRGBA8() const
+    [[nodiscard]] uint32_t to_rgba8() const
     {
         uint8_t r8 = static_cast<uint8_t>(std::clamp(r * 255.0f, 0.0f, 255.0f));
         uint8_t g8 = static_cast<uint8_t>(std::clamp(g * 255.0f, 0.0f, 255.0f));
@@ -350,14 +350,14 @@ struct Color
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string to_string() const
     {
         return "RGBA(" + std::to_string(r) + ", "
                + std::to_string(g) + ", " + std::to_string(b) + ", "
                + std::to_string(a) + ")";
     }
 
-    [[nodiscard]] std::string toHexString() const
+    [[nodiscard]] std::string to_hex_string() const
     {
         uint8_t r8 = static_cast<uint8_t>(std::clamp(r * 255.0f, 0.0f, 255.0f));
         uint8_t g8 = static_cast<uint8_t>(std::clamp(g * 255.0f, 0.0f, 255.0f));
@@ -370,12 +370,12 @@ struct Color
     }
 
     // Daxa conversions
-    [[nodiscard]] daxa_f32vec4 toDaxa() const
+    [[nodiscard]] daxa_f32vec4 to_daxa() const
     {
         return daxa_f32vec4{r, g, b, a};
     }
 
-    static Color fromDaxa(const daxa_f32vec4& v)
+    static Color from_daxa(const daxa_f32vec4& v)
     {
         return Color(v.x, v.y, v.z, v.w);
     }

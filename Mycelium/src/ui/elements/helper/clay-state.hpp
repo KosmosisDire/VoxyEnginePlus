@@ -2,10 +2,8 @@
 
 #include "clay-types.hpp"
 #include <chrono>
-#include <functional>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 // Debug configuration
 #define UI_DEBUG 0
@@ -14,47 +12,47 @@
 #define CONCAT_HELPER(x, y) x##y
 #define CONCAT(x, y) CONCAT_HELPER(x, y)
 
-struct string_alloc
+struct StringAlloc
 {
-    char *str;
+    char* str;
     int access_count;
 };
 
 class ClayState
 {
-  private:
-    static uint32_t lastHoveredElement;
-    static uint32_t capturedElement;
-    static std::unordered_map<std::string, string_alloc> currentStrings;
-    static std::unordered_map<uint32_t, ComputedProps> computedProperties;
+    private:
+        static uint32_t lastHoveredElement;
+        static uint32_t capturedElement;
+        static std::unordered_map<std::string, StringAlloc> currentStrings;
+        static std::unordered_map<uint32_t, ComputedProps> computedProperties;
 
-    static UIInputs inputs;
-    static float lastPointerX;
-    static float lastPointerY;
+        static UIInputs inputs;
+        static float lastPointerX;
+        static float lastPointerY;
 
-    static float pointerDeltaX;
-    static float pointerDeltaY;
+        static float pointerDeltaX;
+        static float pointerDeltaY;
 
-    // how long the frame took to layout and dispatch render calls
-    static double uiFrameTime;
-    static std::chrono::time_point<std::chrono::high_resolution_clock> frameStart;
+        // how long the frame took to layout and dispatch render calls
+        static double uiFrameTime;
+        static std::chrono::time_point<std::chrono::high_resolution_clock> frameStart;
 
-    // Private constructor/assignment operators to prevent instantiation
-    ClayState() = delete;
-    ClayState(const ClayState &) = delete;
-    ClayState &operator=(const ClayState &) = delete;
+        // Private constructor/assignment operators to prevent instantiation
+        ClayState() = delete;
+        ClayState(const ClayState &) = delete;
+        ClayState &operator=(const ClayState &) = delete;
 
-    static void SetComputedProps(ComputedProps *props, Clay_RenderCommand *command);
-    static void FillComputedProperties(Clay_RenderCommandArray commands);
-    static char *AllocateString(const std::string &str);
+        static void set_computed_props(ComputedProps *props, Clay_RenderCommand *command);
+        static void fill_computed_properties(Clay_RenderCommandArray commands);
+        static char* allocate_string(const std::string &str);
 
-  public:
-    static float GetPointerDeltaX();
-    static float GetPointerDeltaY();
-    static void FreeStrings();
-    static void FreeAllStrings();
+    public:
+        static float get_pointer_delta_x();
+        static float get_pointer_delta_y();
+        static void free_strings();
+        static void free_all_strings();
 
-    friend struct Text;
-    friend struct Element;
-    friend class ClayUI;
+        friend struct Text;
+        friend struct Element;
+        friend class ClayUI;
 };

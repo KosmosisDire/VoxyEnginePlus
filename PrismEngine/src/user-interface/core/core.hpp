@@ -2,11 +2,10 @@
 
 // clang-format off
 #include <fmt/core.h>
+#include <functional>
 #include <string>
 #include <ui/core.hpp>
 #include <daxa/daxa.hpp>
-#include <algorithm>
-#include <vector>
 #include <shaders/shared/shared.inl>
 
 using namespace daxa::types;

@@ -34,127 +34,127 @@ class Camera
               far(farPlane),
               refCount(1)
         {
-            validateAndUpdatePlanes(near, far);
-            validateAndUpdateFOV(fov);
-            transform.SetPosition(position);
-            updateCameraVectors();
+            validate_and_update_planes(near, far); // Rename call
+            validate_and_update_fov(fov); // Rename call
+            transform.set_position(position); // Update call from Transform.hpp changes
+            update_camera_vectors(); // Rename call
         }
 
         // Reference counting methods
-        void AddRef()
+        void add_ref()
         {
             refCount++;
         }
 
-        void Release()
+        void release()
         {
             if(--refCount == 0)
                 delete this;
         }
 
         // Viewport control
-        void setViewportSize(uint32_t width, uint32_t height)
+        void set_viewport_size(uint32_t width, uint32_t height)
         {
             viewportWidth = width;
             viewportHeight = height;
         }
 
-        float getAspectRatio() const
+        float get_aspect_ratio() const
         {
             return static_cast<float>(viewportWidth) / static_cast<float>(viewportHeight);
         }
 
         // FOV control
-        void setFOV(float fovDegrees)
+        void set_fov(float fovDegrees)
         {
-            validateAndUpdateFOV(fovDegrees);
+            validate_and_update_fov(fovDegrees); // Rename call
         }
 
-        float getFOV() const { return fov; }
+        float get_fov() const { return fov; }
 
         // Near/Far plane control
-        void setNearPlane(float nearPlane)
+        void set_near_plane(float nearPlane)
         {
-            validateAndUpdatePlanes(nearPlane, far);
+            validate_and_update_planes(nearPlane, far); // Rename call
         }
 
-        void setFarPlane(float farPlane)
+        void set_far_plane(float farPlane)
         {
-            validateAndUpdatePlanes(near, farPlane);
+            validate_and_update_planes(near, farPlane); // Rename call
         }
 
-        void setNearFarPlanes(float nearPlane, float farPlane)
+        void set_near_far_planes(float nearPlane, float farPlane)
         {
-            validateAndUpdatePlanes(nearPlane, farPlane);
+            validate_and_update_planes(nearPlane, farPlane); // Rename call
         }
 
-        Matrix4x4 getProjectionMatrix() const
+        Matrix4x4 get_projection_matrix() const
         {
-            auto proj = Matrix4x4::perspective(fov, getAspectRatio(), near, far);
+            auto proj = Matrix4x4::perspective(fov, get_aspect_ratio(), near, far); // Update call
             proj(1, 1) *= -1; // Flip Y coordinate for Vulkan convention
             return proj;
         }
 
-        Matrix4x4 getViewMatrix() const
+        Matrix4x4 get_view_matrix() const
         {
-            return Matrix4x4::lookAt(getPosition(), getPosition() + getForward(), getUp());
+            return Matrix4x4::look_at(get_position(), get_position() + get_forward(), get_up()); // Update calls
         }
 
-        float getNearPlane() const { return near; }
+        float get_near_plane() const { return near; }
 
-        float getFarPlane() const { return far; }
+        float get_far_plane() const { return far; }
 
-        Vector3 getForward() const { return transform.GetForward(); }
+        Vector3 get_forward() const { return transform.get_forward(); } // Update call
 
-        Vector3 getRight() const { return transform.GetRight(); }
+        Vector3 get_right() const { return transform.get_right(); } // Update call
 
-        Vector3 getUp() const { return transform.GetUp(); }
+        Vector3 get_up() const { return transform.get_up(); } // Update call
 
-        Vector3 getPosition() const { return transform.GetPosition(); }
+        Vector3 get_position() const { return transform.get_position(); } // Update call
 
         // Transform access methods - return handles to the Transform
-        Transform* getTransform()
+        Transform* get_transform()
         {
-            transform.AddRef(); // Increment reference count before returning
+            transform.add_ref(); // Update call
             return &transform;
         }
 
-        void processKeyboard(float deltaTime)
+        void process_keyboard(float deltaTime)
         {
             float velocity = speed * deltaTime;
 
-            if (Input::IsKeyPressed(Key::W))
+            if (Input::is_key_pressed(Key::W))
             {
-                transform.Translate(getForward() * velocity);
+                transform.translate(get_forward() * velocity); // Update call
             }
 
-            if (Input::IsKeyPressed(Key::S))
+            if (Input::is_key_pressed(Key::S))
             {
-                transform.Translate(getForward() * -velocity);
+                transform.translate(get_forward() * -velocity); // Update call
             }
 
-            if (Input::IsKeyPressed(Key::A))
+            if (Input::is_key_pressed(Key::A))
             {
-                transform.Translate(getRight() * -velocity);
+                transform.translate(get_right() * -velocity); // Update call
             }
 
-            if (Input::IsKeyPressed(Key::D))
+            if (Input::is_key_pressed(Key::D))
             {
-                transform.Translate(getRight() * velocity);
+                transform.translate(get_right() * velocity); // Update call
             }
 
-            if (Input::IsKeyPressed(Key::Space))
+            if (Input::is_key_pressed(Key::Space))
             {
-                transform.Translate(getUp() * velocity);
+                transform.translate(get_up() * velocity); // Update call
             }
 
-            if (Input::IsKeyPressed(Key::LeftShift))
+            if (Input::is_key_pressed(Key::LeftShift))
             {
-                transform.Translate(getUp() * -velocity);
+                transform.translate(get_up() * -velocity); // Update call
             }
         }
 
-        void processMouseMovement(Vector2 mouseDelta, bool constrainPitch = true)
+        void process_mouse_movement(Vector2 mouseDelta, bool constrainPitch = true)
         {
             float xoffset = mouseDelta.x;
             float yoffset = mouseDelta.y;
@@ -177,26 +177,26 @@ class Camera
                 }
             }
 
-            updateCameraVectors();
+            update_camera_vectors(); // Rename call
         }
 
-        CameraData getCameraData()
+        CameraData get_camera_data()
         {
             CameraData data;
-            auto proj = getProjectionMatrix();
-            auto view = getViewMatrix();
+            auto proj = get_projection_matrix(); // Update call
+            auto view = get_view_matrix(); // Update call
 
             // Combine view and projection
             auto viewProj = proj * view;
 
-            data.viewProj = viewProj.toDaxa();
-            data.view = view.toDaxa();
-            data.proj = proj.toDaxa();
-            data.invViewProj = viewProj.inverse().toDaxa();
-            data.position = getPosition().toDaxa();
-            data.near = getNearPlane();
-            data.far = getFarPlane();
-            data.fov = getFOV();
+            data.viewProj = viewProj.to_daxa();
+            data.view = view.to_daxa();
+            data.proj = proj.to_daxa();
+            data.invViewProj = viewProj.inverse().to_daxa();
+            data.position = get_position().to_daxa(); // Update call
+            data.near = get_near_plane(); // Update call
+            data.far = get_far_plane(); // Update call
+            data.fov = get_fov(); // Update call
             return data;
         }
 
@@ -215,13 +215,13 @@ class Camera
         float far;  // Far plane distance
         int refCount; // Reference counter for memory management
 
-        void validateAndUpdateFOV(float newFOV)
+        void validate_and_update_fov(float newFOV)
         {
             // Clamp FOV between reasonable limits (e.g., 1 to 179 degrees)
             fov = std::clamp(newFOV, 1.0f, 179.0f);
         }
 
-        void validateAndUpdatePlanes(float newNear, float newFar)
+        void validate_and_update_planes(float newNear, float newFar)
         {
             // Ensure near plane is positive and not too close to zero
             // Ensure far plane is greater than near plane
@@ -239,7 +239,7 @@ class Camera
             far = newFar;
         }
 
-        void updateCameraVectors()
+        void update_camera_vectors()
         {
             // Adjust rotation for Vulkan's coordinate system
             Quaternion rot = Quaternion::euler(Vector3(pitch, yaw, 0.0f));
@@ -248,6 +248,6 @@ class Camera
             Vector3 forwardVec(0.0f, 0.0f, -1.0f); // -Z is forward
 
             // Set the rotation that corresponds to our yaw and pitch
-            transform.SetRotation(rot);
+            transform.set_rotation(rot); // Update call
         }
 };

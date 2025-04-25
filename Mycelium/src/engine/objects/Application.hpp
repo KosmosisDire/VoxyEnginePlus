@@ -2,13 +2,10 @@
 
 #include "window.hpp"
 #include <chrono>
-#include <cmath>
 #include <engine/apis/Fonts.hpp>
 #include <engine/apis/Input.hpp>
-#include <iostream>
 #include <memory>
 #include <engine/objects/Renderer.hpp>
-#include <stdio.h>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -21,8 +18,8 @@ class Application
             : window(std::make_shared<GameWindow>(name, 1920, 1080)), inputManager(window), renderer(std::make_shared<Renderer>(window, shaderDirectories))
         {
             start = Clock::now();
-            window->SetResizeCallback([this](u32 sx, u32 sy)
-            { OnResizeBase(sx, sy); });
+            window->set_resize_callback([this](u32 sx, u32 sy) // Update call
+            { on_resize_base(sx, sy); }); // Update call
         }
 
         virtual ~Application() {};
@@ -31,52 +28,52 @@ class Application
         Application(const Application &) = delete;
         Application &operator=(const Application &) = delete;
 
-        bool Update()
+        bool update()
         {
             if (!initialized)
             {
                 initialized = true;
-                renderer->Resize(window->GetWidth(), window->GetHeight());
-                OnResize(window->GetWidth(), window->GetHeight());
-                OnStart();
+                renderer->resize(window->get_width(), window->get_height()); // Update calls
+                on_resize(window->get_width(), window->get_height()); // Update calls
+                on_start(); // Update call
             }
 
-            Input::Update();
-            window->Update();
+            Input::update();
+            window->update(); // Update call
 
-            if (window->ShouldClose())
+            if (window->should_close()) // Update call
             {
                 return true;
             }
 
-            if (window->IsMinimized())
+            if (window->is_minimized()) // Update call
             {
                 std::this_thread::sleep_for(1ms);
                 return false;
             }
 
-            CalcDeltatime();
+            calc_deltatime(); // Update call
 
-            OnUpdate(delta_time);
+            on_update(delta_time); // Update call
 
-            renderer->Render();
+            renderer->render(); // Update call
 
             renderer->device.collect_garbage();
 
             return false;
         }
 
-        float GetTime() const { return time; }
+        float get_time() const { return time; }
 
     protected:
         std::shared_ptr<GameWindow> window;
         std::shared_ptr<Renderer> renderer;
 
-        virtual void OnResize(u32 sx, u32 sy) {};
+        virtual void on_resize(u32 sx, u32 sy) {};
 
-        virtual void OnUpdate(float dt) {};
+        virtual void on_update(float dt) {};
 
-        virtual void OnStart() {};
+        virtual void on_start() {};
 
     private:
         Input inputManager;
@@ -85,20 +82,20 @@ class Application
         f32 delta_time = 1.0f;
         bool initialized = false;
 
-        void OnResizeBase(u32 sx, u32 sy)
+        void on_resize_base(u32 sx, u32 sy)
         {
-            if (window->IsMinimized())
+            if (window->is_minimized()) // Update call
             {
                 return;
 
             }
 
-            renderer->Resize(sx, sy);
-            OnResize(sx, sy);
-            Update();
+            renderer->resize(sx, sy); // Update call
+            on_resize(sx, sy); // Update call
+            update(); // Update call
         }
 
-        void CalcDeltatime()
+        void calc_deltatime()
         {
             auto now = Clock::now();
             time = std::chrono::duration<f32>(now - start).count();

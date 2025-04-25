@@ -23,16 +23,16 @@ struct Quaternion
     static constexpr Quaternion identity() { return Quaternion(0.0f, 0.0f, 0.0f, 1.0f); }
 
     // Creates a rotation which rotates angle degrees around axis
-    static Quaternion angleAxis(float angle, const Vector3 &axis)
+    static Quaternion angle_axis(float angle, const Vector3 &axis)
     {
-        Vector3 normalized = axis.normalized();
+        Vector3 normalized_axis = axis.normalized(); // Keep call as Vector3::normalized
         float rad = angle * 0.0174533f; // Convert to radians
         float sinHalfAngle = std::sin(rad * 0.5f);
 
         return Quaternion(
-                   normalized.x * sinHalfAngle,
-                   normalized.y * sinHalfAngle,
-                   normalized.z * sinHalfAngle,
+                   normalized_axis.x * sinHalfAngle,
+                   normalized_axis.y * sinHalfAngle,
+                   normalized_axis.z * sinHalfAngle,
                    std::cos(rad * 0.5f));
     }
 
@@ -61,51 +61,51 @@ struct Quaternion
         return Quaternion::euler(euler.x, euler.y, euler.z);
     }
 
-    static Quaternion fromToRotation(const Vector3 &fromDirection, const Vector3 &toDirection)
+    static Quaternion from_to_rotation(const Vector3 &fromDirection, const Vector3 &toDirection)
     {
-        Vector3 from = fromDirection.normalized();
-        Vector3 to = toDirection.normalized();
+        Vector3 from = fromDirection.normalized(); // Keep call
+        Vector3 to = toDirection.normalized(); // Keep call
 
-        float dot = from.dot(to);
+        float dot_val = from.dot(to); // Keep call
 
-        if (dot > 0.999999f)
+        if (dot_val > 0.999999f)
         {
-            return Quaternion::identity();
+            return Quaternion::identity(); // Keep call
         }
 
-        if (dot < -0.999999f)
+        if (dot_val < -0.999999f)
         {
-            Vector3 axis = Vector3(1, 0, 0).cross(from);
+            Vector3 axis = Vector3(1, 0, 0).cross(from); // Keep call
 
-            if (axis.sqrMagnitude() < 0.000001f)
+            if (axis.sqr_magnitude() < 0.000001f) // Update call
             {
-                axis = Vector3(0, 1, 0).cross(from);
+                axis = Vector3(0, 1, 0).cross(from); // Keep call
             }
 
-            return angleAxis(180.0f, axis.normalized());
+            return angle_axis(180.0f, axis.normalized()); // Update call & Keep Vector3::normalized
         }
 
-        float sqrt = std::sqrt((1.0f + dot) * 2.0f);
-        float invs = 1.0f / sqrt;
-        Vector3 cross = from.cross(to);
+        float sqrt_val = std::sqrt((1.0f + dot_val) * 2.0f);
+        float invs = 1.0f / sqrt_val;
+        Vector3 cross_val = from.cross(to); // Keep call
 
         return Quaternion(
-                   cross.x * invs,
-                   cross.y * invs,
-                   cross.z * invs,
-                   sqrt * 0.5f)
-               .normalized();
+                   cross_val.x * invs,
+                   cross_val.y * invs,
+                   cross_val.z * invs,
+                   sqrt_val * 0.5f)
+               .normalized(); // Keep call
     }
 
-    static Quaternion lookRotation(const Vector3 &forward, Vector3 upwards = Vector3(0, 1, 0))
+    static Quaternion look_rotation(const Vector3 &forward, Vector3 upwards = Vector3(0, 1, 0))
     {
-        Vector3 forward_normalized = forward.normalized();
-        Vector3 right = upwards.cross(forward_normalized).normalized();
-        upwards = forward_normalized.cross(right);
+        Vector3 forward_normalized = forward.normalized(); // Keep call
+        Vector3 right_vec = upwards.cross(forward_normalized).normalized(); // Keep calls
+        upwards = forward_normalized.cross(right_vec); // Keep call
 
-        float m00 = right.x;
-        float m01 = right.y;
-        float m02 = right.z;
+        float m00 = right_vec.x;
+        float m01 = right_vec.y;
+        float m02 = right_vec.z;
         float m10 = upwards.x;
         float m11 = upwards.y;
         float m12 = upwards.z;
@@ -217,10 +217,10 @@ struct Quaternion
     // Utility methods
     [[nodiscard]] float magnitude() const
     {
-        return std::sqrt(sqrMagnitude());
+        return std::sqrt(sqr_magnitude()); // Update call
     }
 
-    [[nodiscard]] constexpr float sqrMagnitude() const
+    [[nodiscard]] constexpr float sqr_magnitude() const
     {
         return x * x + y * y + z * z + w * w;
     }
@@ -234,12 +234,12 @@ struct Quaternion
             return *this / mag;
         }
 
-        return Quaternion::identity();
+        return Quaternion::identity(); // Keep call
     }
 
     void normalize()
     {
-        float mag = magnitude();
+        float mag = magnitude(); // Keep call
 
         if (mag > 1e-6f)
         {
@@ -256,7 +256,7 @@ struct Quaternion
         return x * rhs.x + y * rhs.y + z * rhs.z + w * rhs.w;
     }
 
-    [[nodiscard]] Vector3 eulerAngles() const
+    [[nodiscard]] Vector3 euler_angles() const
     {
         float sinr_cosp = 2.0f * (w * x + y * z);
         float cosr_cosp = 1.0f - 2.0f * (x * x + y * y);
@@ -286,24 +286,24 @@ struct Quaternion
                    yaw * 57.2958f);
     }
 
-    [[nodiscard]] Vector3 getForward() const
+    [[nodiscard]] Vector3 get_forward() const
     {
         return *this * Vector3(0, 0, 1);
     }
 
-    [[nodiscard]] Vector3 getUp() const
+    [[nodiscard]] Vector3 get_up() const
     {
         return *this * Vector3(0, 1, 0);
     }
 
-    [[nodiscard]] Vector3 getRight() const
+    [[nodiscard]] Vector3 get_right() const
     {
         return *this * Vector3(1, 0, 0);
     }
 
     [[nodiscard]] Quaternion inverse() const
     {
-        float n = sqrMagnitude();
+        float n = sqr_magnitude(); // Update call
         return Quaternion(-x / n, -y / n, -z / n, w / n);
     }
 
@@ -321,7 +321,7 @@ struct Quaternion
                    a.y + (b.y - a.y) * t,
                    a.z + (b.z - a.z) * t,
                    a.w + (b.w - a.w) * t)
-               .normalized();
+               .normalized(); // Keep call
     }
 
     [[nodiscard]] static Quaternion slerp(const Quaternion &a, const Quaternion &b, float t)
@@ -355,20 +355,20 @@ struct Quaternion
                    a.w * ratioA + b.w * ratioB);
     }
 
-    [[nodiscard]] static Quaternion rotateTowards(const Quaternion &from, const Quaternion &to, float maxDegreesDelta)
+    [[nodiscard]] static Quaternion rotate_towards(const Quaternion &from, const Quaternion &to, float maxDegreesDelta)
     {
-        float angle = Quaternion::angle(from, to);
+        float angle_val = Quaternion::angle(from, to); // Keep call
 
-        if (angle == 0.0f)
+        if (angle_val == 0.0f)
         {
             return to;
         }
 
-        return slerp(from, to, std::min(1.0f, maxDegreesDelta / angle));
+        return slerp(from, to, std::min(1.0f, maxDegreesDelta / angle_val)); // Keep call
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string to_string() const
     {
         return "(" + std::to_string(x) + ", " + std::to_string(y) + ", " +
                std::to_string(z) + ", " + std::to_string(w) + ")";

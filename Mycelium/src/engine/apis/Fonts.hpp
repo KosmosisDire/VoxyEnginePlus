@@ -2,10 +2,9 @@
 #include <imgui.h>
 #include <string>
 #include <unordered_map>
-#include "resources.hpp"
+#include "Resources.hpp"
 #include <stdio.h>
 #include <filesystem>
-#include <iostream>
 
 using namespace std;
 
@@ -13,7 +12,7 @@ using namespace std;
 struct FontManager
 {
     public:
-        inline static void LoadFont(string fontPath, string fontName, float fontSize, ImFontConfig *config)
+        inline static void load_font(string fontPath, string fontName, float fontSize, ImFontConfig *config)
         {
             auto io = ImGui::GetIO();
             ImFont *font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), fontSize, config, io.Fonts->GetGlyphRangesDefault());
@@ -27,7 +26,7 @@ struct FontManager
             fonts[fontName] = font;
         }
 
-        inline static ImFont *GetFont(string fontName)
+        inline static ImFont *get_font(string fontName)
         {
             auto font = FontManager::fonts[fontName];
 
@@ -40,15 +39,15 @@ struct FontManager
             return font;
         }
 
-        inline static void LoadDefaults()
+        inline static void load_defaults()
         {
             ImFontConfig font_config;
             font_config.OversampleH = 2;
             font_config.OversampleV = 2;
 
             // Get and print current working directory
-            auto fontPath = Resources::GetResourcePath("fonts/Roboto-Regular.ttf").string();
-            FontManager::LoadFont(fontPath, "Roboto", 16.0f, &font_config);
+            auto fontPath = Resources::get_resource_path("fonts/Roboto-Regular.ttf").string(); // Keep Resources::GetResourcePath for now
+            FontManager::load_font(fontPath, "Roboto", 16.0f, &font_config); // Update call
         }
 
     private:

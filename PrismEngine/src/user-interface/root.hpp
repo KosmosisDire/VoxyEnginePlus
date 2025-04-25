@@ -5,20 +5,20 @@
 
 static bool init = false;
 
-void DrawFrameTime(float dt)
+void draw_frame_time(float dt)
 {
     static float dtAvg = 0.0f;
     dtAvg = dtAvg * 0.99f + dt * 0.01f;
     UITEXT(Text(fmt::format("Frame Time: {:.2f}ms", dtAvg * 1000.0f)));
 }
 
-void DrawCameraPos(const CameraData& camera)
+void draw_camera_pos(const CameraData& camera)
 {
     UITEXT(Text(fmt::format("Camera Pos: {:.2f}, {:.2f}, {:.2f}", camera.position.x, camera.position.y, camera.position.z)));
 }
 
 
-void InitPages(UIData& data)
+void init_pages(UIData& data)
 {
     data.pages["Menu"] =
     {
@@ -35,24 +35,24 @@ void InitPages(UIData& data)
     init = true;
 }
 
-void DrawRootUI(UIData& data, UIInputs input)
+void draw_root_ui(UIData& data, UIInputs input)
 {
     if (!init)
     {
-        InitPages(data);
+        init_pages(data);
     }
 
     UI(Element("Root")
        .grow()
-       .centerContent())
+       .center_content())
     {
         // display frame time in top corner
         UI(Element("FloatingCorner")
-           .floatingAttachPoint(AttachPointType::RightTop)
-           .floatingOffset(-10, 10)
+           .floating_attach_point(AttachPointType::RightTop)
+           .floating_offset(-10, 10)
            .direction(FlowDirection::TopToBottom))
         {
-            DrawFrameTime(input.deltaTime);
+            draw_frame_time(input.deltaTime);
         }
 
         if (!data.mouseIsActive) continue; // is this how this should be used?

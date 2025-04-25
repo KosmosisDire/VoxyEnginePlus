@@ -1,6 +1,7 @@
 #pragma once
 
 #include <engine/apis/Fonts.hpp>
+#include <functional>
 #include "elements/element.hpp"
 #include "elements/helper/clay-imgui-renderer.hpp"
 #include "elements/text.hpp"
@@ -11,29 +12,29 @@ class ClayUI
         static bool initialized;
         static bool debugMode;
 
-        static void HandleClayErrors(Clay_ErrorData errorData)
+        static void handle_clay_errors(Clay_ErrorData errorData)
         {
             printf("%s", errorData.errorText.chars);
         }
 
-        static void Initialize(UIInputs input)
+        static void initialize(UIInputs input)
         {
             uint64_t totalMemorySize = Clay_MinMemorySize();
             Clay_Arena clayMemory = Clay_CreateArenaWithCapacityAndMemory(totalMemorySize, (char*)malloc(totalMemorySize));
-            Clay_Initialize(clayMemory, Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight}, Clay_ErrorHandler{HandleClayErrors});
-            Clay_SetMeasureTextFunction(Imgui_MeasureText);
+            Clay_Initialize(clayMemory, Clay_Dimensions{(float)input.screenWidth, (float)input.screenHeight}, Clay_ErrorHandler{handle_clay_errors});
+            Clay_SetMeasureTextFunction(imgui_measure_text);
 
-            Clay_SetFont(FontManager::GetFont("Roboto"));
+            clay_set_font(FontManager::get_font("Roboto"));
 
             ClayState::lastPointerX = input.pointerX;
             ClayState::lastPointerY = input.pointerY;
 
-            SetInputs(input);
+            set_inputs(input);
 
             initialized = true;
         }
 
-        static void SetInputs(UIInputs input)
+        static void set_inputs(UIInputs input)
         {
             ClayState::inputs = input;
             ClayState::pointerDeltaX = input.pointerX - ClayState::lastPointerX;
@@ -46,45 +47,45 @@ class ClayUI
             Clay_UpdateScrollContainers(true, Clay_Vector2{input.scrollDeltaX, input.scrollDeltaY * 10}, input.deltaTime);
         }
 
-        static void EndFrame()
+        static void end_frame()
         {
             Clay_RenderCommandArray renderCommands = Clay_EndLayout();
-            ClayState::FillComputedProperties(renderCommands);
+            ClayState::fill_computed_properties(renderCommands);
             clay_imgui_render(renderCommands);
         }
 
-        static void BeginFrame(UIInputs input)
+        static void begin_frame(UIInputs input)
         {
             if (!initialized)
             {
-                Initialize(input);
+                initialize(input);
             }
 
-            ClayState::FreeStrings();
-            SetInputs(input);
+            ClayState::free_strings();
+            set_inputs(input);
 
-            Element::ClearStack();
+            Element::clear_stack();
             Clay_BeginLayout();
         }
 
     public:
         template <typename T>
-        static void Update(T &state, UIInputs input, std::function<void(T &, UIInputs)> build_ui)
+        static void update(T &state, UIInputs input, std::function<void(T &, UIInputs)> build_ui)
         {
             // frameStart = std::chrono::high_resolution_clock::now();
-            BeginFrame(input);
+            begin_frame(input);
             build_ui(state, input);
-            EndFrame();
+            end_frame();
             // uiFrameTime = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - frameStart).count();
         }
 
-        static void DebugMode(bool enabled)
+        static void debug_mode(bool enabled)
         {
             debugMode = enabled;
             Clay_SetDebugModeEnabled(enabled);
         }
 
-        static bool GetDebugMode()
+        static bool get_debug_mode()
         {
             return debugMode;
         }

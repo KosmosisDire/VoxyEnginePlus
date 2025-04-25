@@ -7,7 +7,7 @@
 namespace Resources
 {
     // Function to get the full path to a resource file, searching if necessary
-    std::filesystem::path GetResourcePath(const std::string& relativePath)
+    std::filesystem::path get_resource_path(const std::string& relativePath)
     {
         std::filesystem::path path = std::filesystem::current_path() / "resources" / relativePath;
 
@@ -43,9 +43,9 @@ namespace Resources
     }
 
     // Core function to read a file into a binary buffer (vector of chars)
-    std::vector<char> ReadAsBinary(const std::string& relativePath)
+    std::vector<char> read_as_binary(const std::string& relativePath)
     {
-        std::filesystem::path filePath = GetResourcePath(relativePath);
+        std::filesystem::path filePath = get_resource_path(relativePath); // Update call
         std::ifstream file(filePath, std::ios::binary | std::ios::ate); // Open at the end to get size
 
         if (!file.is_open())
@@ -67,9 +67,9 @@ namespace Resources
     }
 
     // Function to read a file into a string
-    std::string ReadAsString(const std::string& relativePath)
+    std::string read_as_string(const std::string& relativePath)
     {
-        std::filesystem::path filePath = GetResourcePath(relativePath);
+        std::filesystem::path filePath = get_resource_path(relativePath); // Update call
         std::ifstream file(filePath); // Open in text mode
 
         if (!file.is_open())

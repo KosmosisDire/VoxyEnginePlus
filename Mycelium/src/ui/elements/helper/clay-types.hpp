@@ -2,7 +2,6 @@
 
 #include <clay.h>
 #include <imgui_impl_glfw.h>
-#include <memory>
 #include <string>
 #include <engine/data/Color.hpp>
 
@@ -143,42 +142,42 @@ using PointerData = Clay_PointerData;
 using BoundingBox = Clay_BoundingBox;
 
 // Helper conversion functions
-inline Clay_LayoutDirection ToClay(FlowDirection dir)
+inline Clay_LayoutDirection to_clay(FlowDirection dir)
 {
     return static_cast<Clay_LayoutDirection>(dir);
 }
 
-inline Clay_LayoutAlignmentX ToClay(AlignmentX align)
+inline Clay_LayoutAlignmentX to_clay(AlignmentX align)
 {
     return static_cast<Clay_LayoutAlignmentX>(align);
 }
 
-inline Clay_LayoutAlignmentY ToClay(AlignmentY align)
+inline Clay_LayoutAlignmentY to_clay(AlignmentY align)
 {
     return static_cast<Clay_LayoutAlignmentY>(align);
 }
 
-inline Clay__SizingType ToClay(SizingType type)
+inline Clay__SizingType to_clay(SizingType type)
 {
     return static_cast<Clay__SizingType>(type);
 }
 
-inline Clay_PointerCaptureMode ToClay(PointerEventMode mode)
+inline Clay_PointerCaptureMode to_clay(PointerEventMode mode)
 {
     return static_cast<Clay_PointerCaptureMode>(mode);
 }
 
-inline Clay_FloatingAttachPointType ToClay(AttachPointType point)
+inline Clay_FloatingAttachPointType to_clay(AttachPointType point)
 {
     return static_cast<Clay_FloatingAttachPointType>(point);
 }
 
-inline Clay_TextElementConfigWrapMode ToClay(TextWrapMode mode)
+inline Clay_TextElementConfigWrapMode to_clay(TextWrapMode mode)
 {
     return static_cast<Clay_TextElementConfigWrapMode>(mode);
 }
 
-inline Clay_Color ToClay(const Color &color)
+inline Clay_Color to_clay(const Color &color)
 {
     return {color.r, color.g, color.b, color.a};
 }
