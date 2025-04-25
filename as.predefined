@@ -699,7 +699,4 @@ namespace Math { float Rad2Deg; }
 namespace Math { float Epsilon; }
 namespace Math { float Infinity; }
 namespace Math { float NegativeInfinity; }
-Vector3 sunDir;
-Camera camera;
-float dt;
 

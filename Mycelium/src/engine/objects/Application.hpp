@@ -17,7 +17,7 @@ using Clock = std::chrono::high_resolution_clock;
 class Application
 {
     public:
-        Application(std::string name, std::vector<std::filesystem::path> shaderDirectories)
+        Application(std::string name, std::vector<std::filesystem::path> shaderDirectories = {"resources/shaders"})
             : window(std::make_shared<GameWindow>(name, 1920, 1080)), inputManager(window), renderer(std::make_shared<Renderer>(window, shaderDirectories))
         {
             start = Clock::now();
