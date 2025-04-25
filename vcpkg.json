@@ -3,33 +3,19 @@
   "version": "1.0.0",
   "builtin-baseline": "aafb8b71554a4590aa5108bdb5005d81d72db6c1",
   "dependencies": [
-    {
-      "name": "daxa",
-      "features": [
-        "utils-imgui",
-        "utils-mem",
-        "utils-pipeline-manager-glslang",
-        "utils-pipeline-manager-slang",
-        "utils-task-graph"
-      ]
-    },
-    "glm",
     "fmt",
+    "vulkan",
+    "vulkan-headers",
+    "vulkan-memory-allocator",
+    "shader-slang",
+    "glfw3",
+    "glm",
     {
       "name": "imgui",
       "features": [
         "glfw-binding",
         "docking-experimental"
       ]
-    },
-    {
-      "name": "glfw3"
-    },
-    "vulkan-memory-allocator"
-  ],
-  "vcpkg-configuration": {
-    "overlay-ports": [
-      "lib/Daxa"
-    ]
-  }
+    }
+  ]
 }

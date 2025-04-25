@@ -13,7 +13,7 @@ using namespace daxa::types;
 using HWND = void *;
 #elif defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
-#define GLFW_EXPOSE_NATIVE_WAYLAND
+// #define GLFW_EXPOSE_NATIVE_WAYLAND
 #endif
 #include <GLFW/glfw3native.h>
 
@@ -105,13 +105,13 @@ class GameWindow
             return glfwGetWin32Window(glfwWindowPointer);
 #elif defined(__linux__)
 
-            if (platform == GLFW_PLATFORM_WAYLAND)
-            {
-                void* wayland_handle = glfwGetWaylandWindow(glfwWindowPointer);
-                std::cout << "Wayland window handle: " << wayland_handle << std::endl;
-                return reinterpret_cast<daxa::NativeWindowHandle>(wayland_handle);
-            }
-            else if (platform == GLFW_PLATFORM_X11)
+            // if (platform == GLFW_PLATFORM_WAYLAND)
+            // {
+            //     void* wayland_handle = glfwGetWaylandWindow(glfwWindowPointer);
+            //     std::cout << "Wayland window handle: " << wayland_handle << std::endl;
+            //     return reinterpret_cast<daxa::NativeWindowHandle>(wayland_handle);
+            // }
+            if (platform == GLFW_PLATFORM_X11 || platform == GLFW_PLATFORM_WAYLAND)
             {
                 Window x11_handle = glfwGetX11Window(glfwWindowPointer);
                 std::cout << "X11 window handle: " << x11_handle << std::endl;

@@ -63,11 +63,32 @@ foreach(RES_SRC_DIR ${RESOURCE_DIRS})
 endforeach()
 
 # --- DLL Handling (Windows) ---
-# Copy necessary runtime DLLs next to the executable (CMake 3.21+)
+
+
+# Find Slang library path again (needed for the copy command)
+find_library(PRISM_ENGINE_SLANG_LIB_PATH slang)
+if(NOT PRISM_ENGINE_SLANG_LIB_PATH)
+    message(ERROR "PrismEngine: Could not find Slang shared library for copying. Runtime issues may occur if not handled otherwise.")
+else()
+    message(STATUS "PrismEngine: Found Slang library to copy: ${PRISM_ENGINE_SLANG_LIB_PATH}")
+    # Copy Slang shared library (.so/.dylib) next to executable for RPATH
+    if(UNIX) # Handles Linux (.so) and macOS (.dylib)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${PRISM_ENGINE_SLANG_LIB_PATH}"
+                    $<TARGET_FILE_DIR:${PROJECT_NAME}> # Copy to executable directory
+            COMMENT "Copying Slang shared library (${PRISM_ENGINE_SLANG_LIB_PATH}) for runtime"
+            VERBATIM
+        )
+    endif()
+endif()
+
+# Copy necessary runtime DLLs next to the executable (Windows)
+# This might include slang.dll if found and linked as a runtime dependency.
 if(WIN32)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> $<TARGET_FILE_DIR:${PROJECT_NAME}>
-        COMMAND_EXPAND_LISTS # Important!
+        COMMAND_EXPAND_LISTS
         COMMENT "Copying runtime DLLs to $<TARGET_FILE_DIR:${PROJECT_NAME}>"
         VERBATIM
     )

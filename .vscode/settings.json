@@ -7,13 +7,9 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        // Exclude build directories based on presets
-        "build": true, // General build folder if used
-        "out": true, // Common output folder
-        "**/build/*": true, // More specific build folders
-        // Exclude dependency source/build folders if desired
-        "lib": true, // If vcpkg/FetchContent land here and are noisy
-        "_deps": true // Common FetchContent build dir name
+        "out": true,
+        "lib": true,
+        "_deps": true
     },
     "files.watcherExclude": {
         "**/.git/objects/**": true,

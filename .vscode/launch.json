@@ -3,12 +3,10 @@
     "configurations": [
         {
             "name": "CMake: Debug Target", // Generic name
-            "type": "cppvsdbg",
+            "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
             "cwd": "${command:cmake.launchTargetDirectory}",
-            "MIMode": "lldb",
-            "miDebuggerPath": "C:\\Program Files\\LLVM\\bin\\lldb.exe",
             "preLaunchTask": "CMake: Build"
         }
     ]

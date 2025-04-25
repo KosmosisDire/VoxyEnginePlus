@@ -1,6 +1,6 @@
 #pragma once
 
-#include "window.hpp"
+#include "Window.hpp"
 #include <chrono>
 #include <engine/apis/Fonts.hpp>
 #include <engine/apis/Input.hpp>
