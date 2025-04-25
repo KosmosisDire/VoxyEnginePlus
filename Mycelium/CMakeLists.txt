@@ -4,18 +4,6 @@ cmake_minimum_required(VERSION 3.21)
 # --- FetchContent Dependencies ---
 include(FetchContent)
 
-# ANTLR
-FetchContent_Declare(
-    antlr
-    GIT_REPOSITORY https://github.com/antlr/antlr4.git
-    GIT_TAG        4.13.1 # Using 4.13.1, update if needed
-)
-set(ANTLR_BUILD_CPP_RUNTIME ON CACHE BOOL "" FORCE)
-set(WITH_STATIC_CRT OFF CACHE BOOL "" FORCE) # Match project CRT (usually dynamic)
-set(ANTLR_JAR_LOCATION "" CACHE FILEPATH "" FORCE) # Don't need the JAR if only building runtime
-FetchContent_MakeAvailable(antlr)
-message(STATUS "Mycelium: Using ANTLR source from ${antlr_SOURCE_DIR}")
-
 # AngelScript
 FetchContent_Declare(
     angelscript
@@ -63,22 +51,17 @@ file(GLOB_RECURSE MYCELIUM_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.hpp"
 )
 
-# ANTLR Generated Sources (Assuming they land here - adjust path if needed)
-# This part might require running the ANTLR generator first.
-# For now, let's assume they are pre-generated or handled by another process.
-# If ANTLR generation needs to be part of CMake, add custom commands.
-set(ANTLR_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/antlr") # Example output dir
-file(GLOB_RECURSE ANTLR_GENERATED_SRC "${ANTLR_GENERATED_DIR}/*.cpp")
-# Add include directory for generated headers
-include_directories(${ANTLR_GENERATED_DIR})
+# Glob AngelScript sources separately
+file(GLOB_RECURSE ANGELSCRIPT_SRC
+    "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
+    "${angelscript_SOURCE_DIR}/sdk/add_on/**/*.cpp" # Recursively glob all add-on sources
+)
 
 # --- Library Definition ---
 add_library(Mycelium STATIC
     ${MYCELIUM_SRC}
-    # ANTLR runtime sources will be linked via target_link_libraries
-    # AngelScript sources will be linked via target_link_libraries
-    # Add ANTLR generated sources if globbed above
-    ${ANTLR_GENERATED_SRC}
+    ${ANGELSCRIPT_SRC} # Add globbed AngelScript sources
+    # ANTLR removed
 )
 
 # --- AngelScript Assembly Handling ---
@@ -107,10 +90,11 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8) # Only for 64-bit
                 message(WARNING "ml64.exe not found in PATH. AngelScript assembly optimizations disabled for MSVC.")
             endif()
         endif()
-    elseif(CMAKE_SYSTEM_NAME MATCHES "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    # Use GCC/Clang assembly on Linux OR Windows if using Clang/GNU compiler
+    elseif((CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Windows") AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         set(AS_ASM_FILE_CANDIDATE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_gcc.S")
         if(EXISTS "${AS_ASM_FILE_CANDIDATE}")
-            message(STATUS "Found GCC/Clang compatible AngelScript assembly: ${AS_ASM_FILE_CANDIDATE}")
+            message(STATUS "Found GCC/Clang compatible AngelScript assembly for ${CMAKE_SYSTEM_NAME}: ${AS_ASM_FILE_CANDIDATE}")
             set(AS_ASM_FILE "${AS_ASM_FILE_CANDIDATE}")
             set(AS_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_gcc.o")
             # Use CMAKE_ASM_COMPILER (CMake should find assembler associated with C/CXX compiler)
@@ -143,7 +127,7 @@ target_include_directories(Mycelium PUBLIC
     # Dependencies' public includes
     $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/angelscript/include>
     $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/> # Add AngelScript SDK root (includes add_on)
-    $<BUILD_INTERFACE:${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src> # ANTLR runtime includes
+    # ANTLR removed
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # Add Mycelium sources to public interface
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> # Add Mycelium resources to public interface
     # Daxa, glfw, glm, fmt, imgui includes are handled by find_package and target_link_libraries
@@ -155,18 +139,12 @@ target_include_directories(Mycelium PRIVATE
 
 # --- Compile Definitions ---
 target_compile_definitions(Mycelium PUBLIC
-    ANTLR4CPP_STATIC # For static ANTLR runtime build
+    # ANTLR removed
     # Add other necessary public definitions
 )
 target_compile_definitions(Mycelium PRIVATE
     # Add private definitions
 )
-
-# --- Compile Options ---
-# Force include <chrono> for MSVC ANTLR fix (from original)
-if(MSVC)
-    target_compile_options(Mycelium PRIVATE /FI"chrono")
-endif()
 
 # --- Linking ---
 target_link_libraries(Mycelium PUBLIC
@@ -177,10 +155,8 @@ target_link_libraries(Mycelium PUBLIC
     imgui::imgui # Use target provided by find_package(imgui)
     # FetchContent dependencies (Daxa provides a target)
     daxa::daxa
-    # Link ANTLR runtime library target created by FetchContent
-    antlr4_runtime # Assuming this is the target name ANTLR creates
-    # Link AngelScript library target created by FetchContent
-    angelscript # Assuming this is the target name AngelScript creates
+    # ANTLR removed
+    # AngelScript sources are compiled directly into Mycelium now
 )
 
 # --- Configure project_paths.h ---

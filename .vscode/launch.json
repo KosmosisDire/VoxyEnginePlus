@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "CMake: Debug Target", // Generic name
-            "type": "cppdbg", // Use cppdbg for GDB/LLDB (works well with Clang)
+            "type": "cppvsdbg", // Switch back to Visual Studio Debugger
             "request": "launch",
             // Use CMake Tools commands to get path and CWD dynamically
             "program": "${command:cmake.launchTargetPath}",
@@ -12,22 +12,7 @@
             "cwd": "${command:cmake.launchTargetDirectory}",
             "environment": [], // Add environment variables if needed
             "externalConsole": false, // Preference: set to true for separate console
-            "MIMode": "lldb", // Prefer LLDB for Clang, especially on Windows/macOS. Use "gdb" if preferred on Linux.
-            // If lldb-mi or gdb is not in PATH, specify it here:
-            // "miDebuggerPath": "C:/path/to/llvm/bin/lldb-mi.exe", // Example for Windows LLDB
-            // "miDebuggerPath": "/usr/bin/gdb", // Example for Linux GDB
-            "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb/lldb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ],
+            // MIMode, miDebuggerPath, and setupCommands are not used by cppvsdbg
             // Use the default CMake build task we defined in tasks.json
             "preLaunchTask": "CMake: Build"
         }
