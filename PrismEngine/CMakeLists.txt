@@ -49,26 +49,12 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 )
 
 foreach(RES_SRC_DIR ${RESOURCE_DIRS})
-    get_filename_component(RES_DIR_NAME ${RES_SRC_DIR} NAME)
-    set(DEST_SUBDIR "${RESOURCE_DEST_DIR}/${RES_DIR_NAME}")
-
-    # Debug builds: Use symlinks (if not Windows) or copy (Windows fallback/simplicity)
-    # Release builds: Always copy
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND NOT WIN32)
-        # Linux/macOS Debug: Create symlink for hot-reloading
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E create_symlink "${RES_SRC_DIR}" "${DEST_SUBDIR}"
-            COMMENT "Symlinking (Debug): ${RES_SRC_DIR} -> ${DEST_SUBDIR}"
-            VERBATIM
-        )
-    else()
-        # Windows Debug or Any Release: Copy directory contents
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${RES_SRC_DIR}" "${DEST_SUBDIR}"
-            COMMENT "Copying resources: ${RES_SRC_DIR} -> ${DEST_SUBDIR}"
-            VERBATIM
-        )
-    endif()
+    # Always copy contents directly into the target resource directory to merge them.
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${RES_SRC_DIR}" "${RESOURCE_DEST_DIR}" # Copy contents directly
+        COMMENT "Copying resources: ${RES_SRC_DIR} -> ${RESOURCE_DEST_DIR}"
+        VERBATIM
+    )
 endforeach()
 
 # --- DLL Handling (Windows) ---

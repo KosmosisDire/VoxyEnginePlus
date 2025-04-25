@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.21)
 # --- Project Definition ---
 project(PrismEngine VERSION 1.0 LANGUAGES CXX C)
 
+# --- Ensure compile_commands.json is generated ---
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # --- C++ Standard ---
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)

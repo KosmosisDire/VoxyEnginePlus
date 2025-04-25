@@ -36,16 +36,12 @@
     // --- C/C++ Extension Configuration ---
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools", // Use CMake Tools for IntelliSense config
     "C_Cpp.intelliSenseEngine": "default", // Use Default engine (required for cmake-tools provider)
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/clang-debug/compile_commands.json", // Explicit path for clang-tidy
+    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
     // --- Clang-Tidy Integration ---
     "C_Cpp.codeAnalysis.clangTidy.enabled": true,
     "C_Cpp.codeAnalysis.clangTidy.path": "clang-tidy", // Assumes clang-tidy is in PATH
-    // If clang-tidy is NOT in PATH, provide the full path:
-    // "C_Cpp.codeAnalysis.clangTidy.path": "C:/path/to/llvm/bin/clang-tidy.exe",
-    "C_Cpp.codeAnalysis.clangTidy.checks.useBuildPath": true, // Use checks from .clang-tidy in workspace root
     "C_Cpp.codeAnalysis.clangTidy.headerFilter": ".*", // Analyze headers too (can be noisy, adjust if needed e.g., "${workspaceFolder}/(Mycelium|PrismEngine)/.*")
-    "C_Cpp.codeAnalysis.clangTidy.args": [
-        // Add extra args if needed, e.g., "-p=${buildPath}" is usually handled automatically
-    ],
     "C_Cpp.codeAnalysis.runAutomatically": true, // Run analysis automatically
     // --- Formatting ---
     // Keep existing AStyle settings if preferred, or switch to clang-format

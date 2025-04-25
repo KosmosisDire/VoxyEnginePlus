@@ -4,14 +4,7 @@ cmake_minimum_required(VERSION 3.21)
 # --- FetchContent Dependencies ---
 include(FetchContent)
 
-# AngelScript
-FetchContent_Declare(
-    angelscript
-    GIT_REPOSITORY https://github.com/codecat/angelscript-mirror.git # Using mirror
-    GIT_TAG        master # Or specific tag/commit if preferred
-)
-FetchContent_MakeAvailable(angelscript)
-message(STATUS "Mycelium: Using AngelScript source from ${angelscript_SOURCE_DIR}")
+# AngelScript Removed
 
 # Daxa
 FetchContent_Declare(
@@ -45,79 +38,17 @@ file(GLOB_RECURSE MYCELIUM_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp" # Headers often not needed, but included in original
     "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/scripting/**/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/scripting/**/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.hpp"
-)
-
-# Glob AngelScript sources separately
-file(GLOB_RECURSE ANGELSCRIPT_SRC
-    "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
-    "${angelscript_SOURCE_DIR}/sdk/add_on/**/*.cpp" # Recursively glob all add-on sources
+    # Scripting directory removed from sources
 )
 
 # --- Library Definition ---
 add_library(Mycelium STATIC
     ${MYCELIUM_SRC}
-    ${ANGELSCRIPT_SRC} # Add globbed AngelScript sources
+    # AngelScript removed
     # ANTLR removed
 )
-
-# --- AngelScript Assembly Handling ---
-set(AS_USE_ASSEMBLY FALSE)
-set(AS_ASM_FILE "")
-set(AS_ASM_OBJ "")
-
-if(CMAKE_SIZEOF_VOID_P EQUAL 8) # Only for 64-bit
-    if(MSVC)
-        set(AS_ASM_FILE_CANDIDATE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_msvc_asm.asm")
-        if(EXISTS "${AS_ASM_FILE_CANDIDATE}")
-            # Find ml64.exe (simplified find logic - assumes it's in PATH via Dev Prompt or VS setup)
-            find_program(ML64_EXECUTABLE ml64)
-            if(ML64_EXECUTABLE)
-                message(STATUS "Found ml64 for AngelScript assembly: ${ML64_EXECUTABLE}")
-                set(AS_ASM_FILE "${AS_ASM_FILE_CANDIDATE}")
-                set(AS_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_msvc_asm.obj")
-                add_custom_command(
-                    OUTPUT ${AS_ASM_OBJ}
-                    COMMAND ${ML64_EXECUTABLE} /c /nologo /Fo${AS_ASM_OBJ} /W3 /Zi /Ta ${AS_ASM_FILE}
-                    DEPENDS ${AS_ASM_FILE}
-                    COMMENT "Assembling AngelScript MSVC x64: ${AS_ASM_FILE}"
-                    VERBATIM)
-                set(AS_USE_ASSEMBLY TRUE)
-            else()
-                message(WARNING "ml64.exe not found in PATH. AngelScript assembly optimizations disabled for MSVC.")
-            endif()
-        endif()
-    # Use GCC/Clang assembly on Linux OR Windows if using Clang/GNU compiler
-    elseif((CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Windows") AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        set(AS_ASM_FILE_CANDIDATE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_gcc.S")
-        if(EXISTS "${AS_ASM_FILE_CANDIDATE}")
-            message(STATUS "Found GCC/Clang compatible AngelScript assembly for ${CMAKE_SYSTEM_NAME}: ${AS_ASM_FILE_CANDIDATE}")
-            set(AS_ASM_FILE "${AS_ASM_FILE_CANDIDATE}")
-            set(AS_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_gcc.o")
-            # Use CMAKE_ASM_COMPILER (CMake should find assembler associated with C/CXX compiler)
-            add_custom_command(
-                OUTPUT ${AS_ASM_OBJ}
-                COMMAND ${CMAKE_ASM_COMPILER} ${CMAKE_ASM_FLAGS} -c ${AS_ASM_FILE} -o ${AS_ASM_OBJ}
-                DEPENDS ${AS_ASM_FILE}
-                COMMENT "Assembling AngelScript GCC/Clang x64: ${AS_ASM_FILE}"
-                VERBATIM)
-            set(AS_USE_ASSEMBLY TRUE)
-        endif()
-    # Add elif for macOS Clang if needed (might use the same .S file)
-    # elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang") ...
-    endif()
-endif()
-
-if(AS_USE_ASSEMBLY)
-    target_sources(Mycelium PRIVATE ${AS_ASM_OBJ})
-    message(STATUS "AngelScript assembly optimizations enabled.")
-else()
-    target_compile_definitions(Mycelium PRIVATE AS_MAX_PORTABILITY)
-    message(STATUS "AngelScript assembly optimizations disabled (using AS_MAX_PORTABILITY).")
-endif()
 
 # --- Include Directories ---
 target_include_directories(Mycelium PUBLIC
@@ -125,8 +56,7 @@ target_include_directories(Mycelium PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include> # Generated headers (like project_paths.h)
     $<INSTALL_INTERFACE:include> # Install interface
     # Dependencies' public includes
-    $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/angelscript/include>
-    $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/> # Add AngelScript SDK root (includes add_on)
+    # AngelScript removed
     # ANTLR removed
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # Add Mycelium sources to public interface
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> # Add Mycelium resources to public interface
@@ -146,6 +76,16 @@ target_compile_definitions(Mycelium PRIVATE
     # Add private definitions
 )
 
+# --- Compile Options ---
+# Force include <chrono> for MSVC ANTLR fix (from original)
+if(MSVC)
+    target_compile_options(Mycelium PRIVATE /FI"chrono")
+endif()
+# Disable strict aliasing for Clang/GCC as recommended by AngelScript docs
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(Mycelium PRIVATE -fno-strict-aliasing)
+endif()
+
 # --- Linking ---
 target_link_libraries(Mycelium PUBLIC
     # vcpkg dependencies
@@ -156,7 +96,7 @@ target_link_libraries(Mycelium PUBLIC
     # FetchContent dependencies (Daxa provides a target)
     daxa::daxa
     # ANTLR removed
-    # AngelScript sources are compiled directly into Mycelium now
+    # AngelScript removed
 )
 
 # --- Configure project_paths.h ---

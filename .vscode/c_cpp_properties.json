@@ -2,16 +2,7 @@
     "configurations": [
         {
             "name": "Win32",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/PrismEngine/src/**",
-                "${workspaceFolder}/PrismEngine/resources/**",
-                "${vcpkgRoot}/x64-windows/include",
-                "${workspaceFolder}/build/Debug/vcpkg_installed/x64-windows/include",
-                "${workspaceFolder}/Mycelium/src/**",
-                "${workspaceFolder}/Mycelium/resources/**",
-                "${workspaceFolder}/Mycelium/include/**",
-            ],
+            // "includePath" is managed by the configurationProvider (CMake Tools)
             "defines": [
                 "_DEBUG",
                 "UNICODE",
