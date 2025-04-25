@@ -1,17 +1,17 @@
 {
-    "version": 3,
+    "version": 4,
     "cmakeMinimumRequired": {
         "major": 3,
-        "minor": 19,
+        "minor": 21,
         "patch": 0
     },
     "configurePresets": [
         {
-            "name": "Debug-Windows",
-            "description": "Debug configuration (Windows)",
-            "hidden": false,
-            "generator": "Visual Studio 17 2022",
-            "binaryDir": "${sourceDir}/build/Debug",
+            "name": "clang-debug-windows",
+            "displayName": "Clang Debug (Windows)",
+            "description": "Builds with Clang and Ninja in Debug mode on Windows",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clang-debug",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -19,15 +19,18 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang.exe",
+                "CMAKE_CXX_COMPILER": "clang++.exe",
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
-            }
+            },
+            "environment": {}
         },
         {
-            "name": "Release-Windows",
-            "description": "Release configuration (Windows)",
-            "hidden": false,
-            "generator": "Visual Studio 17 2022",
-            "binaryDir": "${sourceDir}/build/Release",
+            "name": "clang-release-windows",
+            "displayName": "Clang Release (Windows)",
+            "description": "Builds with Clang and Ninja in Release mode (RelWithDebInfo) on Windows",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clang-release",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
@@ -35,50 +38,105 @@
             },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "clang.exe",
+                "CMAKE_CXX_COMPILER": "clang++.exe",
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
-            "name": "Debug-Linux",
-            "description": "Debug configuration (Linux)",
-            "hidden": false,
+            "name": "clang-debug-linux",
+            "displayName": "Clang Debug (Linux)",
+            "description": "Builds with Clang and Ninja in Debug mode on Linux",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/Debug",
+            "binaryDir": "${sourceDir}/build/clang-debug",
             "condition": {
                 "type": "equals",
                 "lhs": "${hostSystemName}",
                 "rhs": "Linux"
             },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "Release-Linux",
-            "description": "Release configuration (Linux)",
-            "hidden": false,
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/Release",
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Linux"
-            },
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
-        },
-        {
-            "name": "Configure preset using toolchain file",
-            "displayName": "Configure preset using toolchain file",
-            "description": "Sets Ninja generator, build and install directory",
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_TOOLCHAIN_FILE": "",
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}"
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "clang-release-linux",
+            "displayName": "Clang Release (Linux)",
+            "description": "Builds with Clang and Ninja in Release mode (RelWithDebInfo) on Linux",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/clang-release",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "windows-default-debug",
+            "displayName": "Default Debug (Windows)",
+            "description": "Default Debug build using Visual Studio generator",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/win-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            }
+        },
+        {
+            "name": "linux-default-debug",
+            "displayName": "Default Debug (Linux)",
+            "description": "Default Debug build using Ninja generator (likely GCC)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-debug",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/lib/vcpkg/scripts/buildsystems/vcpkg.cmake"
             }
         }
-    ]
+    ],
+    "buildPresets": [
+        {
+            "name": "clang-debug-windows",
+            "configurePreset": "clang-debug-windows"
+        },
+        {
+            "name": "clang-release-windows",
+            "configurePreset": "clang-release-windows"
+        },
+        {
+            "name": "clang-debug-linux",
+            "configurePreset": "clang-debug-linux"
+        },
+        {
+            "name": "clang-release-linux",
+            "configurePreset": "clang-release-linux"
+        },
+        {
+            "name": "windows-default-debug",
+            "configurePreset": "windows-default-debug"
+        },
+        {
+            "name": "linux-default-debug",
+            "configurePreset": "linux-default-debug"
+        }
+    ],
+    "testPresets": []
 }

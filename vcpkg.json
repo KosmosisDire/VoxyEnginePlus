@@ -24,7 +24,8 @@
     },
     {
       "name": "glfw3"
-    }
+    },
+    "vulkan-memory-allocator"
   ],
   "vcpkg-configuration": {
     "overlay-ports": [

@@ -1,173 +1,194 @@
-include("${CMAKE_CURRENT_LIST_DIR}/deps.cmake")
+# Mycelium/CMakeLists.txt - Rewritten
+cmake_minimum_required(VERSION 3.21)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "lib/vcpkg/installed/x64-windows/share/glfw3")
+# --- FetchContent Dependencies ---
+include(FetchContent)
 
-set(ANTLR_GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/preprocessor)
+# ANTLR
+FetchContent_Declare(
+    antlr
+    GIT_REPOSITORY https://github.com/antlr/antlr4.git
+    GIT_TAG        4.13.1 # Using 4.13.1, update if needed
+)
+set(ANTLR_BUILD_CPP_RUNTIME ON CACHE BOOL "" FORCE)
+set(WITH_STATIC_CRT OFF CACHE BOOL "" FORCE) # Match project CRT (usually dynamic)
+set(ANTLR_JAR_LOCATION "" CACHE FILEPATH "" FORCE) # Don't need the JAR if only building runtime
+FetchContent_MakeAvailable(antlr)
+message(STATUS "Mycelium: Using ANTLR source from ${antlr_SOURCE_DIR}")
 
-# Collect Engine Sources (Explicitly add ANTLR sources, avoid GLOB for them)
-# Use **/*.cpp to recurse into subdirectories like src/scripting, src/ui, etc.
-file(GLOB_RECURSE ENGINE_ONLY_SRC CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/**/*.cpp"
-    "${angelscript_SOURCE_DIR}/sdk/angelscript/source/*.cpp"
-    "${angelscript_SOURCE_DIR}/sdk/add_on/*.cpp"
-    "${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src/*.cpp" # Compile ANTLR sources directly
+# AngelScript
+FetchContent_Declare(
+    angelscript
+    GIT_REPOSITORY https://github.com/codecat/angelscript-mirror.git # Using mirror
+    GIT_TAG        master # Or specific tag/commit if preferred
+)
+FetchContent_MakeAvailable(angelscript)
+message(STATUS "Mycelium: Using AngelScript source from ${angelscript_SOURCE_DIR}")
+
+# Daxa
+FetchContent_Declare(
+    daxa
+    GIT_REPOSITORY https://github.com/Ipotrick/Daxa.git
+    GIT_TAG        d91f215842ca0d49cc6882a234172fdeb5b383b7 # Specific commit from original
+)
+# Set Daxa options BEFORE MakeAvailable
+set(DAXA_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(DAXA_ENABLE_UTILS_IMGUI ON CACHE BOOL "" FORCE)
+set(DAXA_ENABLE_UTILS_MEM ON CACHE BOOL "" FORCE)
+set(DAXA_ENABLE_UTILS_PIPELINE_MANAGER_GLSLANG ON CACHE BOOL "" FORCE)
+set(DAXA_ENABLE_UTILS_PIPELINE_MANAGER_SLANG ON CACHE BOOL "" FORCE)
+set(DAXA_ENABLE_UTILS_TASK_GRAPH ON CACHE BOOL "" FORCE)
+set(DAXA_VALIDATION OFF CACHE BOOL "" FORCE) # Disable validation layers unless needed for debug
+set(DAXA_ENABLE_UTILS OFF CACHE BOOL "" FORCE) # Turn off utils master switch if only specific ones are needed? Check Daxa docs. Assuming ON is fine.
+FetchContent_MakeAvailable(daxa)
+message(STATUS "Mycelium: Using Daxa source from ${daxa_SOURCE_DIR}")
+
+# --- Find vcpkg Dependencies ---
+# vcpkg should handle finding these via the toolchain file
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED COMPONENTS glfw-binding docking-experimental) # Specify components
+
+# --- Source Files ---
+# Glob sources - consider listing explicitly for better control if needed
+file(GLOB_RECURSE MYCELIUM_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp" # Headers often not needed, but included in original
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/scripting/**/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/scripting/**/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.hpp"
 )
 
-# Add ANTLR generated sources
+# ANTLR Generated Sources (Assuming they land here - adjust path if needed)
+# This part might require running the ANTLR generator first.
+# For now, let's assume they are pre-generated or handled by another process.
+# If ANTLR generation needs to be part of CMake, add custom commands.
+set(ANTLR_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/antlr") # Example output dir
 file(GLOB_RECURSE ANTLR_GENERATED_SRC "${ANTLR_GENERATED_DIR}/*.cpp")
+# Add include directory for generated headers
+include_directories(${ANTLR_GENERATED_DIR})
 
-# Create static library
+# --- Library Definition ---
 add_library(Mycelium STATIC
-    ${ENGINE_ONLY_SRC}
-    ${ANTLR_GENERATED_SRC} # Add generated parser/lexer sources
+    ${MYCELIUM_SRC}
+    # ANTLR runtime sources will be linked via target_link_libraries
+    # AngelScript sources will be linked via target_link_libraries
+    # Add ANTLR generated sources if globbed above
+    ${ANTLR_GENERATED_SRC}
 )
 
-# --- AngelScript MSVC x64 Assembly Handling ---
-if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-    # Initialize a variable to hold the ml64 path
-    set(ML64 "ML64-NOTFOUND")
-    
-    # Try to find ml64 in PATH first (works if CMake is run from Developer Command Prompt)
-    find_program(ML64_IN_PATH ml64)
-    if(ML64_IN_PATH)
-        set(ML64 ${ML64_IN_PATH})
-    else()
-        # Try to use vswhere to locate Visual Studio installation
-        find_program(VSWHERE vswhere 
-            PATHS "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer" 
-            "$ENV{ProgramFiles}/Microsoft Visual Studio/Installer")
-            
-        if(VSWHERE)
-            # Use vswhere to find the latest Visual Studio installation path
-            execute_process(
-                COMMAND ${VSWHERE} -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-                OUTPUT_VARIABLE VS_INSTALL_DIR
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-            
-            if(VS_INSTALL_DIR)
-                # Find the MSVC tools version directory
-                file(GLOB MSVC_TOOLS_DIRS "${VS_INSTALL_DIR}/VC/Tools/MSVC/*")
-                if(MSVC_TOOLS_DIRS)
-                    # Get the latest version (assuming directory naming is consistent)
-                    list(SORT MSVC_TOOLS_DIRS)
-                    list(GET MSVC_TOOLS_DIRS -1 LATEST_MSVC_TOOLS_DIR)
-                    
-                    # Check if ml64.exe exists
-                    set(ML64_CANDIDATE "${LATEST_MSVC_TOOLS_DIR}/bin/Hostx64/x64/ml64.exe")
-                    if(EXISTS "${ML64_CANDIDATE}")
-                        set(ML64 "${ML64_CANDIDATE}")
-                    endif()
-                endif()
-            endif()
-        endif()
-        
-        # Fallback method: Try to run vcvarsall.bat to query for ml64
-        if(NOT ML64 OR NOT EXISTS "${ML64}")
-            # Try to find vcvarsall.bat in common locations
-            file(GLOB VS_INSTALLATIONS 
-                "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/*/[Community,Professional,Enterprise]/VC/Auxiliary/Build"
-                "$ENV{ProgramFiles}/Microsoft Visual Studio/*/[Community,Professional,Enterprise]/VC/Auxiliary/Build")
-                
-            if(VS_INSTALLATIONS)
-                list(GET VS_INSTALLATIONS 0 VS_DIR)
-                if(EXISTS "${VS_DIR}/vcvarsall.bat")
-                    # Create a temporary batch file to help find ml64
-                    set(TEMP_BATCH_FILE "${CMAKE_BINARY_DIR}/find_ml64.bat")
-                    file(WRITE ${TEMP_BATCH_FILE} "
-                        @echo off
-                        call \"${VS_DIR}/vcvarsall.bat\" x64 > nul
-                        where ml64
-                    ")
-                    
-                    execute_process(
-                        COMMAND ${CMAKE_COMMAND} -E env "${TEMP_BATCH_FILE}"
-                        OUTPUT_VARIABLE ML64_WHERE_OUTPUT
-                        OUTPUT_STRIP_TRAILING_WHITESPACE
-                        ERROR_QUIET
-                    )
-                    
-                    # Extract first line of where output
-                    if(ML64_WHERE_OUTPUT)
-                        string(REGEX REPLACE "\r?\n.*$" "" ML64_PATH "${ML64_WHERE_OUTPUT}")
-                        if(EXISTS "${ML64_PATH}")
-                            set(ML64 "${ML64_PATH}")
-                        endif()
-                    endif()
-                endif()
-            endif()
-        endif()
-    endif()
-    
-    # Check if we found ml64
-    if(NOT ML64 OR NOT EXISTS "${ML64}")
-        message(STATUS "ML64 not found. Using AngelScript AS_MAX_PORTABILITY.")
-        target_compile_definitions(Mycelium PRIVATE AS_MAX_PORTABILITY)
-    else()
-        message(STATUS "Found ML64: ${ML64}")
-        set(ASM_FILE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_msvc_asm.asm")
-        set(ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_msvc_asm.obj")
+# --- AngelScript Assembly Handling ---
+set(AS_USE_ASSEMBLY FALSE)
+set(AS_ASM_FILE "")
+set(AS_ASM_OBJ "")
 
-        # Ensure custom command uses correct paths and VERBATIM
-        add_custom_command(
-            OUTPUT ${ASM_OBJ}
-            COMMAND ${ML64} /c /nologo /Fo${ASM_OBJ} /W3 /Zi /Ta ${ASM_FILE}
-            DEPENDS ${ASM_FILE}
-            COMMENT "Assembling ${ASM_FILE}"
-            VERBATIM
-        )
-        # Add the generated object file to the library sources
-        target_sources(Mycelium PRIVATE ${ASM_OBJ})
+if(CMAKE_SIZEOF_VOID_P EQUAL 8) # Only for 64-bit
+    if(MSVC)
+        set(AS_ASM_FILE_CANDIDATE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_msvc_asm.asm")
+        if(EXISTS "${AS_ASM_FILE_CANDIDATE}")
+            # Find ml64.exe (simplified find logic - assumes it's in PATH via Dev Prompt or VS setup)
+            find_program(ML64_EXECUTABLE ml64)
+            if(ML64_EXECUTABLE)
+                message(STATUS "Found ml64 for AngelScript assembly: ${ML64_EXECUTABLE}")
+                set(AS_ASM_FILE "${AS_ASM_FILE_CANDIDATE}")
+                set(AS_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_msvc_asm.obj")
+                add_custom_command(
+                    OUTPUT ${AS_ASM_OBJ}
+                    COMMAND ${ML64_EXECUTABLE} /c /nologo /Fo${AS_ASM_OBJ} /W3 /Zi /Ta ${AS_ASM_FILE}
+                    DEPENDS ${AS_ASM_FILE}
+                    COMMENT "Assembling AngelScript MSVC x64: ${AS_ASM_FILE}"
+                    VERBATIM)
+                set(AS_USE_ASSEMBLY TRUE)
+            else()
+                message(WARNING "ml64.exe not found in PATH. AngelScript assembly optimizations disabled for MSVC.")
+            endif()
+        endif()
+    elseif(CMAKE_SYSTEM_NAME MATCHES "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        set(AS_ASM_FILE_CANDIDATE "${angelscript_SOURCE_DIR}/sdk/angelscript/source/as_callfunc_x64_gcc.S")
+        if(EXISTS "${AS_ASM_FILE_CANDIDATE}")
+            message(STATUS "Found GCC/Clang compatible AngelScript assembly: ${AS_ASM_FILE_CANDIDATE}")
+            set(AS_ASM_FILE "${AS_ASM_FILE_CANDIDATE}")
+            set(AS_ASM_OBJ "${CMAKE_CURRENT_BINARY_DIR}/as_callfunc_x64_gcc.o")
+            # Use CMAKE_ASM_COMPILER (CMake should find assembler associated with C/CXX compiler)
+            add_custom_command(
+                OUTPUT ${AS_ASM_OBJ}
+                COMMAND ${CMAKE_ASM_COMPILER} ${CMAKE_ASM_FLAGS} -c ${AS_ASM_FILE} -o ${AS_ASM_OBJ}
+                DEPENDS ${AS_ASM_FILE}
+                COMMENT "Assembling AngelScript GCC/Clang x64: ${AS_ASM_FILE}"
+                VERBATIM)
+            set(AS_USE_ASSEMBLY TRUE)
+        endif()
+    # Add elif for macOS Clang if needed (might use the same .S file)
+    # elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang") ...
     endif()
 endif()
-# --- End AngelScript MSVC ---
 
-# Configure project_paths.h
-# Assume project_paths.h.in is in Mycelium/include/
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/include/project_paths.h"
+if(AS_USE_ASSEMBLY)
+    target_sources(Mycelium PRIVATE ${AS_ASM_OBJ})
+    message(STATUS "AngelScript assembly optimizations enabled.")
+else()
+    target_compile_definitions(Mycelium PRIVATE AS_MAX_PORTABILITY)
+    message(STATUS "AngelScript assembly optimizations disabled (using AS_MAX_PORTABILITY).")
+endif()
+
+# --- Include Directories ---
+target_include_directories(Mycelium PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Public headers
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include> # Generated headers (like project_paths.h)
+    $<INSTALL_INTERFACE:include> # Install interface
+    # Dependencies' public includes
+    $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/angelscript/include>
+    $<BUILD_INTERFACE:${angelscript_SOURCE_DIR}/sdk/> # Add AngelScript SDK root (includes add_on)
+    $<BUILD_INTERFACE:${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src> # ANTLR runtime includes
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # Add Mycelium sources to public interface
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> # Add Mycelium resources to public interface
+    # Daxa, glfw, glm, fmt, imgui includes are handled by find_package and target_link_libraries
+)
+target_include_directories(Mycelium PRIVATE
+    # ${CMAKE_CURRENT_SOURCE_DIR}/src # Moved to PUBLIC
+    # ${CMAKE_CURRENT_SOURCE_DIR}/resources # Moved to PUBLIC
 )
 
-# Define Include Directories for Mycelium
-target_include_directories(Mycelium
-    PUBLIC # Things users of Mycelium need
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/resources
-        ${CMAKE_CURRENT_SOURCE_DIR}/resources/shaders
-        ${CMAKE_CURRENT_BINARY_DIR}/include
-        ${PROJECT_BINARY_DIR}/include
-        ${ANTLR_GENERATED_DIR}
-        ${antlr_SOURCE_DIR}/runtime/Cpp/runtime/src # Ensure ANTLR include dir is public
-        ${angelscript_SOURCE_DIR}/sdk/angelscript/include
-        ${angelscript_SOURCE_DIR}/sdk/
+# --- Compile Definitions ---
+target_compile_definitions(Mycelium PUBLIC
+    ANTLR4CPP_STATIC # For static ANTLR runtime build
+    # Add other necessary public definitions
+)
+target_compile_definitions(Mycelium PRIVATE
+    # Add private definitions
 )
 
-# Add compile definition for static ANTLR build
-target_compile_definitions(Mycelium PUBLIC ANTLR4CPP_STATIC)
-
-# Force include <chrono> for MSVC to fix ANTLR build issues
+# --- Compile Options ---
+# Force include <chrono> for MSVC ANTLR fix (from original)
 if(MSVC)
     target_compile_options(Mycelium PRIVATE /FI"chrono")
 endif()
 
-# Find and link dependencies (Daxa is now built via FetchContent)
-find_package(glfw3 CONFIG REQUIRED)
-# find_package(daxa CONFIG REQUIRED) # Removed: Daxa is built via FetchContent in deps.cmake
-find_package(glm CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-
-# Link dependencies
-target_link_libraries(Mycelium
-    PUBLIC
-        glfw # Assuming glfw provides 'glfw' target
-        daxa::daxa # Link against the FetchContent-built Daxa target
-        glm::glm # Standard target for glm
-        fmt::fmt # Standard target for fmt
-        imgui::imgui # Standard target for imgui
-        # ANTLR linked via source files now
+# --- Linking ---
+target_link_libraries(Mycelium PUBLIC
+    # vcpkg dependencies
+    glfw # Try simpler target name based on vcpkg output example
+    glm::glm
+    fmt::fmt
+    imgui::imgui # Use target provided by find_package(imgui)
+    # FetchContent dependencies (Daxa provides a target)
+    daxa::daxa
+    # Link ANTLR runtime library target created by FetchContent
+    antlr4_runtime # Assuming this is the target name ANTLR creates
+    # Link AngelScript library target created by FetchContent
+    angelscript # Assuming this is the target name AngelScript creates
 )
+
+# --- Configure project_paths.h ---
+# Assumes project_paths.h.in is in Mycelium/include/
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/project_paths.h"
+    @ONLY # Process only @VAR@ variables if used
+)
+
+message(STATUS "Mycelium library configuration complete.")

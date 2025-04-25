@@ -1,22 +1,85 @@
 {
+    // --- General Settings ---
     "files.exclude": {
-        "cmake": true,
-        "lib": true,
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        // Exclude build directories based on presets
+        "build": true, // General build folder if used
+        "out": true, // Common output folder
+        "**/build/*": true, // More specific build folders
+        // Exclude dependency source/build folders if desired
+        "lib": true, // If vcpkg/FetchContent land here and are noisy
+        "_deps": true // Common FetchContent build dir name
     },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/build/**": true, // Exclude build dirs from watcher
+        "**/out/**": true,
+        "**/_deps/**": true,
+        "**/lib/**": true
+    },
+    "editor.formatOnSave": true, // Keep format on save if preferred
+    // --- CMake Tools Configuration ---
+    "cmake.configureOnOpen": true, // Automatically configure when opening the folder
+    // Let presets handle build directory, generator, etc.
+    // "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}", // Example if not using presets fully
     "cmake.debugConfig": {
-        "cwd": "${workspaceFolder}"
+        "cwd": "${workspaceFolder}/build" // Or adjust CWD if needed for debugging
+        // Add specific args or environment vars for debugging if necessary
     },
-    "editor.formatOnSave": true,
-    "C_Cpp.autoAddFileAssociations": false,
+    // --- C/C++ Extension Configuration ---
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools", // Use CMake Tools for IntelliSense config
+    "C_Cpp.intelliSenseEngine": "default", // Use Default engine (required for cmake-tools provider)
+    // --- Clang-Tidy Integration ---
+    "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+    "C_Cpp.codeAnalysis.clangTidy.path": "clang-tidy", // Assumes clang-tidy is in PATH
+    // If clang-tidy is NOT in PATH, provide the full path:
+    // "C_Cpp.codeAnalysis.clangTidy.path": "C:/path/to/llvm/bin/clang-tidy.exe",
+    "C_Cpp.codeAnalysis.clangTidy.checks.useBuildPath": true, // Use checks from .clang-tidy in workspace root
+    "C_Cpp.codeAnalysis.clangTidy.headerFilter": ".*", // Analyze headers too (can be noisy, adjust if needed e.g., "${workspaceFolder}/(Mycelium|PrismEngine)/.*")
+    "C_Cpp.codeAnalysis.clangTidy.args": [
+        // Add extra args if needed, e.g., "-p=${buildPath}" is usually handled automatically
+    ],
+    "C_Cpp.codeAnalysis.runAutomatically": true, // Run analysis automatically
+    // --- Formatting ---
+    // Keep existing AStyle settings if preferred, or switch to clang-format
     "astyle.astylerc": "${workspaceFolder}/.astylerc",
     "astyle.additional_languages": [
         "angelscript",
         "as"
     ],
     "[cpp]": {
+        // Choose one formatter:
         "editor.defaultFormatter": "chiehyu.vscode-astyle"
+        // "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd" // If using clangd
+        // "editor.defaultFormatter": "ms-vscode.cpptools" // If using C/C++ extension formatter + .clang-format
+    },
+    "[c]": { // Add for C files if any
+        "editor.defaultFormatter": "chiehyu.vscode-astyle"
+        // "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+        // "editor.defaultFormatter": "ms-vscode.cpptools"
     },
     "[angelscript]": {
         "editor.defaultFormatter": "chiehyu.vscode-astyle"
     }
+    // Optional: If using clangd extension instead of C/C++ extension for language features
+    // "clangd.path": "clangd", // Assumes clangd is in PATH
+    // "clangd.arguments": [
+    //     "--compile-commands-dir=${workspaceFolder}/build", // Point to compile commands
+    //     "--clang-tidy", // Enable clang-tidy checks via clangd
+    //     "--header-insertion=iwyu",
+    //     "-j=12" // Number of worker threads
+    // ],
+    // "[cpp]": {
+    //     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    // },
+    // "[c]": {
+    //     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
+    // }
 }

@@ -1,78 +1,47 @@
 {
+    // Use CMake Tools commands which respect the selected preset
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Ensure Build Directory",
-            "type": "shell",
-            "windows": {
-                "command": "powershell",
-                "args": [
-                    "-Command",
-                    "if (!(Test-Path -Path '${workspaceFolder}/build/Debug')) { New-Item -ItemType Directory -Force -Path '${workspaceFolder}/build/Debug'; cd '${workspaceFolder}/build/Debug'; cmake '${workspaceFolder}' -DCMAKE_BUILD_TYPE=Debug }"
-                ]
-            },
-            "linux": {
-                "command": "bash",
-                "args": [
-                    "-c",
-                    "mkdir -p '${workspaceFolder}/build/Debug' && if [ ! -f '${workspaceFolder}/build/Debug/CMakeCache.txt' ]; then cd '${workspaceFolder}/build/Debug' && cmake '${workspaceFolder}' -DCMAKE_BUILD_TYPE=Debug; fi"
-                ]
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            },
-            "problemMatcher": []
+            "label": "CMake: Configure",
+            "type": "cmake",
+            "command": "configure",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "build",
+            "detail": "Run CMake configure using the selected preset."
         },
         {
-            "label": "Build PrismEngine",
-            "type": "shell",
-            "windows": {
-                "command": "cmake",
-                "options": {
-                    "env": {
-                        "PATH": "${env:PATH};C:\\Program Files\\CMake\\bin"
-                    }
-                },
-                "args": [
-                    "--build",
-                    "${workspaceFolder}/build/Debug",
-                    "--config",
-                    "Debug",
-                    "--parallel",
-                    "22",
-                    "--target",
-                    "PrismEngine"
-                ]
-            },
-            "linux": {
-                "command": "cd",
-                "args": [
-                    "${workspaceFolder}/build/Debug",
-                    "&&",
-                    "make",
-                    "-j22",
-                    "PrismEngine"
-                ]
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "dependsOn": [
-                "Ensure Build Directory"
+            "label": "CMake: Build",
+            "type": "cmake",
+            "command": "build",
+            "args": [
+                "--parallel", // Use available cores
+                "22" // Keep your parallel setting
             ],
             "problemMatcher": [
                 "$gcc"
             ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "shared",
-                "showReuseMessage": true,
-                "clear": false
-            }
+            "group": {
+                "kind": "build",
+                "isDefault": true // Make this the default build task (Ctrl+Shift+B)
+            },
+            "detail": "Build the default target using the selected preset."
+        },
+        {
+            "label": "CMake: Clean Reconfigure",
+            "type": "cmake",
+            "command": "cleanReconfigure",
+            "problemMatcher": [],
+            "detail": "Delete cache and reconfigure using the selected preset."
+        },
+        {
+            "label": "CMake: Clean",
+            "type": "cmake",
+            "command": "clean",
+            "problemMatcher": [],
+            "detail": "Clean the build directory of the selected preset."
         }
     ]
 }
