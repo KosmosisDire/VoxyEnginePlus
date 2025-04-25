@@ -20,7 +20,7 @@ add_executable(${PROJECT_NAME} ${PRISM_ENGINE_SRC})
 # Include directories needed specifically by PrismEngine sources
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    # Add other private include paths if necessary
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources"
 )
 
 # --- Linking ---
@@ -28,7 +28,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Public/Private linking depends on usage requirements propagation.
 # If PrismEngine doesn't expose Mycelium headers/features in its own interface, PRIVATE is fine.
 # If it does, PUBLIC might be needed, but Mycelium already links its deps PUBLICly. Let's use PRIVATE.
-target_link_libraries(${PROJECT_NAME} PRIVATE Mycelium)
+target_link_libraries(${PROJECT_NAME} PUBLIC Mycelium)
+
+# Add SSE2 support for Clang (needed for intrinsics like in mmintrin.h)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -msse2)
+endif()
 
 # --- Resource Handling ---
 # Define source resource directories (can be relative to CMAKE_SOURCE_DIR)

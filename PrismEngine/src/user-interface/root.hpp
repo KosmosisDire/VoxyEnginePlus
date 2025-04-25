@@ -5,27 +5,29 @@
 
 static bool init = false;
 
-void draw_frame_time(float dt)
+void DrawFrameTime(float dt)
 {
     static float dtAvg = 0.0f;
     dtAvg = dtAvg * 0.99f + dt * 0.01f;
     UITEXT(Text(fmt::format("Frame Time: {:.2f}ms", dtAvg * 1000.0f)));
 }
 
-void draw_camera_pos(const CameraData& camera)
+void DrawCameraPos(const CameraData& camera)
 {
     UITEXT(Text(fmt::format("Camera Pos: {:.2f}, {:.2f}, {:.2f}", camera.position.x, camera.position.y, camera.position.z)));
 }
 
 
-void init_pages(UIData& data)
+void InitPages(UIData& data)
 {
-    data.pages["Menu"] = {
+    data.pages["Menu"] =
+    {
         .isActive = false,
         .render_page = draw_menu_page
     };
 
-    data.pages["Settings"] = {
+    data.pages["Settings"] =
+    {
         .isActive = true,
         .render_page = draw_settings_page
     };
@@ -33,25 +35,24 @@ void init_pages(UIData& data)
     init = true;
 }
 
-void draw_root_ui(UIData& data, UIInputs input)
+void DrawRootUI(UIData& data, UIInputs input)
 {
     if (!init)
     {
-        init_pages(data);
+        InitPages(data);
     }
 
     UI(Element("Root")
-    .grow()
-    .centerContent())
+       .grow()
+       .centerContent())
     {
         // display frame time in top corner
         UI(Element("FloatingCorner")
-        .floatingAttachPoint(AttachPointType::RightTop)
-        .floatingOffset(-10, 10)
-        .direction(FlowDirection::TopToBottom))
+           .floatingAttachPoint(AttachPointType::RightTop)
+           .floatingOffset(-10, 10)
+           .direction(FlowDirection::TopToBottom))
         {
-            draw_frame_time(input.deltaTime);
-            draw_camera_pos(data.renderData->camera);
+            DrawFrameTime(input.deltaTime);
         }
 
         if (!data.mouseIsActive) continue; // is this how this should be used?

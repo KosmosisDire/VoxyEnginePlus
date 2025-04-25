@@ -3,19 +3,13 @@
     "configurations": [
         {
             "name": "CMake: Debug Target", // Generic name
-            "type": "cppvsdbg", // Switch back to Visual Studio Debugger
+            "type": "cppvsdbg",
             "request": "launch",
-            // Use CMake Tools commands to get path and CWD dynamically
             "program": "${command:cmake.launchTargetPath}",
-            "args": [],
-            "stopAtEntry": false,
             "cwd": "${command:cmake.launchTargetDirectory}",
-            "environment": [], // Add environment variables if needed
-            "externalConsole": false, // Preference: set to true for separate console
-            // MIMode, miDebuggerPath, and setupCommands are not used by cppvsdbg
-            // Use the default CMake build task we defined in tasks.json
+            "MIMode": "lldb",
+            "miDebuggerPath": "C:\\Program Files\\LLVM\\bin\\lldb.exe",
             "preLaunchTask": "CMake: Build"
         }
-        // Add other configurations if needed, e.g., attaching to process
     ]
 }

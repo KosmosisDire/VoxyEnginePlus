@@ -27,55 +27,23 @@
     "editor.formatOnSave": true, // Keep format on save if preferred
     // --- CMake Tools Configuration ---
     "cmake.configureOnOpen": true, // Automatically configure when opening the folder
-    // Let presets handle build directory, generator, etc.
-    // "cmake.buildDirectory": "${workspaceFolder}/build/${buildType}", // Example if not using presets fully
     "cmake.debugConfig": {
         "cwd": "${workspaceFolder}/build" // Or adjust CWD if needed for debugging
         // Add specific args or environment vars for debugging if necessary
     },
-    // --- C/C++ Extension Configuration ---
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools", // Use CMake Tools for IntelliSense config
-    "C_Cpp.intelliSenseEngine": "default", // Use Default engine (required for cmake-tools provider)
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/clang-debug/compile_commands.json", // Explicit path for clang-tidy
-    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
     // --- Clang-Tidy Integration ---
     "C_Cpp.codeAnalysis.clangTidy.enabled": true,
-    "C_Cpp.codeAnalysis.clangTidy.path": "clang-tidy", // Assumes clang-tidy is in PATH
-    "C_Cpp.codeAnalysis.clangTidy.headerFilter": ".*", // Analyze headers too (can be noisy, adjust if needed e.g., "${workspaceFolder}/(Mycelium|PrismEngine)/.*")
+    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": false, // Use .clang-tidy from workspace root
     "C_Cpp.codeAnalysis.runAutomatically": true, // Run analysis automatically
     // --- Formatting ---
-    // Keep existing AStyle settings if preferred, or switch to clang-format
     "astyle.astylerc": "${workspaceFolder}/.astylerc",
-    "astyle.additional_languages": [
-        "angelscript",
-        "as"
-    ],
     "[cpp]": {
-        // Choose one formatter:
         "editor.defaultFormatter": "chiehyu.vscode-astyle"
-        // "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd" // If using clangd
-        // "editor.defaultFormatter": "ms-vscode.cpptools" // If using C/C++ extension formatter + .clang-format
     },
-    "[c]": { // Add for C files if any
+    "[c]": {
         "editor.defaultFormatter": "chiehyu.vscode-astyle"
-        // "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
-        // "editor.defaultFormatter": "ms-vscode.cpptools"
     },
     "[angelscript]": {
         "editor.defaultFormatter": "chiehyu.vscode-astyle"
     }
-    // Optional: If using clangd extension instead of C/C++ extension for language features
-    // "clangd.path": "clangd", // Assumes clangd is in PATH
-    // "clangd.arguments": [
-    //     "--compile-commands-dir=${workspaceFolder}/build", // Point to compile commands
-    //     "--clang-tidy", // Enable clang-tidy checks via clangd
-    //     "--header-insertion=iwyu",
-    //     "-j=12" // Number of worker threads
-    // ],
-    // "[cpp]": {
-    //     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
-    // },
-    // "[c]": {
-    //     "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
-    // }
 }

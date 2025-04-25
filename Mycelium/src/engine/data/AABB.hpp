@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <string>
-#include <limits>
 #include <daxa/daxa.hpp>
 #include "Vector3.hpp" // Assuming Vector3 is in this header
 
@@ -19,28 +18,28 @@ struct AABB
     constexpr AABB(const AABB& other) = default;
 
     // Static factory methods
-    static constexpr AABB zero() { return AABB(Vector3::zero(), Vector3::zero()); }
+    static constexpr AABB Zero() { return AABB(Vector3::zero(), Vector3::zero()); }
 
-    static constexpr AABB cube(float size)
+    static constexpr AABB Cube(float size)
     {
         Vector3 half = Vector3(size * 0.5f, size * 0.5f, size * 0.5f);
         return AABB(-half, half);
     }
 
-    static constexpr AABB fromCenterSize(const Vector3& center, const Vector3& size)
+    static constexpr AABB FromCenterSize(const Vector3& center, const Vector3& size)
     {
         Vector3 halfSize = size * 0.5f;
         return AABB(center - halfSize, center + halfSize);
     }
 
-    static constexpr AABB fromExtents(const Vector3& center, const Vector3& extents)
+    static constexpr AABB FromExtents(const Vector3& center, const Vector3& extents)
     {
         return AABB(center - extents, center + extents);
     }
 
-    static constexpr AABB fromPoints(const Vector3* points, size_t count)
+    static constexpr AABB FromPoints(const Vector3* points, size_t count)
     {
-        if (count == 0) return AABB::zero();
+        if (count == 0) return AABB::Zero();
 
         Vector3 min = points[0];
         Vector3 max = points[0];
@@ -96,60 +95,60 @@ struct AABB
     }
 
     // Utility methods
-    [[nodiscard]] constexpr Vector3 center() const
+    [[nodiscard]] constexpr Vector3 Center() const
     {
         return (min + max) * 0.5f;
     }
 
-    [[nodiscard]] constexpr Vector3 size() const
+    [[nodiscard]] constexpr Vector3 Size() const
     {
         return max - min;
     }
 
-    [[nodiscard]] constexpr Vector3 extents() const
+    [[nodiscard]] constexpr Vector3 Extents() const
     {
         return (max - min) * 0.5f;
     }
 
-    [[nodiscard]] constexpr float volume() const
+    [[nodiscard]] constexpr float Volume() const
     {
-        Vector3 s = size();
+        Vector3 s = Size();
         return s.x * s.y * s.z;
     }
 
-    [[nodiscard]] constexpr float surfaceArea() const
+    [[nodiscard]] constexpr float SurfaceArea() const
     {
-        Vector3 s = size();
+        Vector3 s = Size();
         return 2.0f * (s.x * s.y + s.y * s.z + s.z * s.x);
     }
 
-    [[nodiscard]] constexpr bool isValid() const
+    [[nodiscard]] constexpr bool IsValid() const
     {
         return min.x <= max.x && min.y <= max.y && min.z <= max.z;
     }
 
-    [[nodiscard]] constexpr bool contains(const Vector3& point) const
+    [[nodiscard]] constexpr bool Contains(const Vector3& point) const
     {
         return point.x >= min.x && point.x <= max.x &&
                point.y >= min.y && point.y <= max.y &&
                point.z >= min.z && point.z <= max.z;
     }
 
-    [[nodiscard]] constexpr bool contains(const AABB& other) const
+    [[nodiscard]] constexpr bool Contains(const AABB& other) const
     {
         return other.min.x >= min.x && other.max.x <= max.x &&
                other.min.y >= min.y && other.max.y <= max.y &&
                other.min.z >= min.z && other.max.z <= max.z;
     }
 
-    [[nodiscard]] constexpr bool intersects(const AABB& other) const
+    [[nodiscard]] constexpr bool Intersects(const AABB& other) const
     {
         return min.x <= other.max.x && max.x >= other.min.x &&
                min.y <= other.max.y && max.y >= other.min.y &&
                min.z <= other.max.z && max.z >= other.min.z;
     }
 
-    [[nodiscard]] constexpr AABB intersection(const AABB& other) const
+    [[nodiscard]] constexpr AABB Intersection(const AABB& other) const
     {
         Vector3 newMin(
             std::max(min.x, other.min.x),
@@ -172,12 +171,12 @@ struct AABB
         return AABB(newMin, newMax);
     }
 
-    [[nodiscard]] constexpr AABB expanded(const Vector3& amount) const
+    [[nodiscard]] constexpr AABB Expanded(const Vector3& amount) const
     {
         return AABB(min - amount, max + amount);
     }
 
-    [[nodiscard]] constexpr AABB merged(const AABB& other) const
+    [[nodiscard]] constexpr AABB Merged(const AABB& other) const
     {
         Vector3 newMin(
             std::min(min.x, other.min.x),
@@ -194,7 +193,7 @@ struct AABB
         return AABB(newMin, newMax);
     }
 
-    void encapsulate(const Vector3& point)
+    void Encapsulate(const Vector3& point)
     {
         min.x = std::min(min.x, point.x);
         min.y = std::min(min.y, point.y);
@@ -205,7 +204,7 @@ struct AABB
         max.z = std::max(max.z, point.z);
     }
 
-    void encapsulate(const AABB& other)
+    void Encapsulate(const AABB& other)
     {
         min.x = std::min(min.x, other.min.x);
         min.y = std::min(min.y, other.min.y);
@@ -216,7 +215,7 @@ struct AABB
         max.z = std::max(max.z, other.max.z);
     }
 
-    [[nodiscard]] Vector3 closestPoint(const Vector3& point) const
+    [[nodiscard]] Vector3 ClosestPoint(const Vector3& point) const
     {
         return Vector3(
                    std::max(min.x, std::min(point.x, max.x)),
@@ -225,7 +224,7 @@ struct AABB
                );
     }
 
-    [[nodiscard]] float sqrDistance(const Vector3& point) const
+    [[nodiscard]] float SqrDistance(const Vector3& point) const
     {
         float sqDist = 0.0f;
 
@@ -244,12 +243,12 @@ struct AABB
         return sqDist;
     }
 
-    [[nodiscard]] float distance(const Vector3& point) const
+    [[nodiscard]] float Distance(const Vector3& point) const
     {
-        return std::sqrt(sqrDistance(point));
+        return std::sqrt(SqrDistance(point));
     }
 
-    [[nodiscard]] bool raycast(const Vector3& origin, const Vector3& direction, float& tMin, float& tMax) const
+    [[nodiscard]] bool Raycast(const Vector3& origin, const Vector3& direction, float& tMin, float& tMax) const
     {
         float t0x = (min.x - origin.x) / direction.x;
         float t1x = (max.x - origin.x) / direction.x;
@@ -279,7 +278,7 @@ struct AABB
     }
 
     // String conversion
-    [[nodiscard]] std::string toString() const
+    [[nodiscard]] std::string ToString() const
     {
         return "AABB(min: " + min.toString() + ", max: " + max.toString() + ")";
     }
@@ -291,12 +290,12 @@ struct AABB
         daxa_f32vec3 max;
     };
 
-    [[nodiscard]] DaxaAABB toDaxa() const
+    [[nodiscard]] DaxaAABB ToDaxa() const
     {
         return DaxaAABB{min.toDaxa(), max.toDaxa()};
     }
 
-    static AABB fromDaxa(const DaxaAABB& aabb)
+    static AABB FromDaxa(const DaxaAABB& aabb)
     {
         return AABB(Vector3::fromDaxa(aabb.min), Vector3::fromDaxa(aabb.max));
     }

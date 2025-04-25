@@ -55,16 +55,10 @@ target_include_directories(Mycelium PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> # Public headers
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include> # Generated headers (like project_paths.h)
     $<INSTALL_INTERFACE:include> # Install interface
-    # Dependencies' public includes
-    # AngelScript removed
-    # ANTLR removed
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> # Add Mycelium sources to public interface
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> # Add Mycelium resources to public interface
-    # Daxa, glfw, glm, fmt, imgui includes are handled by find_package and target_link_libraries
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> 
 )
 target_include_directories(Mycelium PRIVATE
-    # ${CMAKE_CURRENT_SOURCE_DIR}/src # Moved to PUBLIC
-    # ${CMAKE_CURRENT_SOURCE_DIR}/resources # Moved to PUBLIC
 )
 
 # --- Compile Definitions ---

@@ -1,12 +1,6 @@
 #pragma once
 
-#include "engine.inl"
-#include "const.inl"
-#include "bricks.inl"
-#include "chunks.inl"
-#include "material.inl"
-#include "shared.inl"
-#include "ray.inl"
+#include <shaders/engine.inl>
 
 struct ImageBuffer
 {

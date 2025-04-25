@@ -22,25 +22,25 @@ struct Color
     constexpr Color(const Color& other) = default;
 
     // Static factory methods for common colors
-    static constexpr Color black() { return Color(0.0f, 0.0f, 0.0f); }
+    static constexpr Color Black() { return Color(0.0f, 0.0f, 0.0f); }
 
-    static constexpr Color white() { return Color(1.0f, 1.0f, 1.0f); }
+    static constexpr Color White() { return Color(1.0f, 1.0f, 1.0f); }
 
-    static constexpr Color red() { return Color(1.0f, 0.0f, 0.0f); }
+    static constexpr Color Red() { return Color(1.0f, 0.0f, 0.0f); }
 
-    static constexpr Color green() { return Color(0.0f, 1.0f, 0.0f); }
+    static constexpr Color Green() { return Color(0.0f, 1.0f, 0.0f); }
 
-    static constexpr Color blue() { return Color(0.0f, 0.0f, 1.0f); }
+    static constexpr Color Blue() { return Color(0.0f, 0.0f, 1.0f); }
 
-    static constexpr Color yellow() { return Color(1.0f, 1.0f, 0.0f); }
+    static constexpr Color Yellow() { return Color(1.0f, 1.0f, 0.0f); }
 
-    static constexpr Color cyan() { return Color(0.0f, 1.0f, 1.0f); }
+    static constexpr Color Cyan() { return Color(0.0f, 1.0f, 1.0f); }
 
-    static constexpr Color magenta() { return Color(1.0f, 0.0f, 1.0f); }
+    static constexpr Color Magenta() { return Color(1.0f, 0.0f, 1.0f); }
 
-    static constexpr Color gray() { return Color(0.5f, 0.5f, 0.5f); }
+    static constexpr Color Gray() { return Color(0.5f, 0.5f, 0.5f); }
 
-    static constexpr Color transparent() { return Color(0.0f, 0.0f, 0.0f, 0.0f); }
+    static constexpr Color Transparent() { return Color(0.0f, 0.0f, 0.0f, 0.0f); }
 
     // Basic operators
     constexpr Color operator+(const Color& rhs) const
@@ -127,7 +127,7 @@ struct Color
     }
 
     // Utility methods
-    [[nodiscard]] constexpr Color clamped() const
+    [[nodiscard]] constexpr Color Clamped() const
     {
         return Color(
                    std::clamp(r, 0.0f, 1.0f),
@@ -137,7 +137,7 @@ struct Color
                );
     }
 
-    void clamp()
+    void Clamp()
     {
         r = std::clamp(r, 0.0f, 1.0f);
         g = std::clamp(g, 0.0f, 1.0f);
@@ -146,7 +146,7 @@ struct Color
     }
 
     // Color space conversions
-    [[nodiscard]] static Color fromHSV(float h, float s, float v, float a = 1.0f)
+    [[nodiscard]] static Color FromHSV(float h, float s, float v, float a = 1.0f)
     {
         h = std::fmod(h, 360.0f);
 
@@ -189,7 +189,7 @@ struct Color
         return Color(r + m, g + m, b + m, a);
     }
 
-    [[nodiscard]] void toHSV(float& h, float& s, float& v) const
+    [[nodiscard]] void ToHSV(float& h, float& s, float& v) const
     {
         float cmax = std::max(std::max(r, g), b);
         float cmin = std::min(std::min(r, g), b);
@@ -223,7 +223,7 @@ struct Color
     }
 
     // Color blending
-    [[nodiscard]] static Color lerp(const Color& a, const Color& b, float t)
+    [[nodiscard]] static Color Lerp(const Color& a, const Color& b, float t)
     {
         t = std::clamp(t, 0.0f, 1.0f);
         return Color(
@@ -234,7 +234,7 @@ struct Color
                );
     }
 
-    [[nodiscard]] static Color lerpUnclamped(const Color& a, const Color& b, float t)
+    [[nodiscard]] static Color LerpUnclamped(const Color& a, const Color& b, float t)
     {
         return Color(
                    a.r + (b.r - a.r) * t,
@@ -251,7 +251,7 @@ struct Color
 
         if (outAlpha < 1e-6f)
         {
-            return Color::transparent();
+            return Color::Transparent();
         }
 
         float invOutAlpha = 1.0f / outAlpha;
@@ -304,7 +304,7 @@ struct Color
     [[nodiscard]] Color adjustHue(float degrees) const
     {
         float h, s, v;
-        toHSV(h, s, v);
+        ToHSV(h, s, v);
 
         h += degrees;
 
@@ -312,7 +312,7 @@ struct Color
 
         while (h < 0.0f) h += 360.0f;
 
-        return fromHSV(h, s, v, a);
+        return FromHSV(h, s, v, a);
     }
 
     // Integer color conversions
