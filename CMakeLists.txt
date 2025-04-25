@@ -70,4 +70,39 @@ add_subdirectory(Mycelium)
 # Add main application
 add_subdirectory(PrismEngine)
 
+# --- Create symlink for compile_commands.json ---
+# Ensure this runs after configuration is mostly done and CMAKE_BINARY_DIR is set.
+# Check if the compile_commands.json exists in the build directory
+if(EXISTS "${CMAKE_BINARY_DIR}/compile_commands.json")
+    message(STATUS "Attempting to create symlink for compile_commands.json in project root.")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "${CMAKE_BINARY_DIR}/compile_commands.json"
+                "${CMAKE_SOURCE_DIR}/compile_commands.json"
+        RESULT_VARIABLE symlink_result
+        OUTPUT_VARIABLE symlink_output
+        ERROR_VARIABLE symlink_error
+    )
+    if(NOT symlink_result EQUAL 0)
+        # Don't make it a fatal error, just warn. Permissions might be an issue.
+        message(WARNING "Failed to create symlink for compile_commands.json.")
+        message(WARNING "  Result: ${symlink_result}")
+        # Only show output/error if they are not empty
+        if(NOT "${symlink_output}" STREQUAL "")
+            message(WARNING "  Output: ${symlink_output}")
+        endif()
+        if(NOT "${symlink_error}" STREQUAL "")
+            message(WARNING "  Error: ${symlink_error}")
+        endif()
+        message(WARNING "  You may need to run CMake with administrator privileges (Windows) or create the link manually:")
+        message(WARNING "  mklink \"${CMAKE_SOURCE_DIR}\\compile_commands.json\" \"${CMAKE_BINARY_DIR}\\compile_commands.json\" (Windows Admin CMD)")
+        message(WARNING "  ln -s \"${CMAKE_BINARY_DIR}/compile_commands.json\" \"${CMAKE_SOURCE_DIR}/compile_commands.json\" (Linux/macOS)")
+    else()
+        message(STATUS "Successfully created/updated symlink: ${CMAKE_SOURCE_DIR}/compile_commands.json -> ${CMAKE_BINARY_DIR}/compile_commands.json")
+    endif()
+else()
+    # This might happen on the very first configure run before a build generates the file
+    message(STATUS "compile_commands.json not found in build directory (${CMAKE_BINARY_DIR}). Skipping symlink creation. It should be created on the next configure after a build.")
+endif()
+
 message(STATUS "Root CMake configuration complete.")
