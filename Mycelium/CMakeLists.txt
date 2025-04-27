@@ -1,5 +1,5 @@
 # Mycelium/CMakeLists.txt
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.29)
 
 include(FetchContent)
 
@@ -14,7 +14,6 @@ set(DAXA_ENABLE_UTILS_MEM ON)
 set(DAXA_ENABLE_UTILS_PIPELINE_MANAGER_SLANG ON)
 set(DAXA_ENABLE_UTILS_TASK_GRAPH ON)
 FetchContent_MakeAvailable(daxa)
-message(STATUS "Mycelium: Using Daxa source from ${daxa_SOURCE_DIR}")
 
 # --- Find vcpkg Dependencies ---
 find_package(glfw3 CONFIG REQUIRED)
@@ -22,48 +21,31 @@ find_package(glm CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED COMPONENTS glfw-binding docking-experimental)
 
+# --- Find Slang ---
 find_library(MYCELIUM_SLANG_LIB_PATH slang)
 if(NOT MYCELIUM_SLANG_LIB_PATH)
-    message(FATAL_ERROR "Mycelium: Could not find the Slang shared library (libslang.so / slang.dll). "
-                        "Ensure Slang is installed correctly (e.g., via vcpkg or system) "
-                        "and the CMake environment (toolchain) is set up.")
+    message(FATAL_ERROR "Mycelium: Could not find the Slang shared library (libslang.so / slang.dll). ")
 endif()
-message(STATUS "Mycelium: Found Slang library at ${MYCELIUM_SLANG_LIB_PATH}")
 
-# --- Source Files ---
-# Glob sources - consider listing explicitly for better control if needed
-file(GLOB_RECURSE MYCELIUM_SRC CONFIGURE_DEPENDS
+# --- Source File Collection ---
+file(GLOB_RECURSE MYCELIUM_REGULAR_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp" # Headers often not needed, but included in original
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/**/*.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/**/*.hpp"
-    # Scripting directory removed from sources
 )
 
-# --- Library Definition ---
-add_library(Mycelium STATIC
-    ${MYCELIUM_SRC}
-)
 
-# --- Include Directories ---
+# --- Include Directories --- (Unchanged)
 target_include_directories(Mycelium PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> 
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources> 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/resources>
 )
-target_include_directories(Mycelium PRIVATE
-)
-
-# --- Compile Definitions ---
-target_compile_definitions(Mycelium PUBLIC
-)
-target_compile_definitions(Mycelium PRIVATE
-)
-
 
 # --- Linking ---
 target_link_libraries(Mycelium PUBLIC
@@ -79,7 +61,5 @@ target_link_libraries(Mycelium PUBLIC
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/include/project_paths.h.in"
     "${CMAKE_CURRENT_BINARY_DIR}/include/project_paths.h"
-    @ONLY # Process only @VAR@ variables if used
+    @ONLY
 )
-
-message(STATUS "Mycelium library configuration complete.")
