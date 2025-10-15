@@ -2,12 +2,10 @@
 
 #include "user-interface/root.hpp"
 #include <shaders/shared.inl>
-#include <scripting/scripting.hpp>
 
 #include "voxels/vox-renderer.hpp"
 #include <engine/objects/Application.hpp>
 #include <engine/apis/Input.hpp>
-#include <project_paths.h>
 #include <stdio.h>
 
 struct VoxyApp : public Application
@@ -19,18 +17,13 @@ struct VoxyApp : public Application
         daxa::TaskImage task_render_image;
 
         VoxyApp()
-            : Application("Voxy", {"resources/shaders"}), // use this path instead for dist: "resources/shaders"
-
+            : Application("Voxy", {"resources/shaders"}),
         voxelRenderer(renderer),
         uiState({.renderData = &voxelRenderer.stateData})
         {
             render_image = renderer->CreateRenderImage("game_render_image", &task_render_image);
             voxelRenderer.camera.speed = 6.0f;
             voxelRenderer.camera.sensitivity = 0.05f;
-
-            scriptingEngine.registerProperty("Vector3 sunDir", &voxelRenderer.stateData.sunDir);
-            scriptingEngine.registerProperty("Camera camera", &voxelRenderer.camera);
-            scriptingEngine.registerProperty("float dt", &voxelRenderer.stateData.dt);
         }
 
         ~VoxyApp()
@@ -86,8 +79,40 @@ struct VoxyApp : public Application
                 Input::CaptureMouseResetDelta(true);
             }
 
-            scripts->executeFunction("void Update()");
+            // Camera and input logic (previously from test.as script)
+            HandleCameraControls(dt);
+
             voxelRenderer.Update();
+        }
+
+    private:
+        void HandleCameraControls(float dt)
+        {
+            // Set sun direction to camera forward when L is pressed
+            if (Input::IsKeyPressed(Key::L))
+            {
+                voxelRenderer.stateData.sunDir = (-voxelRenderer.camera.getForward()).toDaxa();
+            }
+
+            // Capture mouse when clicking while not captured
+            if (!Input::IsMouseCaptured() && Input::IsMouseButtonPressed(MouseButton::Left))
+            {
+                Input::CaptureMouse(true);
+            }
+
+            // Release mouse when pressing Escape while captured
+            if (Input::IsMouseCaptured() && Input::IsKeyPressed(Key::Escape))
+            {
+                Input::CaptureMouse(false);
+            }
+
+            // Process camera movement when mouse is captured
+            if (Input::IsMouseCaptured())
+            {
+                voxelRenderer.camera.speed = 30;
+                voxelRenderer.camera.processMouseMovement(-Input::GetMouseDelta(), true);
+                voxelRenderer.camera.processKeyboard(dt);
+            }
         }
 
         void OnResize(u32 sx, u32 sy) override

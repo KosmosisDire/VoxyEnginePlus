@@ -1,7 +1,7 @@
 #pragma once
 #include "daxa/daxa.inl"
 
-static const daxa_u32 GRID_SIZE = 270;
+static const daxa_u32 GRID_SIZE = 60;
 static const daxa_u32 GRID_SIZE_SQUARE = GRID_SIZE * GRID_SIZE;
 static const daxa_u32 GRID_SIZE_CUBE = GRID_SIZE * GRID_SIZE * GRID_SIZE;
 

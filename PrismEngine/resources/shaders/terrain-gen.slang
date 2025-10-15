@@ -91,7 +91,7 @@ float erosion_factor(float2 pos) {
 }
 
 float calculate_terrain_height(float2 position) {
-    float base_height = 64.0f;
+    float base_height = 20.0f;
     
     float continental = plateau_noise(position) * 8.0f;
     float erosion = erosion_factor(position);
