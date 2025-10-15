@@ -112,6 +112,7 @@ class Renderer
             device.wait_idle();
             device.collect_garbage();
             ImGui_ImplGlfw_Shutdown();
+            ImGui::DestroyContext();
         }
 
         void Render()
@@ -523,7 +524,7 @@ class Renderer
 
             return device.create_swapchain({.native_window = native_handle,
                                             .native_window_platform = platform,
-                                            .present_mode = daxa::PresentMode::IMMEDIATE,
+                                            .present_mode = daxa::PresentMode::FIFO,
                                             .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST,
                                             .name = name});
         }

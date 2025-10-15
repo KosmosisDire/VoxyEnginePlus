@@ -17,38 +17,14 @@ struct GBufferCPU
     daxa::ImageId color;
     daxa::ImageId normal;
     daxa::ImageId position;
-    daxa::ImageId voxelIDs;
-    daxa::ImageId voxelFaceIDs;
-    daxa::ImageId materialIDs;
-    daxa::ImageId voxelUVs;
-    daxa::ImageId brickUVs;
-    daxa::ImageId motion;
     daxa::ImageId depth;
     daxa::ImageId ao;
-    daxa::ImageId aoDenoised;
-    daxa::ImageId indirectLight;
-    daxa::ImageId directLight;
-
-    daxa::ImageId history;
-    daxa::ImageId currentFrame;
 
     daxa::TaskImage task_color;
     daxa::TaskImage task_normal;
     daxa::TaskImage task_position;
-    daxa::TaskImage task_voxelIDs;
-    daxa::TaskImage task_voxelFaceIDs;
-    daxa::TaskImage task_materialIDs;
-    daxa::TaskImage task_voxelUVs;
-    daxa::TaskImage task_brickUVs;
-    daxa::TaskImage task_motion;
     daxa::TaskImage task_depth;
     daxa::TaskImage task_ao;
-    daxa::TaskImage task_aoDenoised;
-    daxa::TaskImage task_indirectLight;
-    daxa::TaskImage task_directLight;
-
-    daxa::TaskImage task_history;
-    daxa::TaskImage task_currentFrame;
 
     std::vector<daxa::ImageId> images;
     std::vector<daxa::TaskImage> task_images;
@@ -58,22 +34,11 @@ struct GBufferCPU
         color = renderer.CreateRenderImage("color", &task_color, daxa::Format::R32G32B32A32_SFLOAT);
         normal = renderer.CreateRenderImage("normal", &task_normal, daxa::Format::R16G16B16A16_SFLOAT);
         position = renderer.CreateRenderImage("position", &task_position, daxa::Format::R32G32B32A32_SFLOAT);
-        voxelUVs = renderer.CreateRenderImage("voxelUVs", &task_voxelUVs, daxa::Format::R16G16_SFLOAT);
-        brickUVs = renderer.CreateRenderImage("brickUVs", &task_brickUVs, daxa::Format::R16G16_SFLOAT);
-        motion = renderer.CreateRenderImage("motion", &task_motion, daxa::Format::R32G32_SFLOAT);
         depth = renderer.CreateRenderImage("depth", &task_depth, daxa::Format::R32_SFLOAT, 1);
-        voxelIDs = renderer.CreateRenderImage("voxelIDs", &task_voxelIDs, daxa::Format::R32G32_UINT, 1.0);
-        voxelFaceIDs = renderer.CreateRenderImage("voxelFaceIDs", &task_voxelFaceIDs, daxa::Format::R32_UINT, 1.0);
-        materialIDs = renderer.CreateRenderImage("materialIDs", &task_materialIDs, daxa::Format::R32_UINT, 1.0);
         ao = renderer.CreateRenderImage("ao", &task_ao, daxa::Format::R32_SFLOAT, 0.5);
-        aoDenoised = renderer.CreateRenderImage("aoDenoised", &task_aoDenoised, daxa::Format::R32_SFLOAT, 0.5);
-        indirectLight = renderer.CreateRenderImage("indirectLight", &task_indirectLight, daxa::Format::R32G32B32A32_SFLOAT);
-        directLight = renderer.CreateRenderImage("directLight", &task_directLight, daxa::Format::R32G32B32A32_SFLOAT);
-        history = renderer.CreateRenderImage("history", &task_history, daxa::Format::R32G32B32A32_SFLOAT);
-        currentFrame = renderer.CreateRenderImage("currentFrame", &task_currentFrame, daxa::Format::R32G32B32A32_SFLOAT);
 
-        images = {color, normal, position, voxelUVs, brickUVs, motion, history, depth, voxelIDs, voxelFaceIDs, materialIDs, currentFrame, ao, aoDenoised, indirectLight, directLight};
-        task_images = {task_color, task_normal, task_position, task_voxelUVs, task_brickUVs, task_motion, task_history, task_depth, task_voxelIDs, task_voxelFaceIDs, task_materialIDs, task_currentFrame, task_ao, task_aoDenoised, task_indirectLight, task_directLight};
+        images = {color, normal, position, depth, ao};
+        task_images = {task_color, task_normal, task_position, task_depth, task_ao};
     }
 
     inline void ResizeImages(Renderer &renderer)
@@ -105,19 +70,8 @@ struct GBufferCPU
             .color = color.default_view(),
             .normal = normal.default_view(),
             .position = position.default_view(),
-            .voxelUVs = voxelUVs.default_view(),
-            .brickUVs = brickUVs.default_view(),
-            .motion = motion.default_view(),
             .depth = depth.default_view(),
-            .voxelIDs = voxelIDs.default_view(),
-            .voxelFaceIDs = voxelFaceIDs.default_view(),
-            .materialIDs = materialIDs.default_view(),
             .ao = ao.default_view(),
-            .aoDenoised = aoDenoised.default_view(),
-            .indirectLight = indirectLight.default_view(),
-            .directLight = directLight.default_view(),
-            .history = frame % 2 == 0 ? history.default_view() : currentFrame.default_view(),
-            .currentFrame = frame % 2 == 0 ? currentFrame.default_view() : history.default_view(),
         };
     }
 
@@ -136,7 +90,6 @@ class VoxelRenderer
 
         std::shared_ptr<daxa::ComputePipeline> terrain_compute;
         std::shared_ptr<daxa::ComputePipeline> render_gbuffer_compute;
-        std::shared_ptr<daxa::ComputePipeline> denoise_compute;
         std::shared_ptr<daxa::ComputePipeline> render_composite_compute;
 
         daxa::BufferId chunksBuffer;
@@ -175,7 +128,6 @@ class VoxelRenderer
             .frame = 0,
             .padding = {},
             .camera = {},
-            .lastCamera = {},
             .settings = {},
         };
 
@@ -187,7 +139,6 @@ class VoxelRenderer
         {
             terrain_compute = renderer->AddComputePipeline<ComputePush>("terrain_gen", "terrain-gen.slang");
             render_gbuffer_compute = renderer->AddComputePipeline<ComputePush>("voxel_raymarch", "render-gbuffer.slang");
-            denoise_compute = renderer->AddComputePipeline<ComputePush>("denoise", "denoise.slang");
             render_composite_compute = renderer->AddComputePipeline<ComputePush>("composite", "composite.slang");
 
             // Initialize occupancy buffer
@@ -308,6 +259,7 @@ class VoxelRenderer
         {
             renderer->DestroyBuffer(chunksBuffer);
             renderer->DestroyBuffer(bricksBuffer);
+            renderer->DestroyBuffer(brickPtrBuffer);  // MISSING! This was leaking
             renderer->DestroyBuffer(materialsBuffer);
             renderer->DestroyBuffer(materialPtrBuffer);
             renderer->DestroyBuffer(stateBuffer);
@@ -353,7 +305,6 @@ class VoxelRenderer
             {
                 renderer->CopyToBuffer<GBuffer>(ti, gbufferCPU.GetGPUBuffer(stateData.frame), ti.get(task_gbufferGPU), 0);
 
-                stateData.lastCamera = stateData.camera;
                 stateData.camera = camera.getCameraData();
                 renderer->CopyToBuffer<RenderData>(ti, stateData, ti.get(task_stateBuffer), 0);
             }));
@@ -408,32 +359,34 @@ class VoxelRenderer
                     .materialPtrBuffer = renderer->GetDeviceAddress(ti, task_materialPtrBuffer),
                     .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer),
                     .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
-                    .blueNoiseStatic = blue_noise_images[0].default_view(),
                     .screenSize = {renderer->surface_width, renderer->surface_height}
                 };
 
+                ti.recorder.set_pipeline(*render_gbuffer_compute);
+
+                // Pass 0: Trace rays and write GBuffer
                 push.passNum = 0;
-                ti.recorder.set_pipeline(*render_gbuffer_compute);
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
 
-                // denoise AO
-                ti.recorder.set_pipeline(*denoise_compute);
+                // Memory barrier: GBuffer writes must complete before GTAO reads
+                ti.recorder.pipeline_barrier({
+                    .src_access = daxa::AccessConsts::COMPUTE_SHADER_WRITE,
+                    .dst_access = daxa::AccessConsts::COMPUTE_SHADER_READ_WRITE,
+                });
 
-                for (int i = 1; i <= 5; i++)
-                {
-                    push.passNum = i;
-                    ti.recorder.push_constant(push);
-                    ti.recorder.dispatch({(renderer->surface_width / 2 + 15) / 16, (renderer->surface_height / 2 + 15) / 16});
-                }
-
-                // combine gbuffer
+                // Pass 1: Calculate GTAO from complete GBuffer
                 push.passNum = 1;
-                ti.recorder.set_pipeline(*render_gbuffer_compute);
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
 
-                // TAA
+                // Memory barrier: AO writes must complete before application
+                ti.recorder.pipeline_barrier({
+                    .src_access = daxa::AccessConsts::COMPUTE_SHADER_WRITE,
+                    .dst_access = daxa::AccessConsts::COMPUTE_SHADER_READ_WRITE,
+                });
+
+                // Pass 2: Apply AO to lighting
                 push.passNum = 2;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});

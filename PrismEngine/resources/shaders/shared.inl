@@ -163,7 +163,6 @@ struct RenderData
     // padding
     daxa_f32vec2 padding;
     CameraData camera;
-    CameraData lastCamera;
     GraphicsSettings settings;
 };
 
@@ -231,20 +230,8 @@ struct GBuffer
     daxa_ImageViewId color;
     daxa_ImageViewId normal;
     daxa_ImageViewId position;
-    daxa_ImageViewId voxelUVs;
-    daxa_ImageViewId brickUVs;
-    daxa_ImageViewId motion;
     daxa_ImageViewId depth;
-    daxa_ImageViewId voxelIDs; // global brick id and local voxel id
-    daxa_ImageViewId voxelFaceIDs; // material id
-    daxa_ImageViewId materialIDs; // material id
     daxa_ImageViewId ao; // ambient occlusion
-    daxa_ImageViewId aoDenoised; // ambient occlusion denoised
-    daxa_ImageViewId indirectLight; // indirect light
-    daxa_ImageViewId directLight; // direct light
-
-    daxa_ImageViewId history;
-    daxa_ImageViewId currentFrame;
 };
 
 struct ComputePush
