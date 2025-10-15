@@ -295,6 +295,13 @@ class VoxelRenderer
                 .transparency = 0.0f,
                 .reflectivity = 0.9f,
             };
+            materials_ptr->data[11] = Material // sand
+            {
+                .albedo = {0.76f, 0.70f, 0.50f},
+                .emission = {0.0f, 0.0f, 0.0f},
+                .transparency = 0.0f,
+                .roughness = 0.8f,
+            };
         }
 
         ~VoxelRenderer()

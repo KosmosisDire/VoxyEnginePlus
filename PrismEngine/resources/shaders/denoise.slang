@@ -65,7 +65,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (all(center_pos == float3(0, 0, 0)))
         return;
 
-    if (p.passNum > 2)
+    if (p.passNum > 1)
         return;
 
     float3 center_color;
@@ -89,10 +89,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     float sum_weights = 0.0f;
 
     [unroll]
-    for (int y = -2; y <= 2; y++)
+    for (int y = -1; y <= 1; y++)
     {
         [unroll]
-        for (int x = -2; x <= 2; x++)
+        for (int x = -1; x <= 1; x++)
         {
             int2 offset_pos = int2(pixel) + int2(x, y) * p.passNum;
 
@@ -118,7 +118,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
             if (all(sample_normal == float3(0, 0, 0)))
                 continue;
 
-            float kernel_weight = kernel5x5[(y + 2) * 5 + (x + 2)];
+            float kernel_weight = kernel3x3[(y + 1) * 3 + (x + 1)];
             float geom_weight = geometry_edge_stopping(center_pos, sample_worldpos, center_normal, sigma_geom);
             float normal_weight = normal_edge_stopping(center_normal, sample_normal, sigma_normal);
             float color_weight = color_edge_stopping(center_color, sample_color, sigma_color);

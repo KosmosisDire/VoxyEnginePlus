@@ -14,14 +14,15 @@ static const float3 FORWARD_VECTOR = float3(0, 0, 1);
 static const float PARALLEL_THRESHOLD = 0.9999f;
 
 // TAA constants
-static const float TAA_BLEND_FACTOR = 0.1f;
+static const float TAA_BLEND_FACTOR = 0.2f;
 
-// AO configuration 
-static const int AO_SAMPLE_COUNT = 1;  // Increased from 1 for better quality
-static const float AO_RADIUS = 8.0;
-static const float AO_INTENSITY = 0.6;
-static const float AO_BIAS = 0.01;
-static const float AO_DISTANCE_SCALING = 1.0;
+// GTAO configuration
+static const int GTAO_SLICES = 5;      // Number of slices (directions) around normal
+static const int GTAO_STEPS = 5;       // Steps per slice along each direction
+static const float GTAO_RADIUS = BRICK_SIZE * WORLD_VOXEL_SIZE * 4; // World space radius
+static const float GTAO_FALLOFF_RANGE = 0.5f; // Falloff range as fraction of radius
+static const float GTAO_INTENSITY = 0.9f;  // AO strength
+static const float GTAO_POWER = 1.0f;  // Power for final value adjustment
 
 // Lighting parameters
 static const float SPECULAR_POWER = 32.0f;
@@ -128,7 +129,7 @@ float3 applyTAA(RWTexture2D<float3> current, RWTexture2D<float3> history,
     // ColorBounds bounds = findNeighborhoodBounds(current, pixel, uint2(dimensions));
     
     // Clamp history color to reduce ghosting
-    // previousColor = clamp(previousColor, bounds.min, bounds.max);
+    previousColor = clamp(previousColor, 0, 1);
     
     // Blend between current and history colors
     return lerp(previousColor, currentColor, TAA_BLEND_FACTOR);
@@ -162,69 +163,134 @@ float3x3 createRotationFromNormal(float3 normal)
         right.z, normal.z, forward.z);
 }
 
-float calculateAmbientOcclusion(float3 position, float distance, float3 normal, float4 noiseVec)
+// Fast approximation of acos
+float fastAcos(float x)
 {
-    float occlusion = 0.0f;
-    float adaptiveRadius = AO_RADIUS * min(1.0f, AO_RADIUS / distance);
-    
-    // Adaptively reduce sample count based on distance for better performance
-    int sampleCount = AO_SAMPLE_COUNT;
-    
-    float3x3 rotation = createRotationFromNormal(normal);
-    
-    for (int i = 0; i < sampleCount; i++)
-    {
-        // Generate sample direction using blue noise for better distribution
-        float3 sampleDir = noiseVec.xyz;
-        sampleDir = float3(sampleDir.x * 2.0f - 1.0f, sampleDir.y - 0.2f, sampleDir.z * 2.0f - 1.0f);
-        sampleDir = normalize(sampleDir);
-        
-        // Rotate sample direction to create better distribution
-        float angle = noiseVec.w * 2 * PI * float(i) / float(sampleCount);
-        float s = sin(angle);
-        float c = cos(angle);
-        sampleDir = float3(sampleDir.x * c - sampleDir.z * s, sampleDir.y, sampleDir.x * s + sampleDir.z * c);
-        
-        // Transform sample to align with normal
-        sampleDir = mul(rotation, sampleDir);
-        
-        // Create ray for occlusion testing
-        Ray aoRay;
-        aoRay.origin = position + normal * AO_BIAS;
-        aoRay.direction = sampleDir;
-        
-        // Use adaptive ray length based on distance
-        const int rangeMultiplier = 2;
-        aoRay.maxIterations = 8 * rangeMultiplier;
-        if (distance > 10) aoRay.maxIterations = 6 * rangeMultiplier;
-        if (distance > 40) aoRay.maxIterations = 4 * rangeMultiplier;
-        
-        // Trace the ray
-        var aoHit = traceScene(aoRay, 0, false, false);
-        
-        // Accumulate occlusion with distance-based falloff
-        if (aoHit.hit && aoHit.distance < adaptiveRadius)
-        {
-            float weight = 1.0f - pow(aoHit.distance / adaptiveRadius, AO_DISTANCE_SCALING);
+    // Approximation from https://seblagarde.wordpress.com/2014/12/01/inverse-trigonometric-functions-gpu-optimization-for-amd-gcn-architecture/
+    float x_abs = abs(x);
+    float res = -0.156583f * x_abs + PI * 0.5f;
+    res *= sqrt(1.0f - x_abs);
+    return (x >= 0) ? res : PI - res;
+}
 
-            Material aoMaterial = getMaterial(aoHit.materialId);
-            if (any(aoMaterial.emission != 0.0f))
+float calculateGTAO(uint2 pixel, float3 worldPos, float3 worldNormal, float depth,
+                   RWTexture2D<float3> positionBuffer, RWTexture2D<float> depthBuffer,
+                   float4 noiseVec, uint2 screenSize)
+{
+    // Early out for invalid depth
+    if (depth <= 0.0f) return 1.0f;
+    
+    // All calculations will be done in WORLD SPACE for consistency
+    // since our position buffer stores world space positions
+    float3 viewDirection = normalize(p.stateBuffer.camera.position - worldPos); // From surface to camera in WORLD space
+    
+    // Calculate screen space radius based on world space radius
+    float4 clipPos = mul(p.stateBuffer.camera.viewProj, float4(worldPos, 1.0f));
+    float2 screenPos = (clipPos.xy / clipPos.w) * 0.5f + 0.5f;
+    screenPos *= screenSize;
+    
+    // Calculate adaptive screen radius based on depth
+    // Project world radius to screen space
+    float4 radiusClipPos = mul(p.stateBuffer.camera.viewProj, float4(worldPos + float3(GTAO_RADIUS, 0, 0), 1.0f));
+    float2 radiusScreenPos = (radiusClipPos.xy / radiusClipPos.w) * 0.5f + 0.5f;
+    radiusScreenPos *= screenSize;
+    float screenRadius = length(radiusScreenPos - screenPos);
+    // Ensure minimum radius for close objects
+    screenRadius = max(screenRadius, 30.0f);
+    screenRadius = min(screenRadius, 200.0f); // Cap maximum to avoid too many samples
+    
+    float occlusion = 0.0f;
+    
+    // Main GTAO loop - for each slice direction
+    for (int slice = 0; slice < GTAO_SLICES; slice++)
+    {
+        // Random angle for this slice
+        float sliceAngle = (float(slice) + noiseVec.x) / float(GTAO_SLICES) * 2.0f * PI;
+        float2 sliceDir = float2(cos(sliceAngle), sin(sliceAngle)); // Screen space direction
+        
+        // Track maximum horizon angles for this slice
+        float maxCos = -1.0f; // Start with horizon below
+        
+        // Sample along the slice in screen space
+        for (int step = 1; step <= GTAO_STEPS; step++)
+        {
+            // Use square root distribution for better near/far sample balance
+            float stepRatio = float(step) / float(GTAO_STEPS);
+            stepRatio = pow(stepRatio, 1.5f); // Power distribution for more samples near center
+            
+            // Add temporal noise to reduce banding
+            float stepNoise = frac(noiseVec.y + float(slice * GTAO_STEPS + step) * 0.6180339887f);
+            stepRatio = (float(step - 1) + stepNoise) / float(GTAO_STEPS);
+            stepRatio = pow(stepRatio, 1.5f);
+            
+            // Screen space offset for this sample
+            float2 sampleOffset = sliceDir * stepRatio * screenRadius;
+            float2 samplePixel = float2(pixel) + sampleOffset;
+            
+            // Check bounds
+            if (any(samplePixel < 0) || any(samplePixel >= screenSize))
+                continue;
+            
+            // Sample the world position at this screen location
+            uint2 sampleCoord = uint2(samplePixel);
+            float3 sampleWorldPos = positionBuffer[sampleCoord];
+            
+            // Calculate horizon vector in WORLD SPACE
+            float3 horizonVec = sampleWorldPos - worldPos;
+            float horizonDist = length(horizonVec);
+            
+            // Skip if too close (self-occlusion) or invalid
+            if (horizonDist < 0.01f)
+                continue;
+                
+            horizonVec /= horizonDist; // Normalize
+            
+            // Calculate horizon angle using world space vectors
+            float horizonCos = dot(worldNormal, horizonVec);
+            
+            // Smoother distance-based falloff
+            float normalizedDist = horizonDist / GTAO_RADIUS;
+            float weight = 1.0f;
+            
+            if (normalizedDist < 1.0f)
             {
-                occlusion = 0.0f; // Ignore occlusion for emissive materials
+                // Within radius - smooth falloff
+                weight = 1.0f - pow(normalizedDist, 2.0f);
+            }
+            else if (normalizedDist < 1.0f + GTAO_FALLOFF_RANGE)
+            {
+                // In falloff range - smooth fade out
+                float falloff = (normalizedDist - 1.0f) / GTAO_FALLOFF_RANGE;
+                weight = 1.0f - falloff;
+                weight = smoothstep(0.0f, 1.0f, weight);
+            }
+            else
+            {
+                // Beyond falloff - no contribution
                 continue;
             }
-
-            occlusion += weight;
+            
+            // Track maximum horizon angle (weighted)
+            float weightedCos = lerp(-1.0f, horizonCos, weight);
+            maxCos = max(maxCos, weightedCos);
         }
+        
+        // Calculate occlusion for this slice
+        // Higher horizon angle = more occlusion
+        float sliceOcclusion = saturate((maxCos + 1.0f) * 0.5f);
+        occlusion += sliceOcclusion;
     }
     
-    // Normalize and apply intensity
-    occlusion = occlusion / float(sampleCount);
-    occlusion = pow(occlusion, 1.5f); // Adjusts occlusion curve for better appearance
-    occlusion *= AO_INTENSITY;
+    // Average occlusion over all slices
+    occlusion /= float(GTAO_SLICES);
     
-    // Return visibility factor
-    return saturate(1.0f - occlusion);
+    // Apply power for contrast
+    occlusion = pow(saturate(occlusion), GTAO_POWER);
+    
+    // Apply intensity and invert
+    // Return: 1 = no occlusion, 0 = full occlusion
+    float ao = 1.0f - occlusion * GTAO_INTENSITY;
+    return saturate(ao);
 }
 
 uint hash(uint x) {
@@ -410,15 +476,19 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         // Add subtle normal variation using blue noise for more natural lighting
         uint uniqueIndex = hash(hit.voxelIndex ^ (hit.brickIndex << 16));
         uint blueNoiseIndex = uniqueIndex % 128;
-        float3 perturbedNormal = normalize(worldNormal + 
-            (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
+        float3 perturbedNormal = normalize(worldNormal + (blueNoiseStatic[blueNoiseIndex].xyw * 2.0 - 1.0) * NORMAL_NOISE_AMOUNT);
         
-        if (all(pixel % 2 == 0))
+        if (all((pixel % 2) == 0))
         {
-            float ao = calculateAmbientOcclusion(worldPos, hit.distance, perturbedNormal, noiseVec);
-            ambientOcclusionTex[pixel / 2] = ao;
-        }
+            float ao = 0.0f;
+            // Use GTAO for better quality and stability
+            ao = calculateGTAO(pixel, worldPos, worldNormal, hit.distance, position, depth, noiseVec, p.screenSize);
             
+            // Calculate the base position for the 2x2 block
+            uint2 blockBase = (pixel / 2);
+            ambientOcclusionTex[blockBase] = ao;
+        }
+        
         // Calculate lighting
         float3 directLight = float3(0, 0, 0); // Initialize direct contribution to zero
         
@@ -480,12 +550,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
         float3 albedoColor = albedo[pixel];
         float3 indirectLightColor = indirectLightTex[pixel];
         float3 directLightColor = directLightTex[pixel];
-        float aoColor = ambientOcclusionDenoisedTex[pixel / 2];
+        float ao = ambientOcclusionDenoisedTex[pixel / 2];
         
-        if (any(directLightColor != 0)) aoColor = (1 / aoColor);
-
-        albedo[pixel] = albedoColor * (indirectLightColor + directLightColor);
-        currentFrame[pixel] = aoColor;
+        // Apply AO to indirect lighting only (not direct sunlight)
+        float3 finalColor = albedoColor * (indirectLightColor * ao + directLightColor);
+        albedo[pixel] = albedoColor;
+        currentFrame[pixel] = finalColor;
     }
     
     //--------------------------------------------------------------------------
@@ -495,24 +565,21 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     {
         float3 worldPos = position[pixel];
         float2 motionVector = motion[pixel];
-        float3 ao = currentFrame[pixel];
+        float3 finalColor = currentFrame[pixel];
 
         float2 prevPixel = float2(pixel) + motionVector;
         
         // Validate reprojection
-        bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && 
-                                validateReprojection(worldPos, position[uint2(prevPixel)]);
+        bool validReprojection = all(prevPixel >= 0 && prevPixel < p.screenSize) && validateReprojection(worldPos, position[uint2(prevPixel)]);
 
-        // Apply TAA only if reprojection is valid
-        float3 finalColor = ao;
         if (validReprojection)
         {
-            finalColor = applyTAA(currentFrame, history, pixel, prevPixel, p.screenSize, ao);
+            finalColor = applyTAA(currentFrame, history, pixel, prevPixel, p.screenSize, finalColor);
         }
 
 
         // Write final color
-        albedo[pixel] *= finalColor;
+        albedo[pixel] = finalColor;
         currentFrame[pixel] = finalColor;
     }
 }

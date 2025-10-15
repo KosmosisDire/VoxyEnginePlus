@@ -2,660 +2,572 @@
 #include "lygia/generative/random.hlsl"
 #include "lygia/generative/snoise.hlsl"
 
-// Terrain generation parameters
-static const float noiseScale = 0.07f; 
-static const uint blockSize = 12;
-static const float baseHeight = 90.0f;
+// #region PRNG
 
-// Global scroll variable for terrain exploration
-static const float2 terrainScroll = float2(0.0f, 0.0f);  // Change these values to explore different areas
-
-// Improved FBM with better height variation
-float fbm(float2 pos, int octaves, float lacunarity, float persistence, float baseFreq)
-{
-    float total = 0.0f;
-    float amplitude = 1.0f;
-    float maxValue = 0.0f;
-    float frequency = 1.0f;
-    
-    // Apply scroll offset
-    pos += terrainScroll * 1000.0f;
-    
-    for(int i = 0; i < octaves; i++) {
-        total += snoise(float3(pos.x, pos.y, i * 0.5f) * baseFreq * frequency) * amplitude;
-        maxValue += amplitude;
-        amplitude *= persistence;
-        frequency *= lacunarity;
-    }
-    
-    return total / maxValue;
+uint hash(uint x) {
+    x ^= x >> 16;
+    x *= 0x85ebca6b;
+    x ^= x >> 13;
+    x *= 0xc2b2ae35;
+    x ^= x >> 16;
+    return x;
 }
 
-// Improved terrain terrace function with natural variation
-float terraceHeight(float height, float stepSize, float smoothing, float2 pos)
-{
-    // Add variation to step size based on position
-    float positionVariation = snoise(float3(pos.x, pos.y, 456.7f) * 0.005f) * 0.3f + 1.0f;
-    stepSize *= positionVariation;
-    
-    float steps = floor(height / stepSize);
-    float remainder = frac(height / stepSize);
-    
-    // Varied smoothing for more natural transitions
-    float actualSmoothing = smoothing * (0.5f + snoise(float3(pos.x, pos.y, 789.3f) * 0.01f) * 0.25f + 0.5f);
-    actualSmoothing = clamp(actualSmoothing, 0.05f, 0.95f);
-    
-    // Smooth transition between steps
-    float smoothedRemainder = actualSmoothing > 0.0f ? 
-        smoothstep(0.0f, actualSmoothing, remainder) : remainder;
-        
-    return steps * stepSize + smoothedRemainder * stepSize;
+uint hash2(uint x, uint y) {
+    return hash(x ^ hash(y));
 }
 
-// Cliff noise function - creates vertical drops
-float cliffNoise(float2 pos, float scale)
-{
-    // Apply scroll
-    pos += terrainScroll * 1000.0f;
-    
-    // Create noise patterns for cliff placement
-    float noise = snoise(float3(pos.x, pos.y, 15.5f) * scale);
-    
-    // Sharpen the noise to create more defined cliff edges
-    return pow(abs(noise), 0.5f) * sign(noise);
+uint hash3(uint x, uint y, uint z) {
+    return hash(x ^ hash(y ^ hash(z)));
 }
 
-// Terrain type classification
-float getTerrainType(float2 pos)
-{
-    // Apply scroll offset
-    pos += terrainScroll * 1000.0f;
-    
-    // Large scale noise for terrain classification
-    float terrainType = snoise(float3(pos.x, pos.y, 10.0f) * 0.0015f) * 0.5f + 0.5f;
-    
-    // Add medium-scale variation
-    terrainType += snoise(float3(pos.x, pos.y, 20.0f) * 0.003f) * 0.25f;
-    
-    // Enhance contrast for more distinct terrain types
-    terrainType = pow(terrainType, 0.9f);
-    
-    return saturate(terrainType);
+float rand_float(inout uint seed) {
+    seed = hash(seed);
+    return float(seed) / float(0xFFFFFFFF);
 }
 
-// Convert grid coordinates to world position
-float3 gridToWorldPos(int3 gridPos)
-{
-    return float3(gridPos) * WORLD_VOXEL_SIZE;
+float rand_range(inout uint seed, float min_val, float max_val) {
+    return min_val + rand_float(seed) * (max_val - min_val);
 }
 
-// Get world position aligned to blocks for consistent terrain
-float3 getBlockAlignedPos(int3 gridPos)
-{
-    float3 worldPos = gridToWorldPos(gridPos);
-    return float3(
-        floor(worldPos.x / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize),
-        floor(worldPos.y / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize),
-        floor(worldPos.z / (WORLD_VOXEL_SIZE * blockSize)) * (WORLD_VOXEL_SIZE * blockSize));
+int rand_int(inout uint seed, int min_val, int max_val) {
+    float r = rand_float(seed);
+    return min_val + int(floor(r * float(max_val - min_val + 1)));
 }
 
-// Rocky outcropping function
-float rockyOutcropping(float2 pos, float baseHeight)
-{
-    // Apply scroll
-    pos += terrainScroll * 1000.0f;
-    
-    // Use high-frequency noise for sharp features
-    float sharpNoise1 = snoise(float3(pos.x, pos.y, 40.0f) * 0.03f);
-    float sharpNoise2 = snoise(float3(pos.x, pos.y, 60.0f) * 0.05f);
-    
-    // Generate craggy shapes
-    float cragginess = pow(abs(sharpNoise1 * sharpNoise2), 0.8f) * 15.0f;
-    
-    // Only apply to certain areas based on another noise pattern
-    float mask = smoothstep(0.6f, 0.8f, snoise(float3(pos.x, pos.y, 30.0f) * 0.01f) * 0.5f + 0.5f);
-    
-    return cragginess * mask;
+float3 rand_unit_vector(inout uint seed) {
+    float theta = rand_range(seed, 0.0f, 2.0f * 3.14159f);
+    float phi = rand_range(seed, -1.0f, 1.0f);
+    float r = sqrt(1.0f - phi * phi);
+    return float3(r * cos(theta), phi, r * sin(theta));
 }
 
-// Enhanced terrain height calculation with more natural features
-float calculateTerrainHeight(float2 position)
-{
-    // Apply scroll offset
-    position += terrainScroll * 1000.0f;
-    
-    // Apply non-uniform domain warping to break symmetry
-    float2 warpAmount = float2(
-        snoise(float3(position.y * 0.8f, position.x * 1.2f, 42.5f) * 0.003f),
-        snoise(float3(position.x * 0.9f, position.y * 1.1f, 67.8f) * 0.003f)
-    ) * 150.0f;
-    float2 warpedPosition = position + warpAmount;
-    
-    // Base height
-    float baseHeight = 90.0f;
-    
-    // Get terrain type with additional asymmetric warping
-    float terrainType = getTerrainType(warpedPosition);
-    
-    // Add a second terrain type influence for more variation
-    float secondaryType = snoise(float3(position.x * 1.3f, position.y * 0.7f, 123.4f) * 0.002f) * 0.5f + 0.5f;
-    terrainType = lerp(terrainType, secondaryType, 0.3f); // Blend for more natural variation
-    
-    // Continental shape (very large scale)
-    float continentShape = fbm(warpedPosition, 2, 2.0f, 0.6f, 0.0005f) * 0.5f + 0.5f;
-    float continentHeight = continentShape * 30.0f;
-    
-    // Medium terrain features with directional bias for asymmetry
-    float2 asymWarpedPos = position + float2(
-        snoise(float3(position.x, position.y, 111.0f) * 0.005f),
-        snoise(float3(position.y, position.x, 222.0f) * 0.005f)
-    ) * 50.0f;
-    float mediumFeatures = fbm(asymWarpedPos, 3, 2.0f, 0.6f, 0.003f) * 25.0f;
-    mediumFeatures *= smoothstep(0.2f, 0.5f, terrainType); // Wider transition
-    
-    // Small-scale details with different warping
-    float2 detailWarpedPos = position + float2(
-        snoise(float3(position.y * 1.1f, position.x * 0.9f, 333.0f) * 0.01f),
-        snoise(float3(position.x * 1.2f, position.y * 0.8f, 444.0f) * 0.01f)
-    ) * 20.0f;
-    float smallDetails = fbm(detailWarpedPos, 3, 2.2f, 0.5f, 0.01f) * 8.0f;
-    smallDetails *= smoothstep(0.3f, 0.6f, terrainType); // Wider transition
-    
-    // Plains with gentle undulation - no terracing here
-    float plains = 0.0f;
-    if (terrainType < 0.45f) { // Slightly wider range
-        float plainsNoise = fbm(position + float2(13.4f, 27.8f), 2, 1.5f, 0.5f, 0.002f);
-        plains = plainsNoise * 10.0f * (1.0f - terrainType * 1.5f);
-    }
-    
-    // Hills with selective terracing only in specific areas
-    float hills = 0.0f;
-    if (terrainType >= 0.3f && terrainType < 0.7f) {
-        // Use different offsets for asymmetric hill placement
-        float2 hillsOffset = float2(
-            snoise(float3(position.x * 0.7f, position.y * 1.3f, 555.0f) * 0.004f),
-            snoise(float3(position.y * 0.9f, position.x * 1.1f, 666.0f) * 0.004f)
-        ) * 70.0f;
-        
-        float2 hillPos = position + hillsOffset;
-        float hillFactor = smoothstep(0.3f, 0.4f, terrainType) * smoothstep(0.7f, 0.6f, terrainType);
-        hills = fbm(hillPos, 3, 2.2f, 0.6f, 0.004f) * 35.0f * hillFactor;
-        
-        // Add more selective terracing to hills (only in ~10% of hill areas)
-        float terraceFactor = snoise(float3(position.x * 1.4f, position.y * 0.6f, 25.0f) * 0.01f) * 0.5f + 0.5f;
-        if (terraceFactor > 0.85f) { // Changed from 0.6f to 0.85f - much more selective
-            hills = terraceHeight(hills, 6.0f, 0.5f, position); // More smoothing
-        }
-    }
-    
-    // Cliffs - more selective with asymmetric patterns
-    float cliffFactor = 0.0f;
-    if (terrainType > 0.45f) {
-        float2 cliffOffset = float2(
-            snoise(float3(position.x * 1.2f, position.y * 0.8f, 777.0f) * 0.006f),
-            snoise(float3(position.y * 1.3f, position.x * 0.7f, 888.0f) * 0.006f)
-        ) * 30.0f;
-        
-        float2 cliffPos = position + cliffOffset;
-        float cliffPattern = cliffNoise(cliffPos, 0.007f);
-        
-        // More selective cliff bands with non-circular transitions
-        float cliffSelector = snoise(float3(position.x * 0.8f, position.y * 1.2f, 101.0f) * 0.008f);
-        if (abs(cliffPattern) > 0.75f && abs(cliffPattern) < 0.82f && cliffSelector > 0.1f) {
-            cliffFactor = 15.0f * sign(cliffPattern);
-        }
-    }
-    
-    // Mountains with reduced terracing and more natural features
-    float mountains = 0.0f;
-    if (terrainType > 0.65f) {
-        // Enhanced ridge-based mountain generation with stronger domain warping
-        float2 mountainOffset = float2(
-            snoise(float3(position.x * 0.9f, position.y * 1.1f, 999.0f) * 0.007f),
-            snoise(float3(position.y * 1.2f, position.x * 0.8f, 111.1f) * 0.007f)
-        ) * 150.0f; // Increased warping
-        
-        float2 warpedPos = position + mountainOffset;
-        float mountainNoise = fbm(warpedPos, 4, 2.2f, 0.7f, 0.005f);
-        
-        // Create dramatic mountains
-        mountains = pow(abs(mountainNoise), 1.1f) * 80.0f * smoothstep(0.65f, 0.8f, terrainType);
-        
-        // Greatly reduced terracing, only in very specific mountain areas (5% instead of 60%)
-        float mountainTerraceMask = snoise(float3(position.x * 1.3f, position.y * 0.7f, 35.0f) * 0.008f) * 0.5f + 0.5f;
-        float secondaryMask = snoise(float3(position.y * 0.8f, position.x * 1.2f, 45.0f) * 0.01f) * 0.5f + 0.5f;
-        
-        // Only apply terracing when both masks align, making it much more selective
-        if (mountainTerraceMask > 0.8f && secondaryMask > 0.7f) {
-            // More smoothing for less obvious steps
-            float stepSize = lerp(8.0f, 12.0f, mountainTerraceMask);
-            float smoothing = lerp(0.4f, 0.6f, mountainTerraceMask); // Increased smoothing
-            mountains = terraceHeight(mountains, stepSize, smoothing, position);
-        }
-        
-        // Add rocky outcroppings and cragginess to mountains
-        mountains += rockyOutcropping(position, mountains);
-        
-        // Add occasional dramatic spires in mountain regions with asymmetric patterns
-        float spireNoiseA = snoise(float3(position.x * 1.1f, position.y * 0.9f, 30.0f) * 0.01f);
-        float spireNoiseB = snoise(float3(position.y * 1.2f, position.x * 0.8f, 60.0f) * 0.01f);
-        float combinedSpireNoise = spireNoiseA * spireNoiseB;
-        
-        if (combinedSpireNoise > 0.6f && terrainType > 0.85f) {
-            mountains += 35.0f * pow(combinedSpireNoise - 0.6f, 1.5f) / 0.4f;
-        }
-    }
-    
-    // Valleys with asymmetric patterns
-    float valleyNoise = snoise(float3(position.x * 1.1f, position.y * 0.9f, 50.0f) * 0.004f);
-    float secondValleyNoise = snoise(float3(position.y * 0.8f, position.x * 1.2f, 70.0f) * 0.005f);
-    float valleys = 0.0f;
-    
-    // Only create valleys where both noise patterns overlap to avoid circular patterns
-    if (valleyNoise > 0.65f && valleyNoise < 0.75f && secondValleyNoise > 0.4f && terrainType > 0.4f) {
-        float valleyEdge = smoothstep(0.65f, 0.67f, valleyNoise) * smoothstep(0.75f, 0.73f, valleyNoise);
-        valleys = -25.0f * valleyEdge * secondValleyNoise;
-    }
-    
-    // Mesa formations - much more selective
-    float mesaNoise = snoise(float3(position.x * 0.9f, position.y * 1.1f, 70.0f) * 0.003f) * 0.5f + 0.5f;
-    float secondMesaNoise = snoise(float3(position.y * 1.2f, position.x * 0.8f, 90.0f) * 0.004f) * 0.5f + 0.5f;
-    float mesa = 0.0f;
-    
-    // Only create mesas where both noise patterns align, making them less circular
-    if (mesaNoise > 0.8f && secondMesaNoise > 0.7f && terrainType > 0.5f && terrainType < 0.7f) {
-        float2 mesaOffset = float2(
-            snoise(float3(position.y * 1.1f, position.x * 0.9f, 80.0f) * 0.01f),
-            snoise(float3(position.x * 0.8f, position.y * 1.2f, 85.0f) * 0.01f)
-        ) * 40.0f;
-        
-        float2 mesaPos = position + mesaOffset;
-        float mesaShape = fbm(mesaPos, 2, 2.0f, 0.6f, 0.01f) * 20.0f; 
-        // Create hard flat tops but maintain some variation
-        mesa = terraceHeight(mesaShape, 20.0f, 0.15f, position); // Increased smoothing slightly
-        mesa *= smoothstep(0.8f, 0.9f, mesaNoise) * smoothstep(0.7f, 0.8f, secondMesaNoise);
-    }
-    
-    // Combine all features with proper weighting
-    float finalHeight = baseHeight + continentHeight + plains + hills + mountains + 
-                      mediumFeatures + smallDetails + valleys + cliffFactor + mesa;
-    
-    // Apply terracing only in very specific areas (< 3% of terrain)
-    float globalTerraceMask = snoise(float3(position.x * 0.9f, position.y * 1.1f, 90.0f) * 0.002f) * 0.5f + 0.5f;
-    float secondGlobalMask = snoise(float3(position.y * 1.2f, position.x * 0.8f, 95.0f) * 0.003f) * 0.5f + 0.5f;
-    
-    if (globalTerraceMask > 0.9f && secondGlobalMask > 0.8f && terrainType > 0.6f) {
-        finalHeight = terraceHeight(finalHeight, 8.0f, 0.25f, position); // More smoothing
-    }
-    
-    return finalHeight;
+// #endregion
+
+// #region Basic Helpers
+
+float3 grid_to_world_pos(int3 grid_pos) {
+    return float3(grid_pos) * WORLD_VOXEL_SIZE;
 }
 
-// Calculate if a position should be solid
-bool calculateSolid(int3 gridPos)
-{
-    float3 worldBlockPos = getBlockAlignedPos(gridPos);
-    float2 terrainPos = float2(worldBlockPos.x, worldBlockPos.z);
-    
-    // Get terrain height at this position
-    float terrainHeight = calculateTerrainHeight(terrainPos);
-    float terrainType = getTerrainType(terrainPos);
-    
-    // Generate caves
-    float caveDensity = 0.0f;
-    
-    // Only generate caves below surface with a minimum depth
-    if (worldBlockPos.y < terrainHeight - 12.0f && worldBlockPos.y > 30.0f)
-    {
-        // Apply scroll for cave exploration
-        float3 cavePos = worldBlockPos;
-        cavePos.xz += terrainScroll * 1000.0f;
-        
-        // Cave system noise
-        float caveNoise = snoise(cavePos * 0.025f);
-        float caveDetail = snoise(cavePos * 0.06f) * 0.3f;
-        caveNoise += caveDetail;
-        
-        // More caves in mountains, fewer in plains
-        float caveFrequency = 0.08f + terrainType * 0.1f;
-        
-        // More caves at deeper levels
-        float depthFactor = smoothstep(terrainHeight - 15.0f, 45.0f, worldBlockPos.y);
-        float caveProbability = caveFrequency + depthFactor * 0.15f;
-        
-        // Add occasional large cave chambers
-        float chamberNoise = snoise(cavePos * 0.01f);
-        if (chamberNoise > 0.7f) {
-            caveProbability += 0.1f;
-        }
-        
-        // Cave boundaries
-        caveDensity = smoothstep(0.3f - caveProbability, 0.5f - caveProbability, caveNoise);
-        
-        // Add cave tunnels that connect chambers
-        float tunnelNoise = snoise(cavePos * 0.015f);
-        if (abs(tunnelNoise) < 0.05f) {
-            caveDensity = max(caveDensity, 0.5f);
-        }
-    }
-    
-    // Surface is solid, underground is solid unless there's a cave
-    return worldBlockPos.y < terrainHeight && caveDensity < 0.25f;
+int3 world_to_grid_pos(float3 world_pos) {
+    return int3(floor(world_pos / WORLD_VOXEL_SIZE));
 }
 
-// Helper function to set voxel material safely
-void setVoxelMaterial(uint brickIndex, uint8_t material)
-{
-    p.materialPtrBuffer.data[brickIndex] = material;
+float simple_noise(float2 pos, float scale, float amplitude) {
+    return snoise(float3(pos.x * scale, pos.y * scale, 0.0f)) * amplitude;
 }
 
-// Enhanced material selection with more natural patterns
-uint selectMaterial(int3 brickPos, int3 voxelPos)
-{
-    float3 worldPos = gridToWorldPos(voxelPos);
-    float2 terrainPos = float2(worldPos.x, worldPos.z);
+float fbm_simple(float2 pos, float scale, float amplitude, int octaves) {
+    float value = 0.0f;
+    float freq = scale;
+    float amp = amplitude;
     
-    // Apply scroll
-    terrainPos += terrainScroll * 1000.0f;
-    
-    // Add warping to break circular patterns in material placement
-    float2 materialWarp = float2(
-        snoise(float3(worldPos.z * 0.75f, worldPos.x * 1.25f, worldPos.y * 0.5f) * 0.02f),
-        snoise(float3(worldPos.x * 0.8f, worldPos.y * 0.6f, worldPos.z * 1.4f) * 0.02f)
-    ) * 15.0f;
-    
-    float2 warpedTerrainPos = terrainPos + materialWarp;
-    
-    // Get terrain height and type
-    float terrainHeight = calculateTerrainHeight(terrainPos);
-    float terrainType = getTerrainType(warpedTerrainPos); // Use warped position for type
-    
-    // Calculate depth below surface
-    float depthBelowSurface = terrainHeight - worldPos.y;
-    
-    // Material variation noise - use multiple uncorrelated noise functions
-    float baseNoise = snoise(float3(worldPos.x + terrainScroll.x * 1000.0f, 
-                                    worldPos.y * 1.2f, 
-                                    worldPos.z + terrainScroll.y * 1000.0f) * 0.03f);
-    
-    float detailNoise = snoise(float3(worldPos.z * 0.9f, 
-                                      worldPos.x * 1.1f, 
-                                      worldPos.y * 0.7f) * 0.05f);
-    
-    // Combine noise patterns in a non-linear way to avoid circular patterns
-    float materialNoise = (baseNoise * 0.6f + detailNoise * 0.4f) * 0.5f + 0.5f;
-    
-    // Add directional bias to material variation
-    float directionalBias = snoise(float3(worldPos.x - worldPos.z * 0.5f, 
-                                          worldPos.y * 0.3f, 
-                                          worldPos.z + worldPos.x * 0.5f) * 0.01f) * 0.25f;
-    materialNoise = saturate(materialNoise + directionalBias);
-    
-    // Calculate slope for material selection - with jittered sample points for natural edges
-    float2 sampleDist = float2(5.0f, 0.0f);
-    float jitter = snoise(float3(terrainPos.x * 0.8f, terrainPos.y * 1.2f, 123.4f) * 0.1f) * 1.5f;
-    
-    float2 jitteredSampleX1 = sampleDist.xy * (1.0f + jitter * 0.2f);
-    float2 jitteredSampleX2 = -sampleDist.xy * (1.0f - jitter * 0.2f);
-    float2 jitteredSampleZ1 = sampleDist.yx * (1.0f + jitter * 0.2f);
-    float2 jitteredSampleZ2 = -sampleDist.yx * (1.0f - jitter * 0.2f);
-    
-    float heightX1 = calculateTerrainHeight(terrainPos + jitteredSampleX1);
-    float heightX2 = calculateTerrainHeight(terrainPos + jitteredSampleX2);
-    float heightZ1 = calculateTerrainHeight(terrainPos + jitteredSampleZ1);
-    float heightZ2 = calculateTerrainHeight(terrainPos + jitteredSampleZ2);
-    
-    float slopeX = abs(heightX1 - heightX2) / (length(jitteredSampleX1 - jitteredSampleX2));
-    float slopeZ = abs(heightZ1 - heightZ2) / (length(jitteredSampleZ1 - jitteredSampleZ2));
-    float slope = max(slopeX, slopeZ);
-    
-    // Add small random variation to slope detection
-    slope *= (0.9f + snoise(float3(terrainPos.x, terrainPos.y, 567.8f) * 0.05f) * 0.2f);
-    
-    // Check if this is part of a cliff face - use gradual threshold for smoother transition
-    float cliffFactor = smoothstep(0.75f, 0.85f, slope);
-    
-    // Check if this is on a terrace - more selective and varied
-    float terraceInfluence = 0.0f;
-    if (terrainType > 0.4f) {
-        // Use non-uniform heights to avoid circular rings
-        float baseTerraceHeight = 8.0f * (0.8f + materialNoise * 0.4f);
-        float localHeight = frac(terrainHeight / baseTerraceHeight) * baseTerraceHeight;
-        
-        // Gradual influence rather than boolean
-        float edgeWidth = 0.8f * (0.5f + materialNoise * 1.0f); // Variable width
-        terraceInfluence = max(
-            smoothstep(0.0f, edgeWidth, localHeight),
-            smoothstep(baseTerraceHeight, baseTerraceHeight - edgeWidth, localHeight)
-        );
-        
-        // Add directional variation to terrace detection
-        terraceInfluence *= saturate((snoise(float3(terrainPos.y * 0.7f, terrainPos.x * 1.3f, 789.0f) * 0.02f) + 1.5f) * 0.5f);
+    for (int i = 0; i < octaves; i++) {
+        value += simple_noise(pos, freq, amp);
+        freq *= 2.0f;
+        amp *= 0.5f;
     }
     
-    // Surface layer with more varied transitions
-    if (depthBelowSurface < 1.0f) 
-    {
-        // High mountains get snow/rock with gradual elevation-based transition
-        if (terrainType > 0.7f && terrainHeight > 130.0f)
-        {
-            // Elevation-based gradual snow transition to avoid abrupt lines
-            float snowFactor = smoothstep(130.0f, 140.0f, terrainHeight);
-            
-            // More rock on steeper slopes, smooth transition
-            if (cliffFactor > 0.3f) {
-                // Blend between snow and rock based on steepness
-                return (materialNoise > lerp(0.8f, 0.2f, cliffFactor)) ? 6 : 2;
-            }
-            
-            // Mix of snow and rock based on noise and elevation
-            return (materialNoise > (0.7f - snowFactor * 0.4f)) ? 6 : 2;
-        }
-        // Cliffs get exposed rock regardless of elevation - smooth transition
-        else if (cliffFactor > 0.1f)
-        {
-            // Blend cliff materials based on cliff factor
-            if (materialNoise < cliffFactor * 0.8f) {
-                return 2; // Rocky cliff faces
-            }
-            else {
-                // Blend with surrounding terrain
-                return (terrainHeight < 93.0f) ? 5 : 1;
-            }
-        }
-        // Terraces get partial rock exposure based on influence
-        else if (terraceInfluence > 0.3f && materialNoise > 0.5f)
-        {
-            // Blend between rock and normal terrain based on terrace influence
-            if (materialNoise < terraceInfluence * 0.7f) {
-                return 2; // Rocky terrace edges
-            }
-            else {
-                // Blend with surrounding terrain
-                return (terrainType > 0.6f) ? 2 : 1;
-            }
-        }
-        // Hills and highlands with varied material distribution
-        else if (terrainType > 0.3f && terrainType < 0.8f)
-        {
-            // Gradual increase in rock probability with slope
-            float slopeRockChance = smoothstep(0.3f, 0.6f, slope) * 0.5f;
-            
-            // Rock appears more on slopes but with natural variation
-            if (materialNoise > (0.9f - slopeRockChance)) {
-                return 2;
-            }
-            return 1; // Mostly grass
-        }
-        // Near water level gets sandy with gradual transition
-        else if (terrainHeight < 95.0f)
-        {
-            // Smooth transition from sand to grass as height increases
-            float sandFactor = smoothstep(95.0f, 90.0f, terrainHeight);
-            
-            if (materialNoise < sandFactor * 0.8f) {
-                return 5; // Sand/dirt
-            }
-            return 1; // Some grass patches even at lower elevations
-        }
-        // Plains with occasional variation
-        else
-        {
-            // Very occasional rock outcroppings in plains
-            if (materialNoise > 0.96f && snoise(float3(terrainPos.x * 1.5f, terrainPos.y * 0.9f, 876.5f) * 0.01f) > 0.7f) {
-                return 2; // Rare rock in plains
-            }
-            return 1; // Mostly grass/soil
-        }
-    }
-    // Shallow underground (topsoil/dirt layer) with better transitions
-    else if (depthBelowSurface < 5.0f)
-    {
-        // Gradient between surface and deep materials
-        float depthFactor = depthBelowSurface / 5.0f;
-        
-        // Rocky material near cliff faces even underground
-        if (cliffFactor > 0.3f) {
-            // Natural transition between materials
-            if (materialNoise > (0.6f + depthFactor * 0.3f)) {
-                return 5; // Some dirt even on cliff underground
-            }
-            return 2; // Mostly stone in cliff underground
-        }
-        
-        // Gradual transition to stone with depth
-        if (materialNoise > (0.2f + depthFactor * 0.7f)) {
-            return 5; // Dirt/soil
-        }
-        return 2; // Stone increases with depth
-    }
-    // Deep underground (stone with occasional mineral deposits)
-    else
-    {
-        // Use non-circular patterns for ore veins
-        float oreNoisePrimary = snoise(float3(worldPos.x * 0.8f, worldPos.y * 1.2f, worldPos.z * 0.7f) * 0.05f);
-        float oreNoiseSecondary = snoise(float3(worldPos.z * 1.1f, worldPos.x * 0.6f, worldPos.y * 0.9f) * 0.04f);
-        
-        // Create vein-like structures rather than circular deposits
-        float veinPattern = (oreNoisePrimary * oreNoiseSecondary) * 0.5f + 0.5f;
-        
-        // Depth increases ore probability but with natural veining
-        float depthFactor = min(depthBelowSurface / 200.0f, 0.5f);
-        
-        if (veinPattern > (0.85f - depthFactor) && materialNoise > 0.7f) {
-            return 6; // Mineral/ore in natural vein patterns
-        }
-        else {
-            return 2; // Stone
-        }
-    }
+    return value;
 }
 
-// Structure to hold brick and voxel indices
-struct VoxelIndices
-{
-    int brickIndex;
-    int voxelIndex;
-    bool isValid;
+// #endregion
+
+// #region Terrain Generation
+
+float plateau_noise(float2 pos) {
+    float base = simple_noise(pos, 0.008f, 1.0f);
+    if (abs(base) < 0.3f) {
+        base = sign(base) * 0.3f;
+    }
+    return base;
+}
+
+float erosion_factor(float2 pos) {
+    float erosion = simple_noise(pos, 0.005f, 1.0f);
+    erosion = pow(abs(erosion), 0.5f) * sign(erosion);
+    return erosion;
+}
+
+float calculate_terrain_height(float2 position) {
+    float base_height = 64.0f;
+    
+    float continental = plateau_noise(position) * 8.0f;
+    float erosion = erosion_factor(position);
+    float gentle_hills = simple_noise(position, 0.02f, 16.0f);
+    
+    float flat_mask = simple_noise(position, 0.003f, 1.0f);
+    if (abs(flat_mask) < 0.4f) {
+        gentle_hills *= 0.2f;
+    }
+    
+    float mesa_mask = simple_noise(position + float2(100.0f, 100.0f), 0.004f, 1.0f);
+    float height = base_height + continental + gentle_hills;
+    
+    if (mesa_mask > 0.3f) {
+        float step_size = 4.0f;
+        height = floor(height / step_size) * step_size;
+        height += simple_noise(position, 0.1f, 0.5f);
+    }
+    
+    if (erosion < -0.5f) {
+        height -= (abs(erosion) - 0.5f) * 10.0f;
+    }
+    
+    float detail = simple_noise(position, 0.15f, 0.5f);
+    
+    return height + detail;
+}
+
+uint get_terrain_material(int3 voxel_pos) {
+    float3 world_pos = grid_to_world_pos(voxel_pos);
+    float2 terrain_pos = float2(world_pos.x, world_pos.z);
+    float terrain_height = calculate_terrain_height(terrain_pos);
+    
+    float depth = terrain_height - world_pos.y;
+    
+    float mesa_check = simple_noise(terrain_pos, 0.004f, 1.0f);
+    
+    if (mesa_check > 0.3f) {
+        int layer = (int)(world_pos.y) % 8;
+        if (layer < 2) {
+            return 5;
+        } else if (layer < 4) {
+            return 2;
+        } else if (layer < 6) {
+            return 11;
+        } else {
+            return 5;
+        }
+    }
+    
+    if (depth > 8.0f) {
+        return 2; // Stone
+    }
+    
+    if (depth > 2.0f) {
+        return 5; // Dirt
+    }
+    
+    float erosion = erosion_factor(terrain_pos);
+    if (erosion < -0.6f) {
+        return 5; // Exposed dirt
+    }
+    
+    return 1; // Grass
+}
+
+// #endregion
+
+// #region Biome Detection
+
+enum BiomeType {
+    BIOME_PLAINS = 0,
+    BIOME_FOREST = 1,
+    BIOME_DENSE_FOREST = 2,
+    BIOME_SPARSE = 3,
+    BIOME_MESA = 4
 };
 
-// Get brick and voxel indices from world position
-VoxelIndices getVoxelIndices(int3 worldPos)
-{
-    VoxelIndices result;
-
-    // Calculate brick position
-    int3 brickPos = worldPos / BRICK_SIZE;
-    int3 localPos = worldPos % BRICK_SIZE;
-
-    // Handle negative positions correctly
-    if (any(localPos < 0))
-    {
-        brickPos -= 1;
-        localPos = (localPos + BRICK_SIZE) % BRICK_SIZE;
+BiomeType get_biome(float2 world_pos) {
+    float biome_noise = simple_noise(world_pos, 0.003f, 1.0f);
+    float moisture = simple_noise(world_pos + float2(1000.0f, 0.0f), 0.004f, 1.0f);
+    
+    float mesa_check = simple_noise(world_pos + float2(100.0f, 100.0f), 0.004f, 1.0f);
+    if (mesa_check > 0.3f) {
+        return BiomeType.BIOME_MESA;
     }
-
-    // Check world boundaries
-    int worldBlockSpan = GRID_SIZE * CHUNK_SIZE;
-    if (any(brickPos < 0) || any(brickPos >= worldBlockSpan))
-    {
-        result.isValid = false;
-        return result;
+    
+    if (moisture > 0.3f) {
+        if (biome_noise > 0.2f) {
+            return BiomeType.BIOME_DENSE_FOREST;
+        } else {
+            return BiomeType.BIOME_FOREST;
+        }
+    } else if (moisture < -0.3f) {
+        return BiomeType.BIOME_SPARSE;
     }
-
-    // Calculate indices
-    int3 chunkPos = brickPos / CHUNK_SIZE;
-    int3 localBrickPos = brickPos % CHUNK_SIZE;
-
-    int chunkIndex = chunkIndex(chunkPos);
-    int localBrickIndex = brickLocalIndex(localBrickPos);
-
-    result.brickIndex = brickGlobalIndex(chunkIndex, localBrickIndex);
-    result.voxelIndex = voxelLocalIndex(localPos);
-    result.isValid = true;
-
-    return result;
+    
+    return BiomeType.BIOME_PLAINS;
 }
 
-// Set a voxel at any world position
-void setWorldVoxel(int3 worldPos, uint material)
-{
-    VoxelIndices indices = getVoxelIndices(worldPos);
-    if (!indices.isValid)
-        return;
+// #endregion
 
-    // Set material
-    uint globalVoxelIndex = voxelGlobalIndex(indices.brickIndex, indices.voxelIndex);
-    setVoxelMaterial(globalVoxelIndex, (uint8_t)material);  // Added explicit cast to fix warning
+// #region Tree Structure
 
-    // Update occupancy
-    setBit(p.bricksBuffer.data[indices.brickIndex], indices.voxelIndex);
-    setBit(p.bricksBuffer, indices.brickIndex / CHUNK_SIZE_CUBE, indices.brickIndex % CHUNK_SIZE_CUBE);
-}
+struct tree_params {
+    float3 base_pos;
+    uint seed;
+    int type;
+    float trunk_height;
+    float trunk_radius;
+    int branch_count;
+    float branch_spread;
+    float leaf_density;
+    float leaf_radius;
+    bool has_roots;
+};
 
-// Check if a world position contains a voxel
-bool hasWorldVoxel(int3 worldPos)
-{
-    VoxelIndices indices = getVoxelIndices(worldPos);
-    if (!indices.isValid)
+bool should_place_tree_at_brick(int3 brick_coord) {
+    float3 world_pos = grid_to_world_pos(brick_coord * BRICK_SIZE);
+    float2 terrain_pos = float2(world_pos.x, world_pos.z);
+    
+    // Get terrain height and check basic constraints
+    float terrain_height = calculate_terrain_height(terrain_pos);
+    if (terrain_height < 62.0f || world_pos.y > terrain_height + 1.0f) {
         return false;
-
-    BrickBitmask occupancy = p.bricksBuffer.data[indices.brickIndex];
-    return getBit(occupancy, indices.voxelIndex);
+    }
+    
+    // Check slope
+    float slope_check = 4.0f;
+    float h1 = calculate_terrain_height(terrain_pos + float2(slope_check, 0));
+    float h2 = calculate_terrain_height(terrain_pos + float2(-slope_check, 0));
+    float h3 = calculate_terrain_height(terrain_pos + float2(0, slope_check));
+    float h4 = calculate_terrain_height(terrain_pos + float2(0, -slope_check));
+    float max_slope = max(max(abs(h1 - terrain_height), abs(h2 - terrain_height)), 
+                          max(abs(h3 - terrain_height), abs(h4 - terrain_height)));
+    
+    if (max_slope > 3.0f) {
+        return false;
+    }
+    
+    // Get biome and determine tree density
+    BiomeType biome = get_biome(terrain_pos);
+    float tree_chance = 0.0f;
+    
+    switch (biome) {
+        case BiomeType.BIOME_PLAINS:
+            tree_chance = 0.02f;
+            break;
+        case BiomeType.BIOME_FOREST:
+            tree_chance = 0.15f;
+            break;
+        case BiomeType.BIOME_DENSE_FOREST:
+            tree_chance = 0.3f;
+            break;
+        case BiomeType.BIOME_SPARSE:
+            tree_chance = 0.005f;
+            break;
+        case BiomeType.BIOME_MESA:
+            tree_chance = 0.001f;
+            break;
+    }
+    
+    // Use deterministic placement
+    uint pos_hash = hash3(uint(brick_coord.x), uint(brick_coord.y), uint(brick_coord.z));
+    float placement_roll = float(pos_hash) / float(0xFFFFFFFF);
+    
+    return placement_roll < tree_chance;
 }
+
+tree_params get_tree_params(int3 brick_coord) {
+    tree_params params;
+    
+    float3 world_pos = grid_to_world_pos(brick_coord * BRICK_SIZE);
+    float2 terrain_pos = float2(world_pos.x, world_pos.z);
+    float terrain_height = calculate_terrain_height(terrain_pos);
+    
+    params.base_pos = float3(world_pos.x, terrain_height, world_pos.z);
+    params.seed = hash3(uint(brick_coord.x), uint(brick_coord.y), uint(brick_coord.z));
+    
+    BiomeType biome = get_biome(terrain_pos);
+    uint seed = params.seed;
+    float type_roll = rand_float(seed);
+    
+    // Select tree type based on biome
+    if (biome == BiomeType.BIOME_DENSE_FOREST || biome == BiomeType.BIOME_FOREST) {
+        if (type_roll < 0.4f) {
+            // Oak - branchy tree
+            params.type = 0;
+            params.trunk_height = rand_range(seed, 12.0f, 20.0f);
+            params.trunk_radius = rand_range(seed, 1.0f, 1.5f);
+            params.branch_count = rand_int(seed, 3, 6);
+            params.branch_spread = 45.0f;
+            params.leaf_density = 0.7f;
+            params.leaf_radius = 4.0f;
+            params.has_roots = true;
+        } else if (type_roll < 0.7f) {
+            // Birch - tall
+            params.type = 1;
+            params.trunk_height = rand_range(seed, 18.0f, 28.0f);
+            params.trunk_radius = rand_range(seed, 0.8f, 1.0f);
+            params.branch_count = rand_int(seed, 2, 4);
+            params.branch_spread = 25.0f;
+            params.leaf_density = 0.6f;
+            params.leaf_radius = 3.0f;
+            params.has_roots = false;
+        } else {
+            // Spruce
+            params.type = 2;
+            params.trunk_height = rand_range(seed, 20.0f, 30.0f);
+            params.trunk_radius = rand_range(seed, 0.8f, 1.2f);
+            params.branch_count = rand_int(seed, 8, 12);
+            params.branch_spread = 20.0f;
+            params.leaf_density = 0.8f;
+            params.leaf_radius = 2.5f;
+            params.has_roots = false;
+        }
+    } else {
+        // Sparse trees for other biomes
+        params.type = 3;
+        params.trunk_height = rand_range(seed, 8.0f, 15.0f);
+        params.trunk_radius = rand_range(seed, 1.0f, 1.8f);
+        params.branch_count = rand_int(seed, 2, 4);
+        params.branch_spread = 50.0f;
+        params.leaf_density = 0.5f;
+        params.leaf_radius = 3.5f;
+        params.has_roots = true;
+    }
+    
+    return params;
+}
+
+// #endregion
+
+// #region Tree Generation
+
+void set_voxel_if_in_bounds(int3 grid_pos, uint material) {
+    int world_block_span = GRID_SIZE * CHUNK_SIZE;
+    
+    if (grid_pos.x >= 0 && grid_pos.x < world_block_span &&
+        grid_pos.y >= 0 && grid_pos.y < world_block_span &&
+        grid_pos.z >= 0 && grid_pos.z < world_block_span) {
+        
+        int3 chunk_coord = grid_pos / CHUNK_SIZE;
+        int3 local_brick_coord = (grid_pos % CHUNK_SIZE) / BRICK_SIZE;
+        
+        int chunk_index = chunkIndex(chunk_coord);
+        int local_brick_index = brickLocalIndex(local_brick_coord);
+        int brick_index = brickGlobalIndex(chunk_index, local_brick_index);
+        
+        p.brickPtrBuffer.data[brick_index] = 1;
+        p.materialPtrBuffer.data[brick_index] = (uint8_t)material;
+        setBit(p.chunksBuffer, chunk_index, local_brick_index);
+    }
+}
+
+void generate_trunk(tree_params params) {
+    uint seed = params.seed;
+    float3 current_pos = params.base_pos;
+    float current_radius = params.trunk_radius;
+    
+    // Add roots
+    if (params.has_roots) {
+        int root_count = rand_int(seed, 3, 5);
+        for (int r = 0; r < root_count; r++) {
+            float angle = (float(r) / float(root_count)) * 2.0f * 3.14159f + rand_range(seed, -0.3f, 0.3f);
+            float root_radius = current_radius * 0.6f;
+            
+            for (int i = 0; i < 8; i++) {
+                float3 root_pos = params.base_pos + float3(
+                    cos(angle) * float(i) * 0.8f,
+                    -float(i) * 0.3f,
+                    sin(angle) * float(i) * 0.8f
+                );
+                
+                int radius_voxels = int(ceil(root_radius));
+                for (int dx = -radius_voxels; dx <= radius_voxels; dx++) {
+                    for (int dy = -radius_voxels; dy <= radius_voxels; dy++) {
+                        for (int dz = -radius_voxels; dz <= radius_voxels; dz++) {
+                            float dist = sqrt(float(dx*dx + dy*dy + dz*dz));
+                            if (dist <= root_radius) {
+                                int3 voxel_pos = world_to_grid_pos(root_pos) + int3(dx, dy, dz);
+                                set_voxel_if_in_bounds(voxel_pos, 3); // Wood
+                            }
+                        }
+                    }
+                }
+                
+                root_radius *= 0.85f;
+                if (root_radius < 0.5f) break;
+            }
+        }
+    }
+    
+    // Generate main trunk with slight curves
+    int trunk_segments = int(params.trunk_height);
+    float3 trunk_dir = float3(0, 1, 0);
+    
+    for (int i = 0; i < trunk_segments; i++) {
+        // Add slight random lean
+        if (i % 4 == 0) {
+            trunk_dir = normalize(trunk_dir + rand_unit_vector(seed) * 0.1f);
+            trunk_dir.y = abs(trunk_dir.y); // Keep going up
+        }
+        
+        current_pos += trunk_dir;
+        
+        // Taper trunk
+        if (i > trunk_segments / 2) {
+            current_radius *= 0.98f;
+        }
+        
+        // Fill trunk cylinder
+        int radius_voxels = int(ceil(current_radius));
+        for (int dx = -radius_voxels; dx <= radius_voxels; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -radius_voxels; dz <= radius_voxels; dz++) {
+                    float dist = sqrt(float(dx*dx + dz*dz));
+                    if (dist <= current_radius) {
+                        int3 voxel_pos = world_to_grid_pos(current_pos) + int3(dx, dy, dz);
+                        set_voxel_if_in_bounds(voxel_pos, 3); // Wood
+                    }
+                }
+            }
+        }
+    }
+}
+
+void generate_branch(float3 start_pos, float3 direction, float length, float radius, int depth, uint seed) {
+    if (depth > 2 || radius < 0.3f) {
+        // End with leaves
+        int leaf_radius = int(ceil(radius * 4.0f));
+        for (int dx = -leaf_radius; dx <= leaf_radius; dx++) {
+            for (int dy = -leaf_radius; dy <= leaf_radius; dy++) {
+                for (int dz = -leaf_radius; dz <= leaf_radius; dz++) {
+                    float dist = sqrt(float(dx*dx + dy*dy + dz*dz));
+                    if (dist <= float(leaf_radius)) {
+                        uint leaf_hash = hash3(uint(dx + 100), uint(dy + 100), uint(dz + 100)) ^ seed;
+                        if (float(leaf_hash) / float(0xFFFFFFFF) < 0.7f) {
+                            int3 voxel_pos = world_to_grid_pos(start_pos) + int3(dx, dy, dz);
+                            set_voxel_if_in_bounds(voxel_pos, 4); // Leaves
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+    
+    float3 current_pos = start_pos;
+    int segments = int(length);
+    
+    for (int i = 0; i < segments; i++) {
+        current_pos += direction;
+        
+        // Branch voxels
+        int radius_voxels = int(ceil(radius));
+        for (int dx = -radius_voxels; dx <= radius_voxels; dx++) {
+            for (int dy = -radius_voxels; dy <= radius_voxels; dy++) {
+                for (int dz = -radius_voxels; dz <= radius_voxels; dz++) {
+                    float dist = sqrt(float(dx*dx + dy*dy + dz*dz));
+                    if (dist <= radius) {
+                        int3 voxel_pos = world_to_grid_pos(current_pos) + int3(dx, dy, dz);
+                        set_voxel_if_in_bounds(voxel_pos, 3); // Wood
+                    }
+                }
+            }
+        }
+        
+        // Spawn sub-branches
+        if (i == segments / 2 && rand_float(seed) < 0.5f) {
+            float3 sub_dir = normalize(direction + rand_unit_vector(seed) * 0.5f);
+            //generate_branch(current_pos, sub_dir, length * 0.6f, radius * 0.6f, depth + 1, seed + uint(i));
+        }
+    }
+    
+    // Leaf cluster at end
+    //generate_branch(current_pos, direction, 0, radius * 0.8f, 3, seed);
+}
+
+void generate_tree(tree_params params) {
+    uint seed = params.seed;
+    
+    // Generate trunk
+    generate_trunk(params);
+    
+    // Generate branches
+    float branch_start_height = params.trunk_height * 0.5f;
+    float branch_spacing = params.trunk_height / float(params.branch_count + 1);
+    
+    for (int i = 0; i < params.branch_count; i++) {
+        float height = branch_start_height + float(i) * branch_spacing;
+        float3 branch_pos = params.base_pos + float3(0, height, 0);
+        
+        float angle = rand_range(seed, 0, 2.0f * 3.14159f);
+        float3 branch_dir = normalize(float3(
+            cos(angle) * sin(params.branch_spread * 3.14159f / 180.0f),
+            cos(params.branch_spread * 3.14159f / 180.0f),
+            sin(angle) * sin(params.branch_spread * 3.14159f / 180.0f)
+        ));
+        
+        float branch_length = rand_range(seed, params.trunk_height * 0.3f, params.trunk_height * 0.5f);
+        float branch_radius = params.trunk_radius * rand_range(seed, 0.3f, 0.5f);
+        
+        generate_branch(branch_pos, branch_dir, branch_length, branch_radius, 0, seed + uint(i * 1000));
+    }
+    
+    // Add canopy
+    if (params.type == 0 || params.type == 3) {
+        float3 canopy_center = params.base_pos + float3(0, params.trunk_height, 0);
+        int canopy_radius = int(ceil(params.leaf_radius * 1.5f));
+        
+        for (int dx = -canopy_radius; dx <= canopy_radius; dx++) {
+            for (int dy = -canopy_radius / 2; dy <= canopy_radius; dy++) {
+                for (int dz = -canopy_radius; dz <= canopy_radius; dz++) {
+                    float dist = sqrt(float(dx*dx + dy*dy + dz*dz));
+                    if (dist <= float(canopy_radius)) {
+                        uint leaf_hash = hash3(uint(dx + 200), uint(dy + 200), uint(dz + 200)) ^ seed;
+                        if (float(leaf_hash) / float(0xFFFFFFFF) < params.leaf_density) {
+                            int3 voxel_pos = world_to_grid_pos(canopy_center) + int3(dx, dy, dz);
+                            set_voxel_if_in_bounds(voxel_pos, 4); // Leaves
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// #endregion
+
+// #region Main
 
 [numthreads(4, 4, 4)]
-void main(uint3 brickCoord: SV_DispatchThreadID, uint3 localBrickCoord: SV_GroupThreadID)
-{
-    int worldBlockSpan = GRID_SIZE * CHUNK_SIZE;
+void main(uint3 brick_coord: SV_DispatchThreadID, uint3 local_brick_coord: SV_GroupThreadID) {
+    int world_block_span = GRID_SIZE * CHUNK_SIZE;
 
-    if (brickCoord.x >= worldBlockSpan || brickCoord.y >= worldBlockSpan || brickCoord.z >= worldBlockSpan)
+    if (brick_coord.x >= world_block_span || 
+        brick_coord.y >= world_block_span || 
+        brick_coord.z >= world_block_span)
         return;
 
-    int3 chunkCoord = int3(brickCoord / CHUNK_SIZE);
-    int chunkIndex = chunkIndex(chunkCoord);
+    int3 chunk_coord = int3(brick_coord / CHUNK_SIZE);
+    int chunk_index = chunkIndex(chunk_coord);
+    int local_brick_index = brickLocalIndex(local_brick_coord);
+    int brick_index = brickGlobalIndex(chunk_index, local_brick_index);
 
-    int localBrickIndex = brickLocalIndex(localBrickCoord);
-    int brickIndex = brickGlobalIndex(chunkIndex, localBrickIndex);
-
-    // write to bricks as well
+    // Initialize bricks
     p.bricksBuffer.data[0].data = {0, 0, 0, 0, 0, 0, 0, 0};
-    p.bricksBuffer.data[1].data = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+    p.bricksBuffer.data[1].data = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 
+                                   0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
     
-    if (p.passNum == 1)
-    {
-        var absVoxel = brickCoord * BRICK_SIZE;
-        bool isSolid = calculateSolid(absVoxel);
-        p.brickPtrBuffer.data[brickIndex] = isSolid ? 1 : 0;
-        setVoxelMaterial(brickIndex, selectMaterial(brickCoord, absVoxel));
-
-        if (isSolid)
-        {
-            setBit(p.chunksBuffer, chunkIndex, localBrickIndex);
+    if (p.passNum == 1) {
+        // Pass 1: Generate terrain
+        int3 abs_voxel = brick_coord * BRICK_SIZE;
+        float3 world_pos = grid_to_world_pos(abs_voxel);
+        float terrain_height = calculate_terrain_height(float2(world_pos.x, world_pos.z));
+        
+        bool is_solid = world_pos.y < terrain_height;
+        
+        if (is_solid) {
+            uint material = get_terrain_material(abs_voxel);
+            p.materialPtrBuffer.data[brick_index] = (uint8_t)material;
+            p.brickPtrBuffer.data[brick_index] = 1;
+            setBit(p.chunksBuffer, chunk_index, local_brick_index);
+        } else {
+            p.brickPtrBuffer.data[brick_index] = 0;
+            clearBit(p.chunksBuffer, chunk_index, local_brick_index);
         }
-        else
-        {
-            clearBit(p.chunksBuffer, chunkIndex, localBrickIndex);
+    }
+    else if (p.passNum == 2) {
+        // Pass 2: Generate trees
+        if (true) {
+            tree_params params = get_tree_params(brick_coord);
+            generate_tree(params);
         }
     }
 }
+
+// #endregion

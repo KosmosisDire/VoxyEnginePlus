@@ -162,6 +162,97 @@ TraceResult traceScene(Ray ray, float startDepth = 0, bool ignoreTransparent = f
     return result;
 }
 
+bool traceBrickForAO(float3 origin, float3 direction, float maxDist, out float hitDistance)
+{
+    float3 invDir = 1.0 / max(abs(direction), float3(EPSILON));
+    invDir *= sign(direction);
+    
+    // Box intersection test
+    float tMin, tMax;
+    float3 normal;
+    if (!intersectBoxNormal(origin, invDir, float3(0), float3(GRID_SIZE), tMin, tMax, normal))
+    {
+        hitDistance = maxDist;
+        return false;
+    }
+    
+    if (tMin > maxDist)
+    {
+        hitDistance = maxDist;
+        return false;
+    }
+    
+    float3 rayStart = origin;
+    if (tMin > EPSILON)
+    {
+        origin += direction * (tMin + 0.01);
+    }
+    
+    // Chunk traversal
+    DDAState chunkDDA = initDDA(origin, direction, invDir);
+    int iterations = 0;
+    const int maxIterations = 60; // Enough for AO range
+    
+    while (iterations < maxIterations && isInBounds(chunkDDA.cell, int3(GRID_SIZE)))
+    {
+        int chunkIdx = chunkIndex(chunkDDA.cell);
+        daxa_u32vec2 chunkMask = p.chunksBuffer.data[chunkIdx];
+        
+        if (all(chunkMask == 0))
+        {
+            normal = stepDDA(chunkDDA);
+            iterations++;
+            continue;
+        }
+        
+        // Brick traversal - must match original logic exactly
+        float3 chunkUv = getDdaUvs(chunkDDA, origin, direction);
+        float3 brickOrigin = clamp(chunkUv * CHUNK_SIZE, float3(EPSILON), float3(CHUNK_SIZE - EPSILON));
+        DDAState brickDDA = initDDA(brickOrigin, direction, invDir);
+        
+        while (iterations < maxIterations && isInBounds(brickDDA.cell, int3(CHUNK_SIZE)))
+        {
+            int brickIdx = brickLocalIndex(brickDDA.cell);
+            if (getBit(chunkMask, brickIdx))
+            {
+                int brickIdxGlobal = brickGlobalIndex(chunkIdx, brickIdx);
+                BrickBitmask brickMask = p.bricksBuffer.data[(int)p.brickPtrBuffer.data[brickIdxGlobal]];
+                
+                if (!brickBitmaskEmpty(brickMask))
+                {
+                    // Calculate exact hit position like in original
+                    float3 brickUv = getDdaUvs(brickDDA, brickOrigin, direction);
+                    float3 hitPos = chunkDDA.cell + brickDDA.cell / float(CHUNK_SIZE) + 
+                                   brickUv / float(CHUNK_SIZE);
+                    hitDistance = length(hitPos - rayStart);
+                    
+                    if (hitDistance <= maxDist)
+                    {
+                        // Check if emissive and skip if so
+                        uint materialId = getMaterialId(brickIdxGlobal);
+                        Material mat = getMaterial(materialId);
+                        if (any(mat.emission != 0.0f))
+                        {
+                            normal = stepDDA(brickDDA);
+                            iterations++;
+                            continue;
+                        }
+                        
+                        return true;
+                    }
+                }
+            }
+            normal = stepDDA(brickDDA);
+            iterations++;
+        }
+        normal = stepDDA(chunkDDA);
+        iterations++;
+    }
+    
+    hitDistance = maxDist;
+    return false;
+}
+
 float3 RandomHemisphereUnitVector(uint seed1, uint seed2)
 {
     // Simple hash for speed
