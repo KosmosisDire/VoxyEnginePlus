@@ -6,9 +6,9 @@
 //------------------------------------------------------------------------------
 static const int GTAO_SLICES = 3;      // Number of slices (directions) around normal
 static const int GTAO_STEPS = 3;       // Steps per slice along each direction
-static const float GTAO_RADIUS = 1.5f; // VIEW SPACE radius in units
-static const float GTAO_FALLOFF_RANGE = 0.2f; // Falloff range as fraction of radius (XeGTAO default)
-static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 0.5f; // Focus samples towards center
+static const float GTAO_RADIUS = 3.5f; // VIEW SPACE radius in units
+static const float GTAO_FALLOFF_RANGE = 0.6f; // Falloff range as fraction of radius (XeGTAO default)
+static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 2.0f; // Focus samples towards center
 static const float GTAO_THIN_OCCLUDER_COMPENSATION = 0.0f; // Reduce over-darkening from thin occluders
 static const float GTAO_FINAL_VALUE_POWER = 1.5f; // Power for final value adjustment
 static const float GTAO_PIXEL_TOO_CLOSE_THRESHOLD = 1.9f; // Minimum distance threshold
