@@ -2,17 +2,43 @@
 #include "tracing/trace-contree.slang"
 
 //------------------------------------------------------------------------------
-// GTAO Configuration
+// GTAO Configuration (based on XeGTAO reference implementation)
 //------------------------------------------------------------------------------
-static const int GTAO_SLICES = 5;      // Number of slices (directions) around normal
-static const int GTAO_STEPS = 2;       // Steps per slice along each direction
-static const float GTAO_RADIUS = BRICK_SIZE * WORLD_VOXEL_SIZE * 4; // World space radius
-static const float GTAO_FALLOFF_RANGE = 0.5f; // Falloff range as fraction of radius
-static const float GTAO_INTENSITY = 0.9f;  // AO strength
-static const float GTAO_POWER = 1.0f;  // Power for final value adjustment
+static const int GTAO_SLICES = 3;      // Number of slices (directions) around normal
+static const int GTAO_STEPS = 3;       // Steps per slice along each direction
+static const float GTAO_RADIUS = 1.5f; // VIEW SPACE radius in units
+static const float GTAO_FALLOFF_RANGE = 0.2f; // Falloff range as fraction of radius (XeGTAO default)
+static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 0.5f; // Focus samples towards center
+static const float GTAO_THIN_OCCLUDER_COMPENSATION = 0.0f; // Reduce over-darkening from thin occluders
+static const float GTAO_FINAL_VALUE_POWER = 1.5f; // Power for final value adjustment
+static const float GTAO_PIXEL_TOO_CLOSE_THRESHOLD = 1.9f; // Minimum distance threshold
+
+// Fast approximation of acos for GTAO (from XeGTAO)
+float FastACos(float inX)
+{
+    const float PI = 3.141593f;
+    const float HALF_PI = 1.570796f;
+    float x = abs(inX);
+    float res = -0.156583f * x + HALF_PI;
+    res *= sqrt(1.0f - x);
+    return (inX >= 0) ? res : PI - res;
+}
+
+// Convert world position to view space
+float3 WorldToViewSpace(float3 worldPos)
+{
+    float4 viewPos = mul(p.stateBuffer.camera.view, float4(worldPos, 1.0f));
+    return viewPos.xyz;
+}
+
+// Convert world normal to view space (no translation)
+float3 WorldNormalToViewSpace(float3 worldNormal)
+{
+    return mul((float3x3)p.stateBuffer.camera.view, worldNormal);
+}
 
 //------------------------------------------------------------------------------
-// GTAO Implementation
+// GTAO Implementation (VIEW SPACE like XeGTAO)
 //------------------------------------------------------------------------------
 float calculateGTAO(uint2 pixel, float3 worldPos, float3 worldNormal, float depth,
                    RWTexture2D<float3> positionBuffer, RWTexture2D<float> depthBuffer,
@@ -21,113 +47,190 @@ float calculateGTAO(uint2 pixel, float3 worldPos, float3 worldNormal, float dept
     // Early out for invalid depth
     if (depth <= 0.0f) return 1.0f;
 
-    // All calculations in WORLD SPACE
-    float3 viewDirection = normalize(p.stateBuffer.camera.position - worldPos);
+    // Transform to VIEW SPACE (critical!)
+    float3 viewPos = WorldToViewSpace(worldPos);
+    float3 viewNormal = normalize(WorldNormalToViewSpace(worldNormal));
 
-    // Calculate screen space radius based on world space radius
-    float4 clipPos = mul(p.stateBuffer.camera.viewProj, float4(worldPos, 1.0f));
-    float2 screenPos = (clipPos.xy / clipPos.w) * 0.5f + 0.5f;
-    screenPos *= screenSize;
+    // View vector in VIEW SPACE points toward camera (at origin)
+    // In view space, camera is at origin, so viewVec = -position normalized
+    float3 viewVec = normalize(-viewPos);
 
-    // Project world radius to screen space
-    float4 radiusClipPos = mul(p.stateBuffer.camera.viewProj, float4(worldPos + float3(GTAO_RADIUS, 0, 0), 1.0f));
-    float2 radiusScreenPos = (radiusClipPos.xy / radiusClipPos.w) * 0.5f + 0.5f;
-    radiusScreenPos *= screenSize;
-    float screenRadius = length(radiusScreenPos - screenPos);
-    screenRadius = max(screenRadius, 30.0f);  // Minimum radius
-    screenRadius = min(screenRadius, 200.0f); // Maximum radius
+    // Calculate screen-space radius (exactly like XeGTAO)
+    float viewspaceZ = abs(viewPos.z); // Depth in view space
+    float2 pixelSize = 1.0f / float2(screenSize);
 
-    float occlusion = 0.0f;
+    // Extract tanHalfFOV from projection matrix
+    // proj[0][0] = 1/tanHalfFOVX, proj[1][1] = 1/tanHalfFOVY
+    float tanHalfFOVX = 1.0f / p.stateBuffer.camera.proj[0][0];
+    float tanHalfFOVY = 1.0f / p.stateBuffer.camera.proj[1][1];
 
-    // Main GTAO loop - for each slice direction
+    // NDCToViewMul (from XeGTAO)
+    float2 NDCToViewMul = float2(tanHalfFOVX * 2.0f, tanHalfFOVY * -2.0f);
+
+    // NDCToViewMul_x_PixelSize
+    float2 NDCToViewMul_x_PixelSize = NDCToViewMul * pixelSize;
+
+    // Viewspace pixel size at this depth (XeGTAO line 338)
+    float2 pixelDirRBViewspaceSizeAtCenterZ = viewspaceZ * NDCToViewMul_x_PixelSize;
+
+    // Screen space radius (XeGTAO line 340)
+    float screenRadius = GTAO_RADIUS / pixelDirRBViewspaceSizeAtCenterZ.x;
+
+    // Falloff parameters
+    const float effectRadius = GTAO_RADIUS;
+    const float falloffRange = GTAO_FALLOFF_RANGE * effectRadius;
+    const float falloffFrom = effectRadius * (1.0f - GTAO_FALLOFF_RANGE);
+    const float falloffMul = -1.0f / falloffRange;
+    const float falloffAdd = falloffFrom / falloffRange + 1.0f;
+
+    // Minimum sample distance
+    const float minS = GTAO_PIXEL_TOO_CLOSE_THRESHOLD / screenRadius;
+
+    // Initialize visibility
+    float visibility = 0.0f;
+
+    // Fade out for small screen radii (XeGTAO line 343)
+    visibility += saturate((10.0f - screenRadius) / 100.0f) * 0.5f;
+
+    // Main GTAO algorithm (following XeGTAO exactly)
     for (int slice = 0; slice < GTAO_SLICES; slice++)
     {
-        // Random angle for this slice using blue noise
-        float sliceAngle = (float(slice) + noiseVec.x) / float(GTAO_SLICES) * 2.0f * PI;
-        float2 sliceDir = float2(cos(sliceAngle), sin(sliceAngle));
+        // R1 sequence noise
+        float sliceK = (float(slice) + noiseVec.x) / float(GTAO_SLICES);
 
-        // Track maximum horizon angles for this slice
-        float maxCos = -1.0f;
+        // Lines 5-6 from paper: compute slice angle
+        float phi = sliceK * PI; // Note: XeGTAO uses PI not 2*PI
+        float cosPhi = cos(phi);
+        float sinPhi = sin(phi);
+        float2 omega = float2(cosPhi, -sinPhi);
 
-        // Sample along the slice in screen space
-        for (int step = 1; step <= GTAO_STEPS; step++)
+        // Convert to screen pixels
+        omega *= screenRadius;
+
+        // Line 8: direction vector IN VIEW SPACE (XY plane, Z=0)
+        float3 directionVec = float3(cosPhi, sinPhi, 0);
+
+        // Line 9: orthogonal direction vector
+        float3 orthoDirectionVec = directionVec - (dot(directionVec, viewVec) * viewVec);
+
+        // Line 10: axis vector (orthogonal to both)
+        float3 axisVec = normalize(cross(orthoDirectionVec, viewVec));
+
+        // Line 11: project normal onto slice plane
+        float3 projectedNormalVec = viewNormal - axisVec * dot(viewNormal, axisVec);
+
+        // Line 13-14: sign and length
+        float signNorm = sign(dot(orthoDirectionVec, projectedNormalVec));
+        float projectedNormalVecLength = length(projectedNormalVec);
+        float cosNorm = saturate(dot(projectedNormalVec, viewVec) / max(projectedNormalVecLength, 0.0001f));
+
+        // Line 15: n angle
+        float n = signNorm * FastACos(cosNorm);
+
+        // Initialize horizon cosines (XeGTAO uses cosines, not angles!)
+        const float lowHorizonCos0 = cos(n + 1.5707963f); // n + PI/2
+        const float lowHorizonCos1 = cos(n - 1.5707963f); // n - PI/2
+        float horizonCos0 = lowHorizonCos0;
+        float horizonCos1 = lowHorizonCos1;
+
+        // Sample along both directions
+        for (int step = 0; step < GTAO_STEPS; step++)
         {
-            // Power distribution for better sampling
-            float stepRatio = float(step) / float(GTAO_STEPS);
-            stepRatio = pow(stepRatio, 1.5f);
+            // R1 sequence for step noise
+            float stepBaseNoise = float(slice + step * GTAO_STEPS) * 0.6180339887f;
+            float stepNoise = frac(noiseVec.y + stepBaseNoise);
 
-            // Add noise to reduce banding
-            float stepNoise = frac(noiseVec.y + float(slice * GTAO_STEPS + step) * 0.6180339887f);
-            stepRatio = (float(step - 1) + stepNoise) / float(GTAO_STEPS);
-            stepRatio = pow(stepRatio, 1.5f);
+            // Line 20: calculate s with noise
+            float s = (float(step) + stepNoise) / float(GTAO_STEPS);
+            s = pow(s, GTAO_SAMPLE_DISTRIBUTION_POWER);
+            s += minS;
 
-            // Screen space offset for this sample
-            float2 sampleOffset = sliceDir * stepRatio * screenRadius;
-            float2 samplePixel = float2(pixel) + sampleOffset;
+            // Lines 21-22: sample offsets
+            float2 sampleOffset = s * omega;
+            float2 screenPos = float2(pixel);
 
-            // Check bounds
-            if (any(samplePixel < 0) || any(samplePixel >= screenSize))
-                continue;
+            // Sample both directions
+            float2 samplePixel0 = screenPos + sampleOffset;
+            float2 samplePixel1 = screenPos - sampleOffset;
 
-            // Sample the world position at this screen location
-            uint2 sampleCoord = uint2(samplePixel);
-            float3 sampleWorldPos = positionBuffer[sampleCoord];
-
-            // Calculate horizon vector in WORLD SPACE
-            float3 horizonVec = sampleWorldPos - worldPos;
-            float horizonDist = length(horizonVec);
-
-            // Skip if too close (self-occlusion) or invalid
-            if (horizonDist < 0.01f)
-                continue;
-
-            horizonVec /= horizonDist; // Normalize
-
-            // Calculate horizon angle using world space vectors
-            float horizonCos = dot(worldNormal, horizonVec);
-
-            // Distance-based falloff
-            float normalizedDist = horizonDist / GTAO_RADIUS;
-            float weight = 1.0f;
-
-            if (normalizedDist < 1.0f)
+            // Sample position 0 (positive direction)
+            if (all(samplePixel0 >= 0) && all(samplePixel0 < screenSize))
             {
-                // Within radius - smooth falloff
-                weight = 1.0f - pow(normalizedDist, 2.0f);
-            }
-            else if (normalizedDist < 1.0f + GTAO_FALLOFF_RANGE)
-            {
-                // In falloff range - smooth fade out
-                float falloff = (normalizedDist - 1.0f) / GTAO_FALLOFF_RANGE;
-                weight = 1.0f - falloff;
-                weight = smoothstep(0.0f, 1.0f, weight);
-            }
-            else
-            {
-                // Beyond falloff - no contribution
-                continue;
+                uint2 sampleCoord0 = uint2(samplePixel0);
+                float3 sampleWorldPos0 = positionBuffer[sampleCoord0];
+                float3 sampleViewPos0 = WorldToViewSpace(sampleWorldPos0);
+
+                float3 sampleDelta0 = sampleViewPos0 - viewPos;
+                float sampleDist0 = length(sampleDelta0);
+
+                if (sampleDist0 > 0.01f)
+                {
+                    // Line 23: horizon vector
+                    float3 sampleHorizonVec0 = sampleDelta0 / sampleDist0;
+
+                    // Distance-based falloff
+                    float falloffBase0 = length(float3(sampleDelta0.x, sampleDelta0.y, sampleDelta0.z * (1.0f + GTAO_THIN_OCCLUDER_COMPENSATION)));
+                    float weight0 = saturate(falloffBase0 * falloffMul + falloffAdd);
+
+                    // Sample horizon cosine (not angle!)
+                    float shc0 = dot(sampleHorizonVec0, viewVec);
+                    shc0 = lerp(lowHorizonCos0, shc0, weight0);
+
+                    // Track maximum
+                    horizonCos0 = max(horizonCos0, shc0);
+                }
             }
 
-            // Track maximum horizon angle (weighted)
-            float weightedCos = lerp(-1.0f, horizonCos, weight);
-            maxCos = max(maxCos, weightedCos);
+            // Sample position 1 (negative direction)
+            if (all(samplePixel1 >= 0) && all(samplePixel1 < screenSize))
+            {
+                uint2 sampleCoord1 = uint2(samplePixel1);
+                float3 sampleWorldPos1 = positionBuffer[sampleCoord1];
+                float3 sampleViewPos1 = WorldToViewSpace(sampleWorldPos1);
+
+                float3 sampleDelta1 = sampleViewPos1 - viewPos;
+                float sampleDist1 = length(sampleDelta1);
+
+                if (sampleDist1 > 0.01f)
+                {
+                    float3 sampleHorizonVec1 = sampleDelta1 / sampleDist1;
+
+                    float falloffBase1 = length(float3(sampleDelta1.x, sampleDelta1.y, sampleDelta1.z * (1.0f + GTAO_THIN_OCCLUDER_COMPENSATION)));
+                    float weight1 = saturate(falloffBase1 * falloffMul + falloffAdd);
+
+                    float shc1 = dot(sampleHorizonVec1, viewVec);
+                    shc1 = lerp(lowHorizonCos1, shc1, weight1);
+
+                    horizonCos1 = max(horizonCos1, shc1);
+                }
+            }
         }
 
-        // Calculate occlusion for this slice
-        float sliceOcclusion = saturate((maxCos + 1.0f) * 0.5f);
-        occlusion += sliceOcclusion;
+        // Fudge factor for slopes (from XeGTAO)
+        projectedNormalVecLength = lerp(projectedNormalVecLength, 1.0f, 0.05f);
+
+        // Line 27: calculate horizon angles and integrate
+        float h0 = -FastACos(horizonCos1);
+        float h1 = FastACos(horizonCos0);
+
+        // Integration formula (exact from XeGTAO)
+        float iarc0 = (cosNorm + 2.0f * h0 * sin(n) - cos(2.0f * h0 - n)) / 4.0f;
+        float iarc1 = (cosNorm + 2.0f * h1 * sin(n) - cos(2.0f * h1 - n)) / 4.0f;
+        float localVisibility = projectedNormalVecLength * (iarc0 + iarc1);
+
+        visibility += localVisibility;
     }
 
-    // Average occlusion over all slices
-    occlusion /= float(GTAO_SLICES);
+    // Average over slices
+    visibility /= float(GTAO_SLICES);
 
-    // Apply power for contrast
-    occlusion = pow(saturate(occlusion), GTAO_POWER);
+    // Apply final power
+    visibility = pow(saturate(visibility), GTAO_FINAL_VALUE_POWER);
 
-    // Apply intensity and invert
-    // Return: 1 = no occlusion, 0 = full occlusion
-    float ao = 1.0f - occlusion * GTAO_INTENSITY;
-    return saturate(ao);
+    // Prevent total occlusion
+    visibility = max(0.03f, visibility);
+
+    return visibility;
 }
 
 //------------------------------------------------------------------------------
