@@ -42,6 +42,9 @@ struct VoxyApp : public Application
 
         void OnUpdate(float dt) override
         {
+            // Get GPU timings from PREVIOUS frame (after GPU finished)
+            uiState.gpuTimings = voxelRenderer.GetGPUTimings();
+
             // renderer state
             RenderData &renderData = voxelRenderer.stateData;
             renderData.dt = dt;

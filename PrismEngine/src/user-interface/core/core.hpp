@@ -27,5 +27,6 @@ struct UIData
     bool mouseIsActive = true; // Does this mean that the mouse is captured or not captured? Is this meant to be used to hide or show the UI?
     std::unordered_map<std::string, Page> pages; // name -> page
     RenderData *renderData;
+    GPUTimings gpuTimings = {};
 };
 

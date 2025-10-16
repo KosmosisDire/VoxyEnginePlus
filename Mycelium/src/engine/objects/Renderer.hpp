@@ -306,6 +306,7 @@ class Renderer
                 .format = swapchain.get_format(),
                 .size = {surface_width, surface_height, 1},
                 .usage = flags,
+                .allocate_info = daxa::MemoryFlagBits::DEDICATED_MEMORY,
                 .name = name,
             });
         }
@@ -317,6 +318,7 @@ class Renderer
                 .format = format,
                 .size = {static_cast<u32>(surface_width * scale), static_cast<u32>(surface_height * scale), 1},
                 .usage = flags,
+                .allocate_info = daxa::MemoryFlagBits::DEDICATED_MEMORY,
                 .name = name,
             });
         }
@@ -524,7 +526,7 @@ class Renderer
 
             return device.create_swapchain({.native_window = native_handle,
                                             .native_window_platform = platform,
-                                            .present_mode = daxa::PresentMode::FIFO,
+                                            .present_mode = daxa::PresentMode::IMMEDIATE,
                                             .image_usage = daxa::ImageUsageFlagBits::TRANSFER_DST,
                                             .name = name});
         }

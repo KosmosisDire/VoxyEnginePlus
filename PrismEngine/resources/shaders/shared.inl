@@ -234,6 +234,16 @@ struct GBuffer
     daxa_ImageViewId ao; // ambient occlusion
 };
 
+struct GPUTimings
+{
+    daxa_f32 terrainGen;
+    daxa_f32 gbufferTrace;
+    daxa_f32 gtaoPass;
+    daxa_f32 aoApply;
+    daxa_f32 composite;
+    daxa_f32 totalFrame;
+};
+
 struct ComputePush
 {
     daxa_BufferPtr(GBuffer) gbuffer;

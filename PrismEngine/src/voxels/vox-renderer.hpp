@@ -9,6 +9,7 @@
 #include <engine/apis/Daxa.hpp>
 #include <engine/objects/Renderer.hpp>
 #include <engine/objects/Camera.hpp>
+#include <chrono>
 
 using namespace daxa::types;
 
@@ -120,6 +121,15 @@ class VoxelRenderer
 
         ComputePush pushData;
 
+        // CPU-side timing (captured inside tasks)
+        GPUTimings gpuTimings = {};
+        std::chrono::high_resolution_clock::time_point frameStart;
+        std::chrono::high_resolution_clock::time_point terrainStart, terrainEnd;
+        std::chrono::high_resolution_clock::time_point gbufferStart, gbufferEnd;
+        std::chrono::high_resolution_clock::time_point gtaoStart, gtaoEnd;
+        std::chrono::high_resolution_clock::time_point aoApplyStart, aoApplyEnd;
+        std::chrono::high_resolution_clock::time_point compositeStart, compositeEnd;
+
     public:
         Camera camera;
         RenderData stateData =
@@ -142,13 +152,13 @@ class VoxelRenderer
             render_composite_compute = renderer->AddComputePipeline<ComputePush>("composite", "composite.slang");
 
             // Initialize occupancy buffer
-            renderer->CreateBuffer<Chunks>("Chunks", chunksBuffer, task_chunksBuffer);
-            renderer->CreateBuffer<Bricks>("Bricks", bricksBuffer, task_bricksBuffer);
-            renderer->CreateBuffer<BrickPointers>("BrickPointers", brickPtrBuffer, task_brickPtrBuffer);
+            renderer->CreateBuffer<Chunks>("Chunks", chunksBuffer, task_chunksBuffer, daxa::MemoryFlagBits::DEDICATED_MEMORY);
+            renderer->CreateBuffer<Bricks>("Bricks", bricksBuffer, task_bricksBuffer, daxa::MemoryFlagBits::DEDICATED_MEMORY);
+            renderer->CreateBuffer<BrickPointers>("BrickPointers", brickPtrBuffer, task_brickPtrBuffer, daxa::MemoryFlagBits::DEDICATED_MEMORY);
             renderer->CreateBuffer<Materials>("Materials", materialsBuffer, task_materialsBuffer, daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE);
-            renderer->CreateBuffer<MaterialPointers>("MaterialPointers", materialPtrBuffer, task_materialPtrBuffer);
-            renderer->CreateBuffer<RenderData>("RenderData", stateBuffer, task_stateBuffer);
-            renderer->CreateBuffer<GBuffer>("GBuffer", gbufferGPU, task_gbufferGPU);
+            renderer->CreateBuffer<MaterialPointers>("MaterialPointers", materialPtrBuffer, task_materialPtrBuffer, daxa::MemoryFlagBits::DEDICATED_MEMORY);
+            renderer->CreateBuffer<RenderData>("RenderData", stateBuffer, task_stateBuffer, daxa::MemoryFlagBits::DEDICATED_MEMORY);
+            renderer->CreateBuffer<GBuffer>("GBuffer", gbufferGPU, task_gbufferGPU, daxa::MemoryFlagBits::DEDICATED_MEMORY);
 
             gbufferCPU.CreateImages(*renderer);
 
@@ -253,6 +263,8 @@ class VoxelRenderer
                 .transparency = 0.0f,
                 .roughness = 0.8f,
             };
+
+            frameStart = std::chrono::high_resolution_clock::now();
         }
 
         ~VoxelRenderer()
@@ -303,6 +315,8 @@ class VoxelRenderer
                               .SetTask(
                                   [this](daxa::TaskInterface ti)
             {
+                frameStart = std::chrono::high_resolution_clock::now();
+
                 renderer->CopyToBuffer<GBuffer>(ti, gbufferCPU.GetGPUBuffer(stateData.frame), ti.get(task_gbufferGPU), 0);
 
                 stateData.camera = camera.getCameraData();
@@ -316,8 +330,13 @@ class VoxelRenderer
                 .SetTask(
                     [this, render_image](daxa::TaskInterface ti)
             {
+                terrainStart = std::chrono::high_resolution_clock::now();
+
                 if (!dirtyTerrain)
+                {
+                    terrainEnd = terrainStart;
                     return;
+                }
 
                 auto push = ComputePush
                 {
@@ -338,6 +357,8 @@ class VoxelRenderer
                 ti.recorder.dispatch({(GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4, (GRID_SIZE * CHUNK_SIZE + 3) / 4});
 
                 dirtyTerrain = false;
+
+                terrainEnd = std::chrono::high_resolution_clock::now();
             }));
 
 
@@ -365,31 +386,25 @@ class VoxelRenderer
                 ti.recorder.set_pipeline(*render_gbuffer_compute);
 
                 // Pass 0: Trace rays and write GBuffer
+                gbufferStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 0;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
-
-                // Memory barrier: GBuffer writes must complete before GTAO reads
-                ti.recorder.pipeline_barrier({
-                    .src_access = daxa::AccessConsts::COMPUTE_SHADER_WRITE,
-                    .dst_access = daxa::AccessConsts::COMPUTE_SHADER_READ_WRITE,
-                });
+                gbufferEnd = std::chrono::high_resolution_clock::now();
 
                 // Pass 1: Calculate GTAO from complete GBuffer
+                gtaoStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 1;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
-
-                // Memory barrier: AO writes must complete before application
-                ti.recorder.pipeline_barrier({
-                    .src_access = daxa::AccessConsts::COMPUTE_SHADER_WRITE,
-                    .dst_access = daxa::AccessConsts::COMPUTE_SHADER_READ_WRITE,
-                });
+                gtaoEnd = std::chrono::high_resolution_clock::now();
 
                 // Pass 2: Apply AO to lighting
+                aoApplyStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 2;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 31) / 32, (renderer->surface_height + 31) / 32});
+                aoApplyEnd = std::chrono::high_resolution_clock::now();
             }));
 
             renderer->AddTask(InlineTask("composite_render")
@@ -401,6 +416,8 @@ class VoxelRenderer
                               .SetTask(
                                   [this, render_image](daxa::TaskInterface ti)
             {
+                compositeStart = std::chrono::high_resolution_clock::now();
+
                 auto push = ComputePush
                 {
                     .gbuffer = renderer->GetDeviceAddress(ti, task_gbufferGPU),
@@ -412,6 +429,8 @@ class VoxelRenderer
                 ti.recorder.set_pipeline(*render_composite_compute);
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
+
+                compositeEnd = std::chrono::high_resolution_clock::now();
             }));
 
             // create task to blit render image to swapchain
@@ -422,5 +441,25 @@ class VoxelRenderer
         {
             gbufferCPU.ResizeImages(*renderer);
             camera.setViewportSize(width, height);
+        }
+
+        GPUTimings GetGPUTimings()
+        {
+            // Wait for GPU to finish (force synchronization)
+            renderer->device.wait_idle();
+
+            auto toMs = [](auto start, auto end) -> float {
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                return duration.count() / 1000.0f;
+            };
+
+            gpuTimings.terrainGen = toMs(terrainStart, terrainEnd);
+            gpuTimings.gbufferTrace = toMs(gbufferStart, gbufferEnd);
+            gpuTimings.gtaoPass = toMs(gtaoStart, gtaoEnd);
+            gpuTimings.aoApply = toMs(aoApplyStart, aoApplyEnd);
+            gpuTimings.composite = toMs(compositeStart, compositeEnd);
+            gpuTimings.totalFrame = toMs(frameStart, compositeEnd);
+
+            return gpuTimings;
         }
 };
