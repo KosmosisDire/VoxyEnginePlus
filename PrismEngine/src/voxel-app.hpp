@@ -17,7 +17,7 @@ struct VoxyApp : public Application
         daxa::TaskImage task_render_image;
 
         VoxyApp()
-            : Application("Voxy", {"resources/shaders"}),
+            : Application("Voxy", {"../../../../PrismEngine/resources/shaders", "../../../../Mycelium/resources/shaders"}),
         voxelRenderer(renderer),
         uiState({.renderData = &voxelRenderer.stateData})
         {

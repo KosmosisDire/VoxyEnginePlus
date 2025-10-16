@@ -199,6 +199,47 @@ struct Chunks
 
 DAXA_DECL_BUFFER_PTR(Chunks);
 
+//=============================================================================
+// Contree Structures (4x4x4 sparse variable depth tree)
+//=============================================================================
+
+// Contree constants
+static const daxa_u32 CONTREE_LEVELS = 4;
+static const daxa_u32 CONTREE_BRANCHING = 4;
+static const daxa_u32 CONTREE_CHILDREN = 64; // 4x4x4
+static const daxa_u32 CONTREE_INVALID_PTR = 0xFFFFFFFF;
+
+// Contree node - 16 bytes (12 bytes used + 4 bytes padding)
+// Matches VoxelRT layout in first 12 bytes:
+// Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
+// Bytes 4-7:   PackedData[1] = PopMask low 32 bits
+// Bytes 8-11:  PackedData[2] = PopMask high 32 bits
+// Bytes 12-15: Padding (unused)
+struct ContreeNode
+{
+    daxa_u32 PackedData[3];  // First 12 bytes match VoxelRT exactly
+    daxa_u32 _padding;       // Bytes 12-15: Explicit padding
+
+#ifndef __cplusplus
+    property bool IsLeaf {
+        get { return (PackedData[0] & 1) != 0; }
+    }
+    property uint ChildPtr {
+        get { return PackedData[0] >> 2; }
+    }
+    property uint64_t PopMask {
+        get { return PackedData[1] | uint64_t(PackedData[2]) << 32; }
+    }
+#endif
+};
+
+struct ContreeBuffer
+{
+    ContreeNode nodes[1]; // Variable length array
+};
+
+DAXA_DECL_BUFFER_PTR(ContreeBuffer);
+
 // Material definition
 struct Material
 {
@@ -247,17 +288,12 @@ struct GPUTimings
 struct ComputePush
 {
     daxa_BufferPtr(GBuffer) gbuffer;
-    daxa_BufferPtr(Chunks) chunksBuffer;
-    daxa_BufferPtr(Bricks) bricksBuffer;
-    daxa_BufferPtr(BrickPointers) brickPtrBuffer;
     daxa_BufferPtr(Materials) materialsBuffer;
-    daxa_BufferPtr(MaterialPointers) materialPtrBuffer;
     daxa_BufferPtr(RenderData) stateBuffer;
-    daxa_BufferPtr(RayRequests) rayRequestBuffer;
-    daxa_BufferPtr(RayResults) rayResultBuffer;
+    daxa_BufferPtr(ContreeBuffer) contreeBuffer;
     daxa_ImageViewId screen;
-    daxa_ImageViewId blueNoise; // blue noise texture 128 x 128, different for each frame
-    daxa_ImageViewId blueNoiseStatic; // blue noise texture 128 x 128, different for each frame
+    daxa_ImageViewId blueNoise;
     daxa_u32vec2 screenSize;
     daxa_u32 passNum;
+    daxa_u32 contreeNodeCount;
 };

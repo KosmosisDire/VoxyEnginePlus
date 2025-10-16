@@ -12,49 +12,42 @@ float3 inverseDirection(float3 dir)
 
 void setBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
 {
-    InterlockedOr(occupancy.data[brickIndex].data[voxelIndex / 32], (1 << (voxelIndex % 32)));
+    InterlockedOr(occupancy.data[brickIndex].data[voxelIndex >> 5], (1u << (voxelIndex & 31)));
 }
 
 void clearBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
 {
-    InterlockedAnd(occupancy.data[brickIndex].data[voxelIndex / 32], ~(1 << (voxelIndex % 32)));
+    InterlockedAnd(occupancy.data[brickIndex].data[voxelIndex >> 5], ~(1u << (voxelIndex & 31)));
 }
 
 void setBit(inout BrickBitmask mask, int index)
 {
-
-    mask.data[index / 32] |= (1 << (index % 32));
+    mask.data[index >> 5] |= (1u << (index & 31));
 }
 
 void clearBit(inout BrickBitmask mask, int index)
 {
-    mask.data[index / 32] &= ~(1 << (index % 32));
+    mask.data[index >> 5] &= ~(1u << (index & 31));
 }
 
 bool getBit(BrickBitmask mask, int index)
 {
-    // Calculate which 32-bit chunk and bit position
-    uint chunk = index / 32;
-    uint bitPos = index % 32;
-    uint bitMask = 1u << bitPos;
-
-    // Return true if bit is set
-    return (mask.data[chunk] & bitMask) != 0;
+    return (mask.data[index >> 5] & (1u << (index & 31))) != 0;
 }
 
 bool getBit(daxa_u32vec2 value, int index)
 {
-    return (bool)(value[index / 32] & (1 << (index % 32)));
+    return (bool)(value[index >> 5] & (1u << (index & 31)));
 }
 
 void setBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
 {
-    InterlockedOr(occupancy.data[chunkIndex][brickIndex / 32], (1 << (brickIndex % 32)));
+    InterlockedOr(occupancy.data[chunkIndex][brickIndex >> 5], (1u << (brickIndex & 31)));
 }
 
 void clearBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
 {
-    InterlockedAnd(occupancy.data[chunkIndex][brickIndex / 32], ~(1 << (brickIndex % 32)));
+    InterlockedAnd(occupancy.data[chunkIndex][brickIndex >> 5], ~(1u << (brickIndex & 31)));
 }
 
 Material getMaterial(uint materialID)
@@ -136,12 +129,9 @@ bool getBitFast(BrickBitmask mask, int index)
 // Check if a brick mask is empty (all bits are 0)
 bool brickBitmaskEmpty(BrickBitmask mask)
 {
-    // Check if all data elements are 0
-    for (int i = 0; i < 7; i++)
-    {
-        if (mask.data[i] != 0) return false;
-    }
-    return true;
+    // Manual unroll with vectorization for maximum performance
+    return (mask.data[0] | mask.data[1] | mask.data[2] | mask.data[3] |
+            mask.data[4] | mask.data[5] | mask.data[6]) == 0;
 }
 
 
@@ -283,9 +273,4 @@ float3 getDdaUvs(DDAState state, float3 rayPos, float3 rayDir)
     }
 
     return uvs;
-}
-
-uint getMaterialId(int brickIndex)
-{
-    return p.materialPtrBuffer.data[brickIndex];
 }

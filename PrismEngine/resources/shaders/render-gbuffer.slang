@@ -1,10 +1,11 @@
-#include "tracing/trace.slang"
+#include "common.slang"
+#include "tracing/trace-contree.slang"
 
 //------------------------------------------------------------------------------
 // GTAO Configuration
 //------------------------------------------------------------------------------
 static const int GTAO_SLICES = 5;      // Number of slices (directions) around normal
-static const int GTAO_STEPS = 5;       // Steps per slice along each direction
+static const int GTAO_STEPS = 2;       // Steps per slice along each direction
 static const float GTAO_RADIUS = BRICK_SIZE * WORLD_VOXEL_SIZE * 4; // World space radius
 static const float GTAO_FALLOFF_RANGE = 0.5f; // Falloff range as fraction of radius
 static const float GTAO_INTENSITY = 0.9f;  // AO strength
@@ -132,8 +133,8 @@ float calculateGTAO(uint2 pixel, float3 worldPos, float3 worldNormal, float dept
 //------------------------------------------------------------------------------
 // Main Shader - Pass 0: Calculate AO only
 //------------------------------------------------------------------------------
-[numthreads(32, 32, 1)]
-void main(uint3 pixel_i: SV_DispatchThreadID)
+[numthreads(8, 8, 1)]  // 64 threads per workgroup for shared memory optimization
+void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThreadID)
 {
     uint2 pixel = pixel_i.xy;
     if (any(pixel >= p.screenSize))
@@ -149,14 +150,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     // Pass 0: Trace rays and write GBuffer + lighting
     if (p.passNum == 0)
     {
+        // Calculate thread index for shared memory optimization
+        // 8x8 workgroup = 64 threads, flatten 2D index to 1D
+        uint threadIndex = group_thread_id.x + group_thread_id.y * 8;
+
         // Generate primary ray
         var ray = Ray.FromPixel(pixel, p.screenSize, p.stateBuffer.camera);
-        var hit = traceScene(ray, 0, false);
+        ray.maxIterations = 200;
 
-        // Early out for sky/background
+        var hit = traceContree(ray, threadIndex);
+
+        // Handle miss - sky
         if (!hit.hit)
         {
-            colorTex[pixel] = float3(0.5f, 0.7f, 1.0f); // Simple sky color
+            colorTex[pixel] = float3(0.5f, 0.7f, 1.0f); // Sky blue
             normalTex[pixel] = 0;
             positionTex[pixel] = 0;
             depthTex[pixel] = -1;
@@ -165,37 +172,59 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
 
         // Extract hit information
         float3 worldNormal = hit.normal;
-        float3 worldPos = ray.origin + ray.direction * hit.distance;
+        float3 worldPos = hit.position;
 
         // Write GBuffer data
         normalTex[pixel] = worldNormal;
         positionTex[pixel] = worldPos;
         depthTex[pixel] = hit.distance;
 
-        // Get material properties
-        Material mat = getMaterial(hit.materialId);
-        float3 albedoColor = mat.albedo;
+        // Get material properties (default to white for now)
+        float3 albedoColor = float3(0.8f, 0.8f, 0.8f);
 
-        // Light direction
+        // If we have material data, use it
+        if (hit.materialId > 0 && hit.materialId < 256) {
+            Material mat = getMaterial(hit.materialId);
+            albedoColor = mat.albedo;
+        }
+
+        // Light direction (sun from above and to the side)
         float3 lightDir = normalize(p.stateBuffer.sunDir);
 
-        // Simple shadow check
+        // Cast shadow ray (reuse same threadIndex)
         Ray shadowRay;
-        shadowRay.origin = worldPos + worldNormal * 0.01f;
+        shadowRay.origin = worldPos + worldNormal * 0.1f; // Offset to avoid self-intersection
         shadowRay.direction = lightDir;
-        var shadowHit = traceScene(shadowRay, 0, false);
+        shadowRay.maxDist = 1000.0f;
+        shadowRay.maxIterations = 100;
 
-        float shadow = shadowHit.hit ? 0.0f : 1.0f;
+        // Use coarse mode for shadows - early exit after 20 iterations if we hit anything
+        var shadowHit = traceContree(shadowRay, threadIndex, true);
+        float shadow = shadowHit.hit ? 0.3f : 1.0f; // Soft shadow
 
-        // Simple diffuse lighting
+        // Diffuse lighting (Lambert)
         float ndotl = max(dot(worldNormal, lightDir), 0.0f);
         float3 diffuse = albedoColor * ndotl * shadow;
 
-        // Ambient lighting
-        float ambient = 0.2f;
+        // Specular lighting (Blinn-Phong)
+        float3 viewDir = normalize(p.stateBuffer.camera.position - worldPos);
+        float3 halfDir = normalize(lightDir + viewDir);
+        float spec = pow(max(dot(worldNormal, halfDir), 0.0f), 32.0f);
+        float3 specular = float3(0.3f, 0.3f, 0.3f) * spec * shadow;
 
-        // Store lighting (without AO applied yet)
-        colorTex[pixel] = diffuse + (albedoColor * ambient);
+        // Ambient lighting
+        float3 ambient = albedoColor * 0.15f;
+
+        // Sky lighting (hemisphere lighting)
+        float skyFactor = worldNormal.y * 0.5f + 0.5f; // Map [-1,1] to [0,1]
+        float3 skyColor = float3(0.5f, 0.7f, 1.0f) * 0.2f;
+        float3 skyLight = albedoColor * skyColor * skyFactor;
+
+        // Combine all lighting
+        float3 finalColor = diffuse + specular + ambient + skyLight;
+
+        // Store lighting (AO will be applied in pass 2)
+        colorTex[pixel] = finalColor;
     }
     // Pass 1: Calculate GTAO from complete GBuffer
     else if (p.passNum == 1)
