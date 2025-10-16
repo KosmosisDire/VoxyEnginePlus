@@ -103,12 +103,15 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
     // Stack allocation based on optimization mode
 #if USE_SHARED_MEMORY_STACK
     // Shared memory optimization (VoxelRT line 138)
-    uint groupId = groupThreadIndex;  // 0-63 for 8x8 workgroup (passed as parameter)
+    // Use SPIR-V inline assembly to get thread index and enable VariablePointers capability
+    uint groupId = spirv_asm {
+        OpCapability VariablePointers;
+        result:$$uint = OpLoad builtin(LocalInvocationIndex:uint);
+    };
     uint* stack = &gs_stack[groupId][0];
 #else
-    // Register-based stack (fallback, simpler but slower)
-    uint localStack[11];
-    uint* stack = &localStack[0];
+    // Register-based stack (no pointers, direct array indexing)
+    uint stack[11];
 #endif
     int scaleExp = 21;  // Always start at 21 for finest level (0.25 = 2^-2)
 

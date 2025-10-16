@@ -349,8 +349,6 @@ class VoxelRenderer
                               .SetTask(
                                   [this](daxa::TaskInterface ti)
             {
-                frameStart = std::chrono::high_resolution_clock::now();
-
                 renderer->CopyToBuffer<GBuffer>(ti, gbufferCPU.GetGPUBuffer(stateData.frame), ti.get(task_gbufferGPU), 0);
 
                 stateData.camera = camera.getCameraData();
@@ -384,25 +382,19 @@ class VoxelRenderer
 
                 // Pass 0: Trace rays and write GBuffer
                 // Now using 8x8 workgroups (64 threads) for shared memory optimization
-                gbufferStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 0;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
-                gbufferEnd = std::chrono::high_resolution_clock::now();
 
                 // Pass 1: Calculate GTAO from complete GBuffer
-                gtaoStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 1;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
-                gtaoEnd = std::chrono::high_resolution_clock::now();
 
                 // Pass 2: Apply AO to lighting
-                aoApplyStart = std::chrono::high_resolution_clock::now();
                 push.passNum = 2;
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
-                aoApplyEnd = std::chrono::high_resolution_clock::now();
             }));
 
             renderer->AddTask(InlineTask("composite_render")
@@ -414,7 +406,6 @@ class VoxelRenderer
                               .SetTask(
                                   [this, render_image](daxa::TaskInterface ti)
             {
-                compositeStart = std::chrono::high_resolution_clock::now();
 
                 auto push = ComputePush
                 {
@@ -428,7 +419,6 @@ class VoxelRenderer
                 ti.recorder.push_constant(push);
                 ti.recorder.dispatch({(renderer->surface_width + 7) / 8, (renderer->surface_height + 7) / 8});
 
-                compositeEnd = std::chrono::high_resolution_clock::now();
             }));
 
             // create task to blit render image to swapchain
@@ -439,25 +429,5 @@ class VoxelRenderer
         {
             gbufferCPU.ResizeImages(*renderer);
             camera.setViewportSize(width, height);
-        }
-
-        GPUTimings GetGPUTimings()
-        {
-            // Wait for GPU to finish (force synchronization)
-            renderer->device.wait_idle();
-
-            auto toMs = [](auto start, auto end) -> float {
-                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-                return duration.count() / 1000.0f;
-            };
-
-            gpuTimings.terrainGen = toMs(terrainStart, terrainEnd);
-            gpuTimings.gbufferTrace = toMs(gbufferStart, gbufferEnd);
-            gpuTimings.gtaoPass = toMs(gtaoStart, gtaoEnd);
-            gpuTimings.aoApply = toMs(aoApplyStart, aoApplyEnd);
-            gpuTimings.composite = toMs(compositeStart, compositeEnd);
-            gpuTimings.totalFrame = toMs(frameStart, compositeEnd);
-
-            return gpuTimings;
         }
 };
