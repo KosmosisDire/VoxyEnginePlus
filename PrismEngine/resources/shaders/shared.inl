@@ -209,16 +209,14 @@ static const daxa_u32 CONTREE_BRANCHING = 4;
 static const daxa_u32 CONTREE_CHILDREN = 64; // 4x4x4
 static const daxa_u32 CONTREE_INVALID_PTR = 0xFFFFFFFF;
 
-// Contree node - 16 bytes (12 bytes used + 4 bytes padding)
-// Matches VoxelRT layout in first 12 bytes:
+// Contree node - 16 bytes
 // Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
 // Bytes 4-7:   PackedData[1] = PopMask low 32 bits
 // Bytes 8-11:  PackedData[2] = PopMask high 32 bits
-// Bytes 12-15: Padding (unused)
+// Bytes 12-15: PackedData[3] = MaterialId (16 bits) + padding (16 bits)
 struct ContreeNode
 {
-    daxa_u32 PackedData[3];  // First 12 bytes match VoxelRT exactly
-    daxa_u32 _padding;       // Bytes 12-15: Explicit padding
+    daxa_u32 PackedData[4];  // 16 bytes total
 
 #ifndef __cplusplus
     property bool IsLeaf {
@@ -229,6 +227,9 @@ struct ContreeNode
     }
     property uint64_t PopMask {
         get { return PackedData[1] | uint64_t(PackedData[2]) << 32; }
+    }
+    property uint MaterialId {
+        get { return PackedData[3] & 0xFFFF; }
     }
 #endif
 };

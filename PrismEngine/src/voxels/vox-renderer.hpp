@@ -260,36 +260,117 @@ class VoxelRenderer
                 .roughness = 0.8f,
             };
 
-            // Build contree
+            // Build contree with simple terrain
             Contree::ContreeBuilder builder;
             builder.Build([](int x, int y, int z) -> uint16_t {
-                // Create a hollow sphere at center for easy verification
-                // Tree covers [0, 256)^3, so center at 128
-                float centerX = 128.0f;
-                float centerY = 128.0f;
-                float centerZ = 128.0f;
-                float dx = x - centerX;
-                float dy = y - centerY;
-                float dz = z - centerZ;
-                float distSq = dx*dx + dy*dy + dz*dz;
-                float outerRadiusSq = 60.0f * 60.0f;  // Radius 60
-                float innerRadiusSq = 50.0f * 50.0f;  // Inner radius 50
+                // Simple 3D noise function
+                auto hash = [](int x, int y, int z) -> float {
+                    int n = x + y * 57 + z * 113;
+                    n = (n << 13) ^ n;
+                    return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
+                };
 
-                // Hollow sphere shell
-                if (distSq < outerRadiusSq && distSq > innerRadiusSq) {
-                    return 1; // Material 1 = grass (green)
+                auto noise3D = [&hash](float x, float y, float z) -> float {
+                    int ix = (int)std::floor(x);
+                    int iy = (int)std::floor(y);
+                    int iz = (int)std::floor(z);
+                    float fx = x - ix;
+                    float fy = y - iy;
+                    float fz = z - iz;
+
+                    fx = fx * fx * (3.0f - 2.0f * fx);
+                    fy = fy * fy * (3.0f - 2.0f * fy);
+                    fz = fz * fz * (3.0f - 2.0f * fz);
+
+                    float c000 = hash(ix, iy, iz);
+                    float c100 = hash(ix+1, iy, iz);
+                    float c010 = hash(ix, iy+1, iz);
+                    float c110 = hash(ix+1, iy+1, iz);
+                    float c001 = hash(ix, iy, iz+1);
+                    float c101 = hash(ix+1, iy, iz+1);
+                    float c011 = hash(ix, iy+1, iz+1);
+                    float c111 = hash(ix+1, iy+1, iz+1);
+
+                    float c00 = c000 * (1-fx) + c100 * fx;
+                    float c01 = c001 * (1-fx) + c101 * fx;
+                    float c10 = c010 * (1-fx) + c110 * fx;
+                    float c11 = c011 * (1-fx) + c111 * fx;
+
+                    float c0 = c00 * (1-fy) + c10 * fy;
+                    float c1 = c01 * (1-fy) + c11 * fy;
+
+                    return c0 * (1-fz) + c1 * fz;
+                };
+
+                // Simple heightmap using sin/cos waves
+                float nx = x * 0.02f;
+                float nz = z * 0.02f;
+                float terrainHeight = 60.0f + std::sin(nx) * 20.0f + std::cos(nz) * 15.0f;
+
+                // 3D cave cutout
+                float caveNoise = noise3D(x * 0.05f, y * 0.05f, z * 0.05f);
+                bool inCave = caveNoise > 0.5f && y < terrainHeight - 5.0f && y > 10.0f;
+
+                // Fill terrain (but not caves)
+                if (y < terrainHeight && !inCave) {
+                    float depthFromSurface = terrainHeight - y;
+
+                    if (depthFromSurface < 1.0f) {
+                        return 1; // Grass surface
+                    } else if (depthFromSurface < 4.0f) {
+                        return 3; // Dirt layer
+                    } else {
+                        return 2; // Stone
+                    }
                 }
+
+                // Simple trees on grid
+                if (y >= terrainHeight && y < 256) {
+                    int ix = (int)x;
+                    int iz = (int)z;
+
+                    // Tree every 16 blocks on grid
+                    if ((ix % 16 == 8) && (iz % 16 == 8)) {
+                        int treeBase = (int)terrainHeight + 1;
+                        int treeHeight = 10;
+
+                        // Trunk (2x2)
+                        if (y >= treeBase && y < treeBase + treeHeight) {
+                            int dx = std::abs(x - ix);
+                            int dz = std::abs(z - iz);
+                            if (dx <= 1 && dz <= 1) {
+                                return 5; // Wood
+                            }
+                        }
+
+                        // Leaves (sphere)
+                        if (y >= treeBase + treeHeight - 3 && y < treeBase + treeHeight + 4) {
+                            int dx = x - ix;
+                            int dy = y - (treeBase + treeHeight);
+                            int dz = z - iz;
+                            float distSq = dx*dx + dy*dy + dz*dz;
+                            if (distSq < 20.0f) {
+                                return 4; // Leaves
+                            }
+                        }
+                    }
+                }
+
                 return 0; // Empty
             });
 
             contreeNodeCount = builder.GetNodeCount();
 
             // Debug output
-            std::printf("Contree built: %u nodes, %zu bytes\n",
-                       contreeNodeCount, builder.GetSizeBytes());
-            std::printf("Contree root PopMask: 0x%llx\n",
+            std::printf("=== Simple Terrain Generated ===\n");
+            std::printf("Contree nodes: %u (%.2f MB)\n",
+                       contreeNodeCount, builder.GetSizeBytes() / (1024.0f * 1024.0f));
+            std::printf("Root PopMask: 0x%llx\n",
                        (unsigned long long)builder.GetNodes()[0].GetPopMask());
-            std::printf("Camera will be at (128, 128, 400) looking at sphere at (128, 128, 128)\n");
+            std::printf("Features:\n");
+            std::printf("  - Sine/cosine heightmap (height: 25-95)\n");
+            std::printf("  - 3D noise cave cutouts\n");
+            std::printf("  - Grid-based trees (16 block spacing)\n");
 
             // Create buffer for contree data
             renderer->CreateBuffer(

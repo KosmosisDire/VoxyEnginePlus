@@ -17,15 +17,13 @@ constexpr uint8_t FLAG_LEAF = 0x01;
 constexpr uint8_t FLAG_DIRTY = 0x02;
 constexpr uint8_t FLAG_FULL = 0x04; // All children exist
 
-// Node structure - 16 bytes (12 bytes used + 4 bytes padding)
-// Matches VoxelRT layout in first 12 bytes:
+// Node structure - 16 bytes
 // Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
 // Bytes 4-7:   PackedData[1] = PopMask low 32 bits
 // Bytes 8-11:  PackedData[2] = PopMask high 32 bits
-// Bytes 12-15: Padding (unused)
+// Bytes 12-15: PackedData[3] = MaterialId (16 bits) + padding (16 bits)
 struct ContreeNode {
-    uint32_t PackedData[3];  // First 12 bytes match VoxelRT exactly
-    uint32_t _padding;       // Bytes 12-15: Explicit padding
+    uint32_t PackedData[4];  // 16 bytes total
 
     // Accessor methods matching VoxelRT
     inline bool IsLeaf() const { return (PackedData[0] & 1) != 0; }
@@ -51,7 +49,12 @@ struct ContreeNode {
         PackedData[2] = uint32_t(mask >> 32);
     }
 
-    ContreeNode() : PackedData{0, 0, 0}, _padding(0) {}
+    inline uint16_t GetMaterialId() const { return uint16_t(PackedData[3] & 0xFFFF); }
+    inline void SetMaterialId(uint16_t matId) {
+        PackedData[3] = (PackedData[3] & 0xFFFF0000) | matId;
+    }
+
+    ContreeNode() : PackedData{0, 0, 0, 0} {}
 };
 
 static_assert(sizeof(ContreeNode) == 16, "ContreeNode must be exactly 16 bytes");

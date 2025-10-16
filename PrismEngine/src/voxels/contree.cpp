@@ -117,6 +117,7 @@ static ContreeNode BuildChunkTree(
 
         // Sample 4x4x4 voxels
         uint64_t occupancy = 0;
+        uint16_t leafMaterial = 0; // Material for this leaf (most common or first found)
 
         static int sampleCount = 0;
         static int solidCount = 0;
@@ -144,13 +145,17 @@ static ContreeNode BuildChunkTree(
                 if (mat != 0) {
                     solidCount++;
                     occupancy |= (1ULL << i);
+                    // Store the first non-zero material found
+                    if (leafMaterial == 0) {
+                        leafMaterial = mat;
+                    }
                     if (solidCount <= 5) {
                         float dx = wx - 128.0f;
                         float dy = wy - 128.0f;
                         float dz = wz - 128.0f;
                         float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-                        std::printf("[Contree] Solid voxel %d: world=(%d,%d,%d) leafPos=(%d,%d,%d) localIdx=%d dist=%.1f\n",
-                                   solidCount, wx, wy, wz, pos.x, pos.y, pos.z, i, dist);
+                        std::printf("[Contree] Solid voxel %d: world=(%d,%d,%d) leafPos=(%d,%d,%d) localIdx=%d dist=%.1f mat=%d\n",
+                                   solidCount, wx, wy, wz, pos.x, pos.y, pos.z, i, dist, mat);
                     }
                 }
             }
@@ -169,6 +174,7 @@ static ContreeNode BuildChunkTree(
         }
 
         node.SetPopMask(occupancy);
+        node.SetMaterialId(leafMaterial); // Store the material ID
 
         // CRITICAL: Leaf nodes must have ChildPtr = 0 to avoid pointing to random nodes
         node.SetChildPtr(0);

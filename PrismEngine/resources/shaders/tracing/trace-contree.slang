@@ -154,7 +154,7 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
     for (i = 0; i < ray.maxIterations; i++) {
         // Coarse early-out for shadow rays (reference line 178)
         // After 20 iterations, if we're in a leaf, we hit something - good enough for shadows!
-        if (coarse && i > 20 && node.IsLeaf) break;
+        if (coarse && i > 100 && node.IsLeaf) break;
 
         childIdx = GetNodeCellIndex(pos, scaleExp) ^ mirrorMask;
 
@@ -213,8 +213,8 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
         result.position = (pos - 1.0 - worldOrigin * scale) * (1 << TreeScale);
         result.distance = length(result.position - ray.origin);
 
-        // Material ID (would need ReadMaterialId function like VoxelRT)
-        result.materialId = 1; // Placeholder
+        // Read material ID from the leaf node
+        result.materialId = node.MaterialId;
 
         // Calculate normal (reference line 231-233)
         float tmax = min(min(sideDist.x, sideDist.y), sideDist.z);

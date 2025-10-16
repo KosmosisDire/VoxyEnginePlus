@@ -217,15 +217,20 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         shadowRay.maxIterations = 100;
 
         var shadowHit = traceContree(shadowRay, threadIndex, true);
-        float shadow = shadowHit.hit ? 0.3f : 1.0f;
+
+        // Shadows affect direct lighting differently:
+        // - Diffuse: partial occlusion (ambient bounce light still reaches surface)
+        // - Specular: full occlusion (no direct light = no specular highlight)
+        float diffuseShadow = shadowHit.hit ? 0.3f : 1.0f;  // Soft shadow for diffuse
+        float specularShadow = shadowHit.hit ? 0.0f : 1.0f; // Hard shadow for specular
 
         float ndotl = max(dot(worldNormal, lightDir), 0.0f);
-        float3 diffuse = albedoColor * ndotl * shadow;
+        float3 diffuse = albedoColor * ndotl * diffuseShadow;
 
         float3 viewDir = normalize(p.stateBuffer.camera.position - worldPos);
         float3 halfDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(worldNormal, halfDir), 0.0f), 32.0f);
-        float3 specular = float3(0.3f, 0.3f, 0.3f) * spec * shadow;
+        float3 specular = float3(0.3f, 0.3f, 0.3f) * spec * specularShadow;
 
         float3 ambient = albedoColor * 0.15f;
 
@@ -253,7 +258,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float ao = calculateGTAO(pixel, worldPos, worldNormal, depth, positionTex, depthTex, noiseVec, p.screenSize);
         aoTex[pixel / 2] = ao;
     }
-    // Pass 2: Apply AO to all pixels
+    // Pass 2: Apply AO to all pixels with specular occlusion
     else if (p.passNum == 2)
     {
         float depth = depthTex[pixel];
@@ -261,7 +266,10 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
             return;
 
         float3 color = colorTex[pixel];
+        float3 worldPos = positionTex[pixel];
+        float3 worldNormal = normalTex[pixel];
 
+        // Bilinear interpolation of half-res AO
         float2 halfResCoord = float2(pixel) * 0.5f;
         uint2 coord00 = uint2(floor(halfResCoord));
         uint2 coord10 = coord00 + uint2(1, 0);
@@ -279,6 +287,27 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float ao1 = lerp(ao01, ao11, frac.x);
         float ao = lerp(ao0, ao1, frac.y);
 
-        colorTex[pixel] = color * ao;
+        // Calculate specular occlusion with view-dependent falloff
+        // Based on the horizon-based specular occlusion technique
+        float3 viewDir = normalize(p.stateBuffer.camera.position - worldPos);
+        float ndotv = saturate(dot(worldNormal, viewDir));
+
+        // Specular roughness (0 = mirror, 1 = rough)
+        // Currently hardcoded to match the spec power of 32 in pass 0
+        float roughness = sqrt(2.0f / (32.0f + 2.0f)); // Convert from specular power to roughness
+
+        // Specular occlusion: smoother surfaces get less occlusion in grazing angles
+        // This approximates the micro-occlusion behavior of rough vs smooth surfaces
+        float specularOcclusion = saturate(pow(ndotv + ao, roughness) - 1.0f + ao);
+
+        // Apply different occlusion to diffuse vs specular components
+        // Approximate split: diffuse = 70%, specular = 30% of the total lighting
+        // This is a rough approximation since we don't have separated lighting channels
+        float diffuseWeight = 0.7f;
+        float specularWeight = 0.3f;
+
+        float combinedOcclusion = diffuseWeight * ao + specularWeight * specularOcclusion;
+
+        colorTex[pixel] = color * combinedOcclusion;
     }
 }
