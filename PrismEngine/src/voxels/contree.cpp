@@ -311,6 +311,25 @@ void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& density
                GetSizeBytes() + GetBricksSizeBytes() + GetBrickPaletteDataSizeBytes() + GetBrickIndexDataSizeBytes());
 }
 
+void ContreeBuilder::BuildFromGrid(const uint16_t* grid, int sizeX, int sizeY, int sizeZ) {
+    std::printf("[Contree] Building from grid: %dx%dx%d\n", sizeX, sizeY, sizeZ);
+
+    // Create a lambda that samples from the grid
+    auto gridSampler = [grid, sizeX, sizeY, sizeZ](int x, int y, int z) -> uint16_t {
+        // Bounds check
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
+            return 0; // Empty outside grid bounds
+        }
+
+        // Sample from grid (YXZ ordering: x + y * sizeX + z * sizeX * sizeY)
+        int index = x + y * sizeX + z * sizeX * sizeY;
+        return grid[index];
+    };
+
+    // Use existing Build() implementation with the grid sampler
+    Build(gridSampler);
+}
+
 // Reference implementation pattern from VoxelRT/src/VoxelRT/Render/RendererTree64.cpp:66
 static ContreeNode BuildChunkTree(
     std::vector<ContreeNode>& nodePool,

@@ -237,6 +237,11 @@ public:
     // Covers region [0, 0, 0] to [512, 512, 512]
     void Build(const std::function<uint16_t(int, int, int)>& densityFunc);
 
+    // Build tree from pre-generated voxel grid
+    // Grid dimensions should be at least 256x256x256 for full tree coverage
+    // Grid is indexed as: grid[x + y * sizeX + z * sizeX * sizeY]
+    void BuildFromGrid(const uint16_t* grid, int sizeX, int sizeY, int sizeZ);
+
     // Get flat node array for GPU upload
     const std::vector<ContreeNode>& GetNodes() const { return nodes; }
     uint32_t GetNodeCount() const { return static_cast<uint32_t>(nodes.size()); }

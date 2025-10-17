@@ -272,28 +272,107 @@ class VoxelRenderer
 
             // Build contree with SIMPLE test geometry (sphere)
             Contree::ContreeBuilder builder;
-            builder.Build([](int x, int y, int z) -> uint16_t {
-                // Simple sphere at center (128, 128, 128) with radius 50
-                float dx = x - 128.0f;
-                float dy = y - 128.0f;
-                float dz = z - 128.0f;
-                float distSq = dx*dx + dy*dy + dz*dz;
-                float radius = 50.0f;
 
-                if (distSq < radius * radius) {
-                    // Different materials based on distance from center
-                    float dist = std::sqrt(distSq);
-                    if (dist < radius * 0.3f) {
-                        return 6; // Purple glow (core)
-                    } else if (dist < radius * 0.6f) {
-                        return 2; // Stone (middle layer)
-                    } else {
-                        return 1; // Grass (outer layer)
+            // METHOD 1: Direct function-based generation (current approach)
+            // builder.Build([](int x, int y, int z) -> uint16_t {
+            //     // Simple sphere at center (128, 128, 128) with radius 50
+            //     float dx = x - 128.0f;
+            //     float dy = y - 128.0f;
+            //     float dz = z - 128.0f;
+            //     float distSq = dx*dx + dy*dy + dz*dz;
+            //     float radius = 50.0f;
+
+            //     if (distSq < radius * radius) {
+            //         // Different materials based on distance from center
+            //         float dist = std::sqrt(distSq);
+            //         if (dist < radius * 0.3f) {
+            //             return 6; // Purple glow (core)
+            //         } else if (dist < radius * 0.6f) {
+            //             return 2; // Stone (middle layer)
+            //         } else {
+            //             return 1; // Grass (outer layer)
+            //         }
+            //     }
+
+            //     return 0; // Empty
+            // });
+
+            // METHOD 2: Grid-based generation (for complex terrain)
+            // Example: Generate a 256x256x256 voxel grid with advanced terrain
+            
+            // Simple 3D noise function
+            auto hash = [](int x, int y, int z) -> float {
+                int n = x + y * 57 + z * 113;
+                n = (n << 13) ^ n;
+                return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
+            };
+
+            auto noise3D = [&hash](float x, float y, float z) -> float {
+                int ix = (int)std::floor(x);
+                int iy = (int)std::floor(y);
+                int iz = (int)std::floor(z);
+                float fx = x - ix;
+                float fy = y - iy;
+                float fz = z - iz;
+
+                fx = fx * fx * (3.0f - 2.0f * fx);
+                fy = fy * fy * (3.0f - 2.0f * fy);
+                fz = fz * fz * (3.0f - 2.0f * fz);
+
+                float c000 = hash(ix, iy, iz);
+                float c100 = hash(ix+1, iy, iz);
+                float c010 = hash(ix, iy+1, iz);
+                float c110 = hash(ix+1, iy+1, iz);
+                float c001 = hash(ix, iy, iz+1);
+                float c101 = hash(ix+1, iy, iz+1);
+                float c011 = hash(ix, iy+1, iz+1);
+                float c111 = hash(ix+1, iy+1, iz+1);
+
+                float c00 = c000 * (1-fx) + c100 * fx;
+                float c01 = c001 * (1-fx) + c101 * fx;
+                float c10 = c010 * (1-fx) + c110 * fx;
+                float c11 = c011 * (1-fx) + c111 * fx;
+
+                float c0 = c00 * (1-fy) + c10 * fy;
+                float c1 = c01 * (1-fy) + c11 * fy;
+
+                return c0 * (1-fz) + c1 * fz;
+            };
+
+            constexpr int GRID_SIZE = 256;
+            std::vector<uint16_t> voxelGrid(GRID_SIZE * GRID_SIZE * GRID_SIZE, 0);
+
+            // Generate complex terrain into the grid
+            for (int z = 0; z < GRID_SIZE; z++) {
+                for (int y = 0; y < GRID_SIZE; y++) {
+                    for (int x = 0; x < GRID_SIZE; x++) {
+                        int idx = x + y * GRID_SIZE + z * GRID_SIZE * GRID_SIZE;
+
+                        // Example: Multi-octave noise terrain
+                        float height = 100.0f;
+                        height += noise3D(x * 0.01f, z * 0.01f, 0.0f) * 50.0f;  // Large features
+                        height += noise3D(x * 0.05f, z * 0.05f, 0.0f) * 10.0f;  // Medium details
+                        height += noise3D(x * 0.1f, z * 0.1f, 0.0f) * 3.0f;     // Fine details
+
+                        if (y < height) {
+                            // Layer materials by depth
+                            if (y > height - 3) {
+                                voxelGrid[idx] = 1; // Grass
+                            } else if (y > height - 10) {
+                                voxelGrid[idx] = 3; // Dirt
+                            } else {
+                                voxelGrid[idx] = 2; // Stone
+                            }
+                        } else {
+                            voxelGrid[idx] = 0; // Air
+                        }
                     }
                 }
+            }
 
-                return 0; // Empty
-            });
+            // Build contree from the pre-generated grid
+            builder.BuildFromGrid(voxelGrid.data(), GRID_SIZE, GRID_SIZE, GRID_SIZE);
+            
 
             contreeNodeCount = builder.GetNodeCount();
             brickCount = builder.GetBrickCount();
