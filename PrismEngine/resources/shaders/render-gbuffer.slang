@@ -184,6 +184,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
 
         var ray = Ray.FromPixel(pixel, p.screenSize, p.stateBuffer.camera);
         ray.maxIterations = 200;
+
         var hit = traceContree(ray, threadIndex);
 
         if (!hit.hit)
@@ -202,11 +203,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         positionTex[pixel] = worldPos;
         depthTex[pixel] = hit.distance;
 
-        float3 albedoColor = float3(0.8f, 0.8f, 0.8f);
-        if (hit.materialId > 0 && hit.materialId < 256) {
-            Material mat = getMaterial(hit.materialId);
-            albedoColor = mat.albedo;
-        }
+        // Decode voxel position from materialId for visualization
+        uint matId = hit.materialId - 1;
+        uint vx = matId % 10;
+        uint vy = (matId / 10) % 10;
+        uint vz = (matId / 100) % 10;
+        float3 albedoColor = float3(vx, vy, vz) / 5.0;
 
         float3 lightDir = normalize(p.stateBuffer.sunDir);
 

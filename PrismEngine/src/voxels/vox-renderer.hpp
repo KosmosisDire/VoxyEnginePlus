@@ -112,6 +112,16 @@ class VoxelRenderer
         daxa::TaskBuffer task_contreeBuffer;
         uint32_t contreeNodeCount = 0;
 
+        daxa::BufferId brickBuffer;
+        daxa::TaskBuffer task_brickBuffer;
+        uint32_t brickCount = 0;
+
+        daxa::BufferId brickPaletteBuffer;
+        daxa::TaskBuffer task_brickPaletteBuffer;
+
+        daxa::BufferId brickIndexBuffer;
+        daxa::TaskBuffer task_brickIndexBuffer;
+
         std::unique_ptr<Image> blue_noise_images_data[64];
         daxa::ImageId blue_noise_images[64];
         daxa::TaskImage task_blue_noise_image;
@@ -260,99 +270,25 @@ class VoxelRenderer
                 .roughness = 0.8f,
             };
 
-            // Build contree with simple terrain
+            // Build contree with SIMPLE test geometry (sphere)
             Contree::ContreeBuilder builder;
             builder.Build([](int x, int y, int z) -> uint16_t {
-                // Simple 3D noise function
-                auto hash = [](int x, int y, int z) -> float {
-                    int n = x + y * 57 + z * 113;
-                    n = (n << 13) ^ n;
-                    return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
-                };
+                // Simple sphere at center (128, 128, 128) with radius 50
+                float dx = x - 128.0f;
+                float dy = y - 128.0f;
+                float dz = z - 128.0f;
+                float distSq = dx*dx + dy*dy + dz*dz;
+                float radius = 50.0f;
 
-                auto noise3D = [&hash](float x, float y, float z) -> float {
-                    int ix = (int)std::floor(x);
-                    int iy = (int)std::floor(y);
-                    int iz = (int)std::floor(z);
-                    float fx = x - ix;
-                    float fy = y - iy;
-                    float fz = z - iz;
-
-                    fx = fx * fx * (3.0f - 2.0f * fx);
-                    fy = fy * fy * (3.0f - 2.0f * fy);
-                    fz = fz * fz * (3.0f - 2.0f * fz);
-
-                    float c000 = hash(ix, iy, iz);
-                    float c100 = hash(ix+1, iy, iz);
-                    float c010 = hash(ix, iy+1, iz);
-                    float c110 = hash(ix+1, iy+1, iz);
-                    float c001 = hash(ix, iy, iz+1);
-                    float c101 = hash(ix+1, iy, iz+1);
-                    float c011 = hash(ix, iy+1, iz+1);
-                    float c111 = hash(ix+1, iy+1, iz+1);
-
-                    float c00 = c000 * (1-fx) + c100 * fx;
-                    float c01 = c001 * (1-fx) + c101 * fx;
-                    float c10 = c010 * (1-fx) + c110 * fx;
-                    float c11 = c011 * (1-fx) + c111 * fx;
-
-                    float c0 = c00 * (1-fy) + c10 * fy;
-                    float c1 = c01 * (1-fy) + c11 * fy;
-
-                    return c0 * (1-fz) + c1 * fz;
-                };
-
-                // Simple heightmap using sin/cos waves
-                float nx = x * 0.02f;
-                float nz = z * 0.02f;
-                float terrainHeight = 60.0f + std::sin(nx) * 20.0f + std::cos(nz) * 15.0f;
-
-                // 3D cave cutout
-                float caveNoise = noise3D(x * 0.05f, y * 0.05f, z * 0.05f);
-                bool inCave = caveNoise > 0.5f && y < terrainHeight - 5.0f && y > 10.0f;
-
-                // Fill terrain (but not caves)
-                if (y < terrainHeight && !inCave) {
-                    float depthFromSurface = terrainHeight - y;
-
-                    if (depthFromSurface < 1.0f) {
-                        return 1; // Grass surface
-                    } else if (depthFromSurface < 4.0f) {
-                        return 3; // Dirt layer
+                if (distSq < radius * radius) {
+                    // Different materials based on distance from center
+                    float dist = std::sqrt(distSq);
+                    if (dist < radius * 0.3f) {
+                        return 6; // Purple glow (core)
+                    } else if (dist < radius * 0.6f) {
+                        return 2; // Stone (middle layer)
                     } else {
-                        return 2; // Stone
-                    }
-                }
-
-                // Simple trees on grid
-                if (y >= terrainHeight && y < 256) {
-                    int ix = (int)x;
-                    int iz = (int)z;
-
-                    // Tree every 16 blocks on grid
-                    if ((ix % 16 == 8) && (iz % 16 == 8)) {
-                        int treeBase = (int)terrainHeight + 1;
-                        int treeHeight = 10;
-
-                        // Trunk (2x2)
-                        if (y >= treeBase && y < treeBase + treeHeight) {
-                            int dx = std::abs(x - ix);
-                            int dz = std::abs(z - iz);
-                            if (dx <= 1 && dz <= 1) {
-                                return 5; // Wood
-                            }
-                        }
-
-                        // Leaves (sphere)
-                        if (y >= treeBase + treeHeight - 3 && y < treeBase + treeHeight + 4) {
-                            int dx = x - ix;
-                            int dy = y - (treeBase + treeHeight);
-                            int dz = z - iz;
-                            float distSq = dx*dx + dy*dy + dz*dz;
-                            if (distSq < 20.0f) {
-                                return 4; // Leaves
-                            }
-                        }
+                        return 1; // Grass (outer layer)
                     }
                 }
 
@@ -360,19 +296,21 @@ class VoxelRenderer
             });
 
             contreeNodeCount = builder.GetNodeCount();
+            brickCount = builder.GetBrickCount();
 
             // Debug output
-            std::printf("=== Simple Terrain Generated ===\n");
-            std::printf("Contree nodes: %u (%.2f MB)\n",
-                       contreeNodeCount, builder.GetSizeBytes() / (1024.0f * 1024.0f));
-            std::printf("Root PopMask: 0x%llx\n",
-                       (unsigned long long)builder.GetNodes()[0].GetPopMask());
-            std::printf("Features:\n");
-            std::printf("  - Sine/cosine heightmap (height: 25-95)\n");
-            std::printf("  - 3D noise cave cutouts\n");
-            std::printf("  - Grid-based trees (16 block spacing)\n");
+            std::printf("=== Simple Sphere Generated ===\n");
+            std::printf("Contree nodes: %u (%.2f KB)\n",
+                       contreeNodeCount, builder.GetSizeBytes() / 1024.0f);
+            std::printf("Bricks: %u (%.2f KB)\n",
+                       brickCount, builder.GetBricksSizeBytes() / 1024.0f);
+            std::printf("Palette data: %.2f KB\n", builder.GetBrickPaletteDataSizeBytes() / 1024.0f);
+            std::printf("Index data: %.2f KB\n", builder.GetBrickIndexDataSizeBytes() / 1024.0f);
+            std::printf("Total memory: %.2f KB\n",
+                       (builder.GetSizeBytes() + builder.GetBricksSizeBytes() +
+                        builder.GetBrickPaletteDataSizeBytes() + builder.GetBrickIndexDataSizeBytes()) / 1024.0f);
 
-            // Create buffer for contree data
+            // Create buffers
             renderer->CreateBuffer(
                 "ContreeBuffer",
                 builder.GetSizeBytes(),
@@ -381,9 +319,71 @@ class VoxelRenderer
                 daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
             );
 
-            // Copy contree data to GPU
+            renderer->CreateBuffer(
+                "BrickBuffer",
+                builder.GetBricksSizeBytes(),
+                brickBuffer,
+                task_brickBuffer,
+                daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
+            );
+
+            // Pack palette data: uint16s -> uint32s (2 per uint32)
+            size_t paletteU16Count = builder.GetBrickPaletteData().size();
+            size_t paletteU32Count = (paletteU16Count + 1) / 2; // Round up
+            size_t paletteBufferSize = std::max(paletteU32Count * sizeof(uint32_t), size_t(4)); // Min 4 bytes
+
+            // Pack index data: uint8s -> uint32s (4 per uint32)
+            size_t indexU8Count = builder.GetBrickIndexData().size();
+            size_t indexU32Count = (indexU8Count + 3) / 4; // Round up
+            size_t indexBufferSize = std::max(indexU32Count * sizeof(uint32_t), size_t(4)); // Min 4 bytes
+
+            renderer->CreateBuffer(
+                "BrickPaletteBuffer",
+                paletteBufferSize,
+                brickPaletteBuffer,
+                task_brickPaletteBuffer,
+                daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
+            );
+
+            renderer->CreateBuffer(
+                "BrickIndexBuffer",
+                indexBufferSize,
+                brickIndexBuffer,
+                task_brickIndexBuffer,
+                daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
+            );
+
+            // Copy data to GPU
             auto contreePtr = renderer->device.get_host_address_as<Contree::ContreeNode>(contreeBuffer).value();
             std::memcpy(contreePtr, builder.GetNodes().data(), builder.GetSizeBytes());
+
+            auto brickPtr = renderer->device.get_host_address_as<Contree::BrickHeader>(brickBuffer).value();
+            std::memcpy(brickPtr, builder.GetBricks().data(), builder.GetBricksSizeBytes());
+
+            // Pack palette: uint16s into uint32s
+            auto palettePtr = renderer->device.get_host_address_as<uint32_t>(brickPaletteBuffer).value();
+            const uint16_t* paletteData = builder.GetBrickPaletteData().data();
+            for (size_t i = 0; i < paletteU32Count; i++) {
+                uint32_t packed = 0;
+                if (i * 2 < paletteU16Count) {
+                    packed |= paletteData[i * 2];
+                }
+                if (i * 2 + 1 < paletteU16Count) {
+                    packed |= (uint32_t(paletteData[i * 2 + 1]) << 16);
+                }
+                palettePtr[i] = packed;
+            }
+
+            // Pack index: uint8s into uint32s
+            auto indexPtr = renderer->device.get_host_address_as<uint32_t>(brickIndexBuffer).value();
+            const uint8_t* indexData = builder.GetBrickIndexData().data();
+            for (size_t i = 0; i < indexU32Count; i++) {
+                uint32_t packed = 0;
+                for (int j = 0; j < 4 && (i * 4 + j) < indexU8Count; j++) {
+                    packed |= (uint32_t(indexData[i * 4 + j]) << (j * 8));
+                }
+                indexPtr[i] = packed;
+            }
 
             frameStart = std::chrono::high_resolution_clock::now();
         }
@@ -394,6 +394,9 @@ class VoxelRenderer
             renderer->DestroyBuffer(stateBuffer);
             renderer->DestroyBuffer(gbufferGPU);
             renderer->DestroyBuffer(contreeBuffer);
+            renderer->DestroyBuffer(brickBuffer);
+            renderer->DestroyBuffer(brickPaletteBuffer);
+            renderer->DestroyBuffer(brickIndexBuffer);
 
             for (int i = 0; i < 64; i++)
             {
@@ -420,6 +423,9 @@ class VoxelRenderer
             task_graph.use_persistent_buffer(task_materialsBuffer);
             task_graph.use_persistent_buffer(task_stateBuffer);
             task_graph.use_persistent_buffer(task_contreeBuffer);
+            task_graph.use_persistent_buffer(task_brickBuffer);
+            task_graph.use_persistent_buffer(task_brickPaletteBuffer);
+            task_graph.use_persistent_buffer(task_brickIndexBuffer);
             task_graph.use_persistent_image(task_blue_noise_image);
             task_graph.use_persistent_buffer(task_gbufferGPU);
             gbufferCPU.UseImages(task_graph);
@@ -441,7 +447,7 @@ class VoxelRenderer
 
 
             renderer->AddTask(InlineTask("main_render_gbuffer")
-                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, {task_materialsBuffer, task_contreeBuffer})
+                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, {task_materialsBuffer, task_contreeBuffer, task_brickBuffer, task_brickPaletteBuffer, task_brickIndexBuffer})
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_stateBuffer)
                               .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
@@ -454,9 +460,13 @@ class VoxelRenderer
                     .materialsBuffer = renderer->GetDeviceAddress(ti, task_materialsBuffer),
                     .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer),
                     .contreeBuffer = renderer->GetDeviceAddress(ti, task_contreeBuffer),
+                    .brickBuffer = renderer->GetDeviceAddress(ti, task_brickBuffer),
+                    .brickPaletteData = renderer->GetDeviceAddress(ti, task_brickPaletteBuffer),
+                    .brickIndexData = renderer->GetDeviceAddress(ti, task_brickIndexBuffer),
                     .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
                     .screenSize = {renderer->surface_width, renderer->surface_height},
-                    .contreeNodeCount = contreeNodeCount
+                    .contreeNodeCount = contreeNodeCount,
+                    .brickCount = brickCount
                 };
 
                 ti.recorder.set_pipeline(*render_gbuffer_compute);

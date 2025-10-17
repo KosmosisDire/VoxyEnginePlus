@@ -213,7 +213,7 @@ static const daxa_u32 CONTREE_INVALID_PTR = 0xFFFFFFFF;
 // Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
 // Bytes 4-7:   PackedData[1] = PopMask low 32 bits
 // Bytes 8-11:  PackedData[2] = PopMask high 32 bits
-// Bytes 12-15: PackedData[3] = MaterialId (16 bits) + padding (16 bits)
+// Bytes 12-15: PackedData[3] = BrickPtr(16) | DefaultMaterial(16) [for leaves only]
 struct ContreeNode
 {
     daxa_u32 PackedData[4];  // 16 bytes total
@@ -228,8 +228,11 @@ struct ContreeNode
     property uint64_t PopMask {
         get { return PackedData[1] | uint64_t(PackedData[2]) << 32; }
     }
-    property uint MaterialId {
+    property uint BrickPtr {
         get { return PackedData[3] & 0xFFFF; }
+    }
+    property uint DefaultMaterial {
+        get { return (PackedData[3] >> 16) & 0xFFFF; }
     }
 #endif
 };
@@ -240,6 +243,85 @@ struct ContreeBuffer
 };
 
 DAXA_DECL_BUFFER_PTR(ContreeBuffer);
+
+//=============================================================================
+// Brick Structures (6x6x6 voxel bricks with palette compression)
+//=============================================================================
+
+// Brick encoding types
+static const daxa_u32 BRICK_SINGLE_MATERIAL = 0;
+static const daxa_u32 BRICK_PALETTE_1BIT = 1;
+static const daxa_u32 BRICK_PALETTE_2BIT = 2;
+static const daxa_u32 BRICK_PALETTE_4BIT = 3;
+static const daxa_u32 BRICK_PALETTE_8BIT = 4;
+
+// BrickHeader: 32 bytes (8 x uint32)
+// Word 0-6: occupancy (216 bits) + materialCount (8 bits)
+//   - Bits [0-215]: occupancy data
+//   - Bits [216-223]: materialCount (8 bits)
+// Word 7: packed metadata
+//   - Bits [0-7]: encodingType
+//   - Bits [8-15]: flags
+//   - Bits [16-31]: palettePtr
+struct BrickHeader
+{
+    daxa_u32 data[8];  // 32 bytes total
+
+#ifndef __cplusplus
+    // Test occupancy bit [0-215]
+    bool TestOccupancy(uint idx) {
+        if (idx >= 216) return false;
+        uint wordIdx = idx / 32;
+        uint bitIdx = idx % 32;
+        return (data[wordIdx] & (1u << bitIdx)) != 0;
+    }
+
+    // Get materialCount from bits [216-223] (high byte of data[6])
+    property uint MaterialCount {
+        get { return (data[6] >> 24) & 0xFF; }
+    }
+
+    // Get encodingType from low byte of data[7]
+    property uint EncodingType {
+        get { return data[7] & 0xFF; }
+    }
+
+    // Get flags from second byte of data[7]
+    property uint Flags {
+        get { return (data[7] >> 8) & 0xFF; }
+    }
+
+    // Get palettePtr from high 16 bits of data[7]
+    property uint PalettePtr {
+        get { return data[7] >> 16; }
+    }
+#endif
+};
+
+struct BrickBuffer
+{
+    BrickHeader bricks[1]; // Variable length array
+};
+
+DAXA_DECL_BUFFER_PTR(BrickBuffer);
+
+// BrickPaletteData: Material IDs packed as uint16s into uint32s
+// Each uint32 contains 2 material IDs: [low 16 bits][high 16 bits]
+struct BrickPaletteData
+{
+    daxa_u32 data[1]; // Variable length array (2 uint16s per uint32)
+};
+
+DAXA_DECL_BUFFER_PTR(BrickPaletteData);
+
+// BrickIndexData: Per-voxel material indices packed into uint32s
+// Packing depends on encoding (1/2/4/8 bits per voxel)
+struct BrickIndexData
+{
+    daxa_u32 data[1]; // Variable length array of packed indices
+};
+
+DAXA_DECL_BUFFER_PTR(BrickIndexData);
 
 // Material definition
 struct Material
@@ -292,9 +374,13 @@ struct ComputePush
     daxa_BufferPtr(Materials) materialsBuffer;
     daxa_BufferPtr(RenderData) stateBuffer;
     daxa_BufferPtr(ContreeBuffer) contreeBuffer;
+    daxa_BufferPtr(BrickBuffer) brickBuffer;
+    daxa_BufferPtr(BrickPaletteData) brickPaletteData;
+    daxa_BufferPtr(BrickIndexData) brickIndexData;
     daxa_ImageViewId screen;
     daxa_ImageViewId blueNoise;
     daxa_u32vec2 screenSize;
     daxa_u32 passNum;
     daxa_u32 contreeNodeCount;
+    daxa_u32 brickCount;
 };

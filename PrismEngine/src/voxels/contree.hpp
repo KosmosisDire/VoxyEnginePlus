@@ -21,7 +21,7 @@ constexpr uint8_t FLAG_FULL = 0x04; // All children exist
 // Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
 // Bytes 4-7:   PackedData[1] = PopMask low 32 bits
 // Bytes 8-11:  PackedData[2] = PopMask high 32 bits
-// Bytes 12-15: PackedData[3] = MaterialId (16 bits) + padding (16 bits)
+// Bytes 12-15: PackedData[3] = BrickPtr(16) | DefaultMaterial(16) [for leaves only]
 struct ContreeNode {
     uint32_t PackedData[4];  // 16 bytes total
 
@@ -49,15 +49,103 @@ struct ContreeNode {
         PackedData[2] = uint32_t(mask >> 32);
     }
 
-    inline uint16_t GetMaterialId() const { return uint16_t(PackedData[3] & 0xFFFF); }
-    inline void SetMaterialId(uint16_t matId) {
-        PackedData[3] = (PackedData[3] & 0xFFFF0000) | matId;
+    // For leaf nodes: brick pointer and default material
+    inline uint16_t GetBrickPtr() const { return uint16_t(PackedData[3] & 0xFFFF); }
+    inline void SetBrickPtr(uint16_t ptr) {
+        PackedData[3] = (PackedData[3] & 0xFFFF0000) | ptr;
+    }
+
+    inline uint16_t GetDefaultMaterial() const { return uint16_t(PackedData[3] >> 16); }
+    inline void SetDefaultMaterial(uint16_t matId) {
+        PackedData[3] = (PackedData[3] & 0xFFFF) | (uint32_t(matId) << 16);
     }
 
     ContreeNode() : PackedData{0, 0, 0, 0} {}
 };
 
 static_assert(sizeof(ContreeNode) == 16, "ContreeNode must be exactly 16 bytes");
+
+//=============================================================================
+// Brick Structures (6x6x6 voxel bricks with palette compression)
+//=============================================================================
+
+// Brick encoding types
+enum BrickEncoding : uint8_t {
+    BRICK_SINGLE_MATERIAL = 0,    // materialCount=1, no per-voxel data needed
+    BRICK_PALETTE_1BIT = 1,       // 2 materials, 1 bit per voxel
+    BRICK_PALETTE_2BIT = 2,       // 3-4 materials, 2 bits per voxel
+    BRICK_PALETTE_4BIT = 3,       // 5-16 materials, 4 bits per voxel
+    BRICK_PALETTE_8BIT = 4,       // 17-256 materials, 8 bits per voxel
+};
+
+// BrickHeader: 32 bytes (8 x uint32)
+// Word 0-6: occupancy (216 bits) + materialCount (8 bits)
+//   - Bits [0-215]: occupancy data
+//   - Bits [216-223]: materialCount (8 bits)
+// Word 7: packed metadata
+//   - Bits [0-7]: encodingType
+//   - Bits [8-15]: flags
+//   - Bits [16-31]: palettePtr
+struct BrickHeader {
+    uint32_t data[8];  // 32 bytes total
+
+    // Accessors for occupancy bits [0-215]
+    inline bool TestOccupancy(uint32_t idx) const {
+        if (idx >= 216) return false;
+        uint32_t wordIdx = idx / 32;
+        uint32_t bitIdx = idx % 32;
+        return (data[wordIdx] & (1u << bitIdx)) != 0;
+    }
+
+    inline void SetOccupancy(uint32_t idx, bool value) {
+        if (idx >= 216) return;
+        uint32_t wordIdx = idx / 32;
+        uint32_t bitIdx = idx % 32;
+        if (value) {
+            data[wordIdx] |= (1u << bitIdx);
+        } else {
+            data[wordIdx] &= ~(1u << bitIdx);
+        }
+    }
+
+    // Accessors for materialCount in bits [216-223] (high byte of data[6])
+    inline uint8_t GetMaterialCount() const {
+        return uint8_t(data[6] >> 24);
+    }
+
+    inline void SetMaterialCount(uint8_t count) {
+        data[6] = (data[6] & 0x00FFFFFF) | (uint32_t(count) << 24);
+    }
+
+    // Accessors for data[7] packed fields
+    inline uint8_t GetEncodingType() const {
+        return uint8_t(data[7] & 0xFF);
+    }
+
+    inline void SetEncodingType(uint8_t type) {
+        data[7] = (data[7] & 0xFFFFFF00) | type;
+    }
+
+    inline uint8_t GetFlags() const {
+        return uint8_t((data[7] >> 8) & 0xFF);
+    }
+
+    inline void SetFlags(uint8_t f) {
+        data[7] = (data[7] & 0xFFFF00FF) | (uint32_t(f) << 8);
+    }
+
+    inline uint16_t GetPalettePtr() const {
+        return uint16_t(data[7] >> 16);
+    }
+
+    inline void SetPalettePtr(uint16_t ptr) {
+        data[7] = (data[7] & 0x0000FFFF) | (uint32_t(ptr) << 16);
+    }
+
+    BrickHeader() : data{0, 0, 0, 0, 0, 0, 0, 0} {}
+};
+
+static_assert(sizeof(BrickHeader) == 32, "BrickHeader must be exactly 32 bytes");
 
 // Helper structure for 3D integer coordinates
 struct int3 {
@@ -79,10 +167,36 @@ struct int3 {
     }
 };
 
+// Brick data: represents a 6x6x6 voxel volume with materials
+struct BrickData {
+    uint16_t materials[216];  // Material ID per voxel (0 = empty)
+
+    BrickData() {
+        std::fill(std::begin(materials), std::end(materials), uint16_t(0));
+    }
+};
+
+// Brick builder: analyzes a brick and generates compressed representation
+class BrickBuilder {
+public:
+    // Analyze brick and determine optimal encoding
+    static BrickHeader BuildBrick(
+        const BrickData& brick,
+        std::vector<uint16_t>& paletteDataOut,
+        std::vector<uint8_t>& indexDataOut
+    );
+
+    // Helper: count unique materials in brick
+    static uint8_t CountUniqueMaterials(const BrickData& brick, std::vector<uint16_t>& uniqueMaterials);
+};
+
 // Custom allocator that builds tree directly into flat array
 class ContreeBuilder {
 private:
     std::vector<ContreeNode> nodes;
+    std::vector<BrickHeader> bricks;
+    std::vector<uint16_t> brickPaletteData;  // Variable-size palette entries
+    std::vector<uint8_t> brickIndexData;     // Variable-size per-voxel indices
 
     // Helper: get child index from 3D local position (0-3 in each axis)
     inline uint32_t ChildIndex(int x, int y, int z) const {
@@ -128,8 +242,24 @@ public:
     uint32_t GetNodeCount() const { return static_cast<uint32_t>(nodes.size()); }
     size_t GetSizeBytes() const { return nodes.size() * sizeof(ContreeNode); }
 
+    // Get brick data for GPU upload
+    const std::vector<BrickHeader>& GetBricks() const { return bricks; }
+    uint32_t GetBrickCount() const { return static_cast<uint32_t>(bricks.size()); }
+    size_t GetBricksSizeBytes() const { return bricks.size() * sizeof(BrickHeader); }
+
+    const std::vector<uint16_t>& GetBrickPaletteData() const { return brickPaletteData; }
+    size_t GetBrickPaletteDataSizeBytes() const { return brickPaletteData.size() * sizeof(uint16_t); }
+
+    const std::vector<uint8_t>& GetBrickIndexData() const { return brickIndexData; }
+    size_t GetBrickIndexDataSizeBytes() const { return brickIndexData.size(); }
+
     // Clear the tree
-    void Clear() { nodes.clear(); }
+    void Clear() {
+        nodes.clear();
+        bricks.clear();
+        brickPaletteData.clear();
+        brickIndexData.clear();
+    }
 };
 
 // CPU-side helper functions (matching VoxelRT's prefix_popcnt64)

@@ -56,9 +56,159 @@ static float3 GetMirroredPos(float3 pos, float3 dir, bool rangeCheck) {
 }
 
 //=============================================================================
+// Brick Material Lookup Helpers
+//=============================================================================
+
+// Read material ID from palette data (packed as 2 uint16s per uint32)
+uint ReadPaletteMaterial(uint paletteIdx) {
+    uint wordIdx = paletteIdx / 2;
+    uint subIdx = paletteIdx % 2;
+    uint packed = p.brickPaletteData.data[wordIdx];
+    if (subIdx == 0) {
+        return packed & 0xFFFF; // Low 16 bits
+    } else {
+        return packed >> 16; // High 16 bits
+    }
+}
+
+// Get material for a voxel in a brick (simplified version - no per-voxel lookup yet)
+uint GetBrickVoxelMaterial(uint brickPtr, uint3 localVoxelPos) {
+    if (brickPtr >= p.brickCount) {
+        return 0; // Invalid brick
+    }
+
+    BrickHeader brick = p.brickBuffer.bricks[brickPtr];
+
+    // Calculate voxel index in brick (6x6x6) using XZY ordering to match tree
+    uint voxelIdx = localVoxelPos.x + localVoxelPos.z * 6 + localVoxelPos.y * 36;
+
+    // Check occupancy
+    if (!brick.TestOccupancy(voxelIdx)) {
+        return 0; // Empty voxel
+    }
+
+    uint materialCount = brick.MaterialCount;
+    uint encodingType = brick.EncodingType;
+    uint palettePtr = brick.PalettePtr;
+
+    // For now, just return first material from palette
+    // TODO: Implement full per-voxel material lookup
+    return ReadPaletteMaterial(palettePtr);
+}
+
+//=============================================================================
 // Octant Mirroring Traversal - Direct port from VoxelRT
 // Reference: VoxelRT Tree64/Map.slang Traversal_OctMirror (line 131-236)
 //=============================================================================
+
+// DEBUG: Direct brick traversal (bypassing tree)
+TraceResult traceBrickDirect(Ray ray, uint brickPtr) {
+    TraceResult result = (TraceResult)0;
+    result.hit = false;
+    result.distance = ray.maxDist;
+    result.iterations = 0;
+
+    // Simple box intersection test in world space
+    // Brick bounds: [0, 4) in world coordinates
+    float3 boxMin = float3(0, 0, 0);
+    float3 boxMax = float3(4, 4, 4);
+
+    // Standard ray-box intersection
+    float3 invDir = 1.0 / ray.direction;
+    float3 t0 = (boxMin - ray.origin) * invDir;
+    float3 t1 = (boxMax - ray.origin) * invDir;
+
+    float3 tNear = min(t0, t1);
+    float3 tFar = max(t0, t1);
+
+    float tEnter = max(max(tNear.x, tNear.y), max(tNear.z, 0.0));
+    float tExit = min(min(tFar.x, tFar.y), tFar.z);
+
+    // Check if ray intersects box
+    if (tEnter < tExit && tExit > 0.0) {
+        // Calculate entry position in world space
+        float3 entryPos = ray.origin + ray.direction * tEnter;
+
+        // Calculate local position within brick [0, 4)
+        float3 localPos = entryPos - boxMin;
+
+        // Map to voxel coordinates [0, 6) for the 6x6x6 brick
+        float3 brickVoxelPosFloat = localPos * (6.0 / 4.0);
+        int3 voxelPos = int3(clamp(floor(brickVoxelPosFloat), 0.0, 5.0));
+
+        // DDA traversal setup
+        int3 step = int3(sign(ray.direction));
+        float voxelSize = 4.0 / 6.0; // Each voxel is 0.667 world units
+
+        // Calculate tDelta - how far along the ray to move to cross one voxel
+        float3 tDelta = abs(voxelSize / ray.direction);
+
+        // Calculate tSide - distance to next voxel boundary for each axis
+        float3 voxelWorldMin = boxMin + float3(voxelPos) * voxelSize;
+        float3 nextBoundary = voxelWorldMin + max(float3(step), 0.0) * voxelSize;
+        float3 tSide = (nextBoundary - entryPos) / ray.direction;
+
+        // Sphere test: center at (2.5, 2.5, 2.5) in voxel coords, radius 2.5
+        float3 sphereCenter = float3(2.5, 2.5, 2.5);
+        float sphereRadius = 2.5;
+
+        // Track which axis we last stepped on for normal calculation
+        int3 lastStepAxis = int3(0, 0, 0);
+
+        // Traverse voxels using DDA
+        for (int step_i = 0; step_i < 18; step_i++) {
+            // Check bounds
+            if (any(voxelPos < int3(0)) || any(voxelPos >= int3(6))) {
+                break; // Exited brick
+            }
+
+            // Test if this voxel is inside the sphere
+            float3 voxelCenterFloat = float3(voxelPos) + 0.5;
+            float dist = length(voxelCenterFloat - sphereCenter);
+
+            if (dist <= sphereRadius) {
+                // Hit! Inside sphere
+                result.hit = true;
+                result.position = boxMin + (float3(voxelPos) + 0.5) * voxelSize;
+                result.distance = length(result.position - ray.origin);
+
+                // Encode voxel position for visualization
+                result.materialId = 1 + voxelPos.x + voxelPos.y * 10 + voxelPos.z * 100;
+
+                // Normal is based on which face we entered from
+                // For first voxel (step_i == 0), use entry normal from box
+                // For subsequent voxels, use the last step axis
+                if (step_i == 0) {
+                    // Entry from outside brick - use box entry normal
+                    if (abs(tNear.x - tEnter) < 0.0001) result.normal = float3(-sign(ray.direction.x), 0, 0);
+                    else if (abs(tNear.y - tEnter) < 0.0001) result.normal = float3(0, -sign(ray.direction.y), 0);
+                    else result.normal = float3(0, 0, -sign(ray.direction.z));
+                } else {
+                    // Use last step direction - normal points opposite to step
+                    result.normal = -float3(lastStepAxis);
+                }
+                return result;
+            }
+
+            // Step to next voxel along the ray and record which axis
+            if (tSide.x <= tSide.y && tSide.x <= tSide.z) {
+                lastStepAxis = int3(step.x, 0, 0);
+                tSide.x += tDelta.x;
+                voxelPos.x += step.x;
+            } else if (tSide.y <= tSide.z) {
+                lastStepAxis = int3(0, step.y, 0);
+                tSide.y += tDelta.y;
+                voxelPos.y += step.y;
+            } else {
+                lastStepAxis = int3(0, 0, step.z);
+                tSide.z += tDelta.z;
+                voxelPos.z += step.z;
+            }
+        }
+    }
+
+    return result;
+}
 
 TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
 #if USE_SHARED_MEMORY_STACK
@@ -170,8 +320,105 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
             childIdx = GetNodeCellIndex(pos, scaleExp) ^ mirrorMask;
         }
 
-        // Check for hit (reference line 191)
-        if (BitTestHalf64(node.PopMask, childIdx, 1) && node.IsLeaf && !skipNextHit) break;
+        // Check for hit - if we're at a leaf, traverse the brick (reference line 191)
+        if (BitTestHalf64(node.PopMask, childIdx, 1) && node.IsLeaf && !skipNextHit) {
+            // Un-mirror position to get world coordinates
+            float3 posUnmirrored = GetMirroredPos(pos, dir, false);
+            float3 worldPos = (posUnmirrored - 1.0 - worldOrigin * scale) * (1 << TreeScale);
+
+            // ========== 6×6×6 Brick Traversal ==========
+            // Calculate leaf base position in world space (4×4×4 leaf cell)
+            float3 leafBase = floor(worldPos / 4.0) * 4.0;
+            float3 brickMin = leafBase;
+            float3 brickMax = leafBase + 4.0;
+
+            // Intersect ray with brick to get entry point
+            float3 invDirBrick = 1.0 / ray.direction;
+            float3 t0 = (brickMin - ray.origin) * invDirBrick;
+            float3 t1 = (brickMax - ray.origin) * invDirBrick;
+            float3 tNear = min(t0, t1);
+            float3 tFar = max(t0, t1);
+            float tEnter = max(max(tNear.x, tNear.y), max(tNear.z, 0.0));
+
+            // Entry point in world space
+            float3 entryPos = ray.origin + ray.direction * tEnter;
+
+            // Local position within brick [0, 4)
+            float3 localPos = entryPos - brickMin;
+
+            // Map to 6×6×6 voxel coordinates [0, 6)
+            float3 voxelPosFloat = localPos * (6.0 / 4.0);
+            int3 voxelPos = int3(clamp(floor(voxelPosFloat), 0.0, 5.0));
+
+            // DDA traversal setup
+            int3 stepBrick = int3(sign(ray.direction));
+            float voxelSize = 4.0 / 6.0; // Each voxel is 2/3 world unit
+            float3 tDelta = abs(voxelSize / ray.direction);
+
+            // Calculate tSide - distance to next voxel boundary for each axis
+            float3 voxelWorldMin = brickMin + float3(voxelPos) * voxelSize;
+            float3 nextBoundary = voxelWorldMin + max(float3(stepBrick), 0.0) * voxelSize;
+            float3 tSide = (nextBoundary - entryPos) / ray.direction;
+
+            // Track last step axis for normal calculation
+            int3 lastStepAxis = int3(0, 0, 0);
+
+            // Get brick pointer from leaf node
+            uint brickPtr = node.BrickPtr;
+
+            // Traverse the 6×6×6 brick
+            for (int step_i = 0; step_i < 18; step_i++) {
+                // Check bounds
+                if (any(voxelPos < int3(0)) || any(voxelPos >= int3(6))) {
+                    break; // Exited brick without hit - continue tree traversal
+                }
+
+                // Read actual voxel data from brick using XZY ordering
+                uint3 voxelPosU = uint3(voxelPos);
+                uint materialId = GetBrickVoxelMaterial(brickPtr, voxelPosU);
+
+                if (materialId != 0) {
+                    // Hit! Found a solid voxel
+                    result.hit = true;
+                    result.position = brickMin + (float3(voxelPos) + 0.5) * voxelSize;
+                    result.distance = length(result.position - ray.origin);
+
+                    // Encode voxel position for visualization (keeping the color display)
+                    result.materialId = 1 + voxelPos.x + voxelPos.y * 10 + voxelPos.z * 100;
+                    result.iterations = i;
+
+                    // Calculate normal based on entry
+                    if (step_i == 0) {
+                        // First voxel - use brick entry normal
+                        if (abs(tNear.x - tEnter) < 0.0001) result.normal = float3(-sign(ray.direction.x), 0, 0);
+                        else if (abs(tNear.y - tEnter) < 0.0001) result.normal = float3(0, -sign(ray.direction.y), 0);
+                        else result.normal = float3(0, 0, -sign(ray.direction.z));
+                    } else {
+                        // Subsequent voxels - use last step axis
+                        result.normal = -float3(lastStepAxis);
+                    }
+
+                    return result; // EARLY RETURN - we hit a voxel!
+                }
+
+                // Step to next voxel along the ray
+                if (tSide.x <= tSide.y && tSide.x <= tSide.z) {
+                    lastStepAxis = int3(stepBrick.x, 0, 0);
+                    tSide.x += tDelta.x;
+                    voxelPos.x += stepBrick.x;
+                } else if (tSide.y <= tSide.z) {
+                    lastStepAxis = int3(0, stepBrick.y, 0);
+                    tSide.y += tDelta.y;
+                    voxelPos.y += stepBrick.y;
+                } else {
+                    lastStepAxis = int3(0, 0, stepBrick.z);
+                    tSide.z += tDelta.z;
+                    voxelPos.z += stepBrick.z;
+                }
+            }
+
+            // If we reach here, we didn't hit anything in the brick - continue tree traversal
+        }
 
         int advScaleExp = scaleExp;
 
@@ -204,23 +451,6 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
 
     result.iterations = i;
 
-    // Process hit (reference line 225-234)
-    if (node.IsLeaf && scaleExp <= 21) {
-        // Un-mirror position (reference line 226)
-        pos = GetMirroredPos(pos, dir, false);
-
-        result.hit = true;
-        result.position = (pos - 1.0 - worldOrigin * scale) * (1 << TreeScale);
-        result.distance = length(result.position - ray.origin);
-
-        // Read material ID from the leaf node
-        result.materialId = node.MaterialId;
-
-        // Calculate normal (reference line 231-233)
-        float tmax = min(min(sideDist.x, sideDist.y), sideDist.z);
-        bool3 sideMask = tmax >= sideDist;
-        result.normal = select(sideMask, -sign(dir), 0.0);
-    }
-
+    // If we exited the loop without hitting anything, return miss
     return result;
 }

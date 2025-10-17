@@ -3,12 +3,126 @@
 #include <cmath>
 #include <vector>
 #include <bitset>
+#include <unordered_map>
 
 namespace Contree {
+
+//=============================================================================
+// Brick Builder Implementation
+//=============================================================================
+
+uint8_t BrickBuilder::CountUniqueMaterials(const BrickData& brick, std::vector<uint16_t>& uniqueMaterials) {
+    uniqueMaterials.clear();
+    std::unordered_map<uint16_t, bool> seen;
+
+    for (int i = 0; i < 216; i++) {
+        uint16_t mat = brick.materials[i];
+        if (mat != 0 && seen.find(mat) == seen.end()) {
+            seen[mat] = true;
+            uniqueMaterials.push_back(mat);
+        }
+    }
+
+    return static_cast<uint8_t>(uniqueMaterials.size());
+}
+
+BrickHeader BrickBuilder::BuildBrick(
+    const BrickData& brick,
+    std::vector<uint16_t>& paletteDataOut,
+    std::vector<uint8_t>& indexDataOut)
+{
+    BrickHeader header;
+
+    // Step 1: Build occupancy mask
+    for (int i = 0; i < 216; i++) {
+        if (brick.materials[i] != 0) {
+            header.SetOccupancy(i, true);
+        }
+    }
+
+    // Step 2: Count unique materials
+    std::vector<uint16_t> uniqueMaterials;
+    uint8_t materialCount = CountUniqueMaterials(brick, uniqueMaterials);
+
+    header.SetMaterialCount(materialCount);
+
+    // Step 3: Choose encoding based on material count
+    if (materialCount == 0) {
+        // Empty brick
+        header.SetEncodingType(BRICK_SINGLE_MATERIAL);
+        header.SetPalettePtr(0);
+        return header;
+    }
+    else if (materialCount == 1) {
+        // Single material - no per-voxel data needed
+        header.SetEncodingType(BRICK_SINGLE_MATERIAL);
+        header.SetPalettePtr(static_cast<uint16_t>(paletteDataOut.size()));
+        paletteDataOut.push_back(uniqueMaterials[0]);
+        return header;
+    }
+    else if (materialCount == 2) {
+        header.SetEncodingType(BRICK_PALETTE_1BIT);
+    }
+    else if (materialCount <= 4) {
+        header.SetEncodingType(BRICK_PALETTE_2BIT);
+    }
+    else if (materialCount <= 16) {
+        header.SetEncodingType(BRICK_PALETTE_4BIT);
+    }
+    else {
+        header.SetEncodingType(BRICK_PALETTE_8BIT);
+    }
+
+    // Step 4: Build material palette
+    header.SetPalettePtr(static_cast<uint16_t>(paletteDataOut.size()));
+    std::unordered_map<uint16_t, uint8_t> materialToIndex;
+
+    for (size_t i = 0; i < uniqueMaterials.size(); i++) {
+        paletteDataOut.push_back(uniqueMaterials[i]);
+        materialToIndex[uniqueMaterials[i]] = static_cast<uint8_t>(i);
+    }
+
+    // Step 5: Build per-voxel indices
+    uint32_t bitsPerVoxel = (header.GetEncodingType() == BRICK_PALETTE_1BIT) ? 1 :
+                           (header.GetEncodingType() == BRICK_PALETTE_2BIT) ? 2 :
+                           (header.GetEncodingType() == BRICK_PALETTE_4BIT) ? 4 : 8;
+
+    uint32_t totalBits = 216 * bitsPerVoxel;
+    uint32_t totalBytes = (totalBits + 7) / 8;
+
+    size_t indexStartPos = indexDataOut.size();
+    indexDataOut.resize(indexStartPos + totalBytes, 0);
+
+    // Pack indices into bit stream
+    for (int voxelIdx = 0; voxelIdx < 216; voxelIdx++) {
+        uint16_t mat = brick.materials[voxelIdx];
+        uint8_t matIndex = (mat == 0) ? 0 : materialToIndex[mat];
+
+        uint32_t bitOffset = voxelIdx * bitsPerVoxel;
+        uint32_t byteOffset = bitOffset / 8;
+        uint32_t bitInByte = bitOffset % 8;
+
+        // Write bits (may span 2 bytes)
+        indexDataOut[indexStartPos + byteOffset] |= (matIndex << bitInByte);
+        if (bitInByte + bitsPerVoxel > 8) {
+            // Overflow into next byte
+            indexDataOut[indexStartPos + byteOffset + 1] |= (matIndex >> (8 - bitInByte));
+        }
+    }
+
+    return header;
+}
+
+//=============================================================================
+// Tree Builder Implementation
+//=============================================================================
 
 // Helper: build tree recursively, returns node by value (matching reference pattern)
 static ContreeNode BuildChunkTree(
     std::vector<ContreeNode>& nodePool,
+    std::vector<BrickHeader>& brickPool,
+    std::vector<uint16_t>& paletteData,
+    std::vector<uint8_t>& indexData,
     const std::function<uint16_t(int, int, int)>& densityFunc,
     int scale,  // log4 of size (6=4096, 4=256, 2=16, 0=1)
     int3 pos);  // Position in world
@@ -20,6 +134,97 @@ ContreeBuilder::ContreeBuilder() {
 
 void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& densityFunc) {
     nodes.clear();
+    bricks.clear();
+    brickPaletteData.clear();
+    brickIndexData.clear();
+
+    // ========== Create Two Hardcoded Bricks ==========
+
+    // Brick 0: Sphere (radius 2.5)
+    std::printf("[Contree] Creating brick 0: sphere\n");
+    BrickData sphereBrick;
+    float sphereCenter = 2.5f; // Center of 6x6x6 brick
+    float sphereRadius = 2.5f;
+    int sphereSolidCount = 0;
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int brickIdx = bx + bz * 6 + by * 36; // XZY ordering
+
+                // Test if voxel is inside sphere
+                float dx = bx + 0.5f - sphereCenter;
+                float dy = by + 0.5f - sphereCenter;
+                float dz = bz + 0.5f - sphereCenter;
+                float distSq = dx*dx + dy*dy + dz*dz;
+
+                if (distSq <= sphereRadius * sphereRadius) {
+                    sphereBrick.materials[brickIdx] = 1; // Material 1
+                    sphereSolidCount++;
+                } else {
+                    sphereBrick.materials[brickIdx] = 0; // Empty
+                }
+            }
+        }
+    }
+
+    BrickHeader sphereBrickHeader = BrickBuilder::BuildBrick(sphereBrick, brickPaletteData, brickIndexData);
+    bricks.push_back(sphereBrickHeader);
+
+    std::printf("[Contree] Brick 0 (sphere): %d/216 voxels solid, encoding=%d\n",
+               sphereSolidCount, sphereBrickHeader.GetEncodingType());
+
+    // Brick 1: 4x4x4 Cube centered in the 6x6x6 brick
+    std::printf("[Contree] Creating brick 1: 4x4x4 cube\n");
+    BrickData cubeBrick;
+    int cubeSolidCount = 0;
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int brickIdx = bx + bz * 6 + by * 36; // XZY ordering
+
+                // 4x4x4 cube centered: voxels [1,4] in each dimension
+                bool inCube = (bx >= 1 && bx <= 4) &&
+                              (by >= 1 && by <= 4) &&
+                              (bz >= 1 && bz <= 4);
+
+                if (inCube) {
+                    cubeBrick.materials[brickIdx] = 2; // Material 2
+                    cubeSolidCount++;
+                } else {
+                    cubeBrick.materials[brickIdx] = 0; // Empty
+                }
+            }
+        }
+    }
+
+    BrickHeader cubeBrickHeader = BrickBuilder::BuildBrick(cubeBrick, brickPaletteData, brickIndexData);
+    bricks.push_back(cubeBrickHeader);
+
+    std::printf("[Contree] Brick 1 (cube): %d/216 voxels solid, encoding=%d\n",
+               cubeSolidCount, cubeBrickHeader.GetEncodingType());
+
+    // Visualize both bricks
+    std::printf("[Contree] Brick 0 (sphere) - Middle Z-slice (z=3):\n");
+    for (int y = 0; y < 6; y++) {
+        std::printf("    ");
+        for (int x = 0; x < 6; x++) {
+            int idx = x + 3 * 6 + y * 36;
+            std::printf("%c", sphereBrick.materials[idx] != 0 ? 'S' : '.');
+        }
+        std::printf("\n");
+    }
+
+    std::printf("[Contree] Brick 1 (cube) - Middle Z-slice (z=3):\n");
+    for (int y = 0; y < 6; y++) {
+        std::printf("    ");
+        for (int x = 0; x < 6; x++) {
+            int idx = x + 3 * 6 + y * 36;
+            std::printf("%c", cubeBrick.materials[idx] != 0 ? 'C' : '.');
+        }
+        std::printf("\n");
+    }
 
     // Build tree using scale = log2(grid_size)
     // CRITICAL: Scale must be EVEN and >= 2 (decreases by 2 each level, stops at scale=2 leaf)
@@ -32,7 +237,7 @@ void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& density
     std::printf("[Contree] Building tree with scale=%d (size=2^%d=%d)\n",
                scale, scale, 1 << scale);
 
-    ContreeNode root = BuildChunkTree(nodes, densityFunc, scale, origin);
+    ContreeNode root = BuildChunkTree(nodes, bricks, brickPaletteData, brickIndexData, densityFunc, scale, origin);
 
     // CRITICAL: When we insert root at beginning, all child pointers shift by +1
     // We need to patch all non-leaf child pointers before inserting root
@@ -96,11 +301,22 @@ void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& density
                (unsigned long long)nodes[0].GetPopMask(),
                nodes[0].GetChildPtr(),
                nodes[0].IsLeaf());
+
+    // Brick statistics
+    std::printf("[Contree] Built %u nodes, %u bricks\n", GetNodeCount(), GetBrickCount());
+    std::printf("[Contree] Palette data: %zu uint16s (%zu bytes)\n",
+               brickPaletteData.size(), GetBrickPaletteDataSizeBytes());
+    std::printf("[Contree] Index data: %zu bytes\n", GetBrickIndexDataSizeBytes());
+    std::printf("[Contree] Total memory: %zu bytes\n",
+               GetSizeBytes() + GetBricksSizeBytes() + GetBrickPaletteDataSizeBytes() + GetBrickIndexDataSizeBytes());
 }
 
 // Reference implementation pattern from VoxelRT/src/VoxelRT/Render/RendererTree64.cpp:66
 static ContreeNode BuildChunkTree(
     std::vector<ContreeNode>& nodePool,
+    std::vector<BrickHeader>& brickPool,
+    std::vector<uint16_t>& paletteData,
+    std::vector<uint8_t>& indexData,
     const std::function<uint16_t(int, int, int)>& densityFunc,
     int scale,
     int3 pos)
@@ -111,91 +327,58 @@ static ContreeNode BuildChunkTree(
     node.SetPopMask(0);
 
     // Create leaf (reference line 70: if scale == 2)
-    // At this point we're at scale=2, which means a 4x4x4 voxel leaf
+    // At this point we're at scale=2, which means a 4x4x4 leaf
+    // All leaves will point to the single hardcoded brick (index 0)
     if (scale == 2) {
         node.SetLeaf(true);
 
-        // Sample 4x4x4 voxels
-        uint64_t occupancy = 0;
-        uint16_t leafMaterial = 0; // Material for this leaf (most common or first found)
+        // Check if this leaf should be visible using the density function
+        // Sample the center of this 4x4x4 leaf
+        int centerX = pos.x + 2;
+        int centerY = pos.y + 2;
+        int centerZ = pos.z + 2;
 
-        static int sampleCount = 0;
-        static int solidCount = 0;
-        static bool debugPrinted = false;
+        bool isVisible = false;
+        if (centerX >= 0 && centerX < 256 && centerY >= 0 && centerY < 256 && centerZ >= 0 && centerZ < 256) {
+            uint16_t mat = densityFunc(centerX, centerY, centerZ);
+            isVisible = (mat != 0);
+        }
 
-        for (int i = 0; i < 64; i++) {
-            int lx = (i >> 0) & 3;
-            int ly = (i >> 4) & 3;
-            int lz = (i >> 2) & 3;
+        if (isVisible) {
+            // Randomly choose between brick 0 (sphere) and brick 1 (cube)
+            // Use leaf position as seed for deterministic "random" selection
+            // Better hash mixing to avoid patterns with multiples of 4
+            uint32_t h = pos.x + pos.y * 374761393 + pos.z * 668265263;
+            h = (h ^ (h >> 13)) * 1274126177;
+            h = h ^ (h >> 16);
+            uint16_t brickChoice = h & 1; // 0 = sphere, 1 = cube
 
-            int wx = pos.x + lx;
-            int wy = pos.y + ly;
-            int wz = pos.z + lz;
+            node.SetBrickPtr(brickChoice);
+            node.SetDefaultMaterial(brickChoice + 1); // Material 1 or 2
+            node.SetPopMask(0xFFFFFFFFFFFFFFFFULL); // Mark all 64 children as occupied
 
-            // Debug first few samples
-            if (!debugPrinted && sampleCount < 10) {
-                std::printf("[Contree] Sample %d: pos=(%d,%d,%d) local=(%d,%d,%d) world=(%d,%d,%d)\n",
-                           sampleCount, pos.x, pos.y, pos.z, lx, ly, lz, wx, wy, wz);
+            static int sphereCount = 0;
+            static int cubeCount = 0;
+            if (brickChoice == 0) sphereCount++; else cubeCount++;
+
+            if (sphereCount + cubeCount < 10) {
+                std::printf("[Contree] Leaf at pos=(%d,%d,%d) -> brick %d (%s)\n",
+                           pos.x, pos.y, pos.z, brickChoice, brickChoice == 0 ? "sphere" : "cube");
             }
 
-            // Only sample if within valid region [0, 256)
-            if (wx >= 0 && wx < 256 && wy >= 0 && wy < 256 && wz >= 0 && wz < 256) {
-                uint16_t mat = densityFunc(wx, wy, wz);
-                sampleCount++;
-                if (mat != 0) {
-                    solidCount++;
-                    occupancy |= (1ULL << i);
-                    // Store the first non-zero material found
-                    if (leafMaterial == 0) {
-                        leafMaterial = mat;
-                    }
-                    if (solidCount <= 5) {
-                        float dx = wx - 128.0f;
-                        float dy = wy - 128.0f;
-                        float dz = wz - 128.0f;
-                        float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-                        std::printf("[Contree] Solid voxel %d: world=(%d,%d,%d) leafPos=(%d,%d,%d) localIdx=%d dist=%.1f mat=%d\n",
-                                   solidCount, wx, wy, wz, pos.x, pos.y, pos.z, i, dist, mat);
-                    }
-                }
+            if ((sphereCount + cubeCount) % 100 == 0) {
+                std::printf("[Contree] %d leaves total: %d spheres, %d cubes\n",
+                           sphereCount + cubeCount, sphereCount, cubeCount);
             }
+        } else {
+            // Empty leaf - no brick pointer
+            node.SetBrickPtr(0);
+            node.SetDefaultMaterial(0);
+            node.SetPopMask(0);
         }
 
-        if (sampleCount == 10) {
-            debugPrinted = true;
-            std::printf("[Contree] Tested sphere at (128,128,128): %d\n",
-                       densityFunc(128, 128, 128));
-            std::printf("[Contree] Tested sphere at (128,128,178): %d\n",
-                       densityFunc(128, 128, 178));
-        }
-
-        if (sampleCount % 100000 == 0) {
-            std::printf("[Contree] Sampled %d voxels, %d solid\n", sampleCount, solidCount);
-        }
-
-        node.SetPopMask(occupancy);
-        node.SetMaterialId(leafMaterial); // Store the material ID
-
-        // CRITICAL: Leaf nodes must have ChildPtr = 0 to avoid pointing to random nodes
+        // CRITICAL: Leaf nodes must have ChildPtr = 0
         node.SetChildPtr(0);
-
-        // Debug
-        if (occupancy != 0) {
-            static int leafsWithVoxels = 0;
-            static int totalVoxels = 0;
-            int voxelsInLeaf = static_cast<int>(std::bitset<64>(occupancy).count());
-            totalVoxels += voxelsInLeaf;
-            leafsWithVoxels++;
-
-            if (leafsWithVoxels == 1) {
-                std::printf("[Contree] First leaf with voxels at pos=(%d,%d,%d), count=%d\n",
-                           pos.x, pos.y, pos.z, voxelsInLeaf);
-            }
-            if (leafsWithVoxels % 100 == 0) {
-                std::printf("[Contree] %d leaves with voxels, %d total voxels\n",
-                           leafsWithVoxels, totalVoxels);
-            }
-        }
 
         return node;
     }
@@ -226,7 +409,7 @@ static ContreeNode BuildChunkTree(
         );
 
         // Recurse
-        ContreeNode child = BuildChunkTree(nodePool, densityFunc, scale, childPos);
+        ContreeNode child = BuildChunkTree(nodePool, brickPool, paletteData, indexData, densityFunc, scale, childPos);
 
         // Only store non-empty children (reference line 103-106)
         if (child.GetPopMask() != 0) {
