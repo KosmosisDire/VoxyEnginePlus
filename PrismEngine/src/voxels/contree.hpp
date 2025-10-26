@@ -190,6 +190,64 @@ public:
     static uint8_t CountUniqueMaterials(const BrickData& brick, std::vector<uint16_t>& uniqueMaterials);
 };
 
+// BrickPalette: Manages a collection of reusable brick patterns
+//
+// Example usage:
+//   // Create a palette with custom brick patterns
+//   Contree::BrickPalette palette;
+//
+//   // Register preset patterns
+//   uint16_t sphereIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSphere(2.5f, 1));
+//   uint16_t cubeIdx = palette.RegisterBrick(Contree::BrickPalette::CreateCube(1, 4, 1, 4, 1, 4, 2));
+//   uint16_t checkerIdx = palette.RegisterBrick(Contree::BrickPalette::CreateCheckerboard(3, 4));
+//
+//   // Create custom pattern with lambda
+//   uint16_t customIdx = palette.RegisterBrick(
+//       Contree::BrickPalette::CreateCustom([](int x, int y, int z) -> uint16_t {
+//           // Example: hollow shell (only outer voxels)
+//           bool isOuter = (x == 0 || x == 5 || y == 0 || y == 5 || z == 0 || z == 5);
+//           return isOuter ? 5 : 0;
+//       })
+//   );
+//
+//   // Build tree with brick selector function
+//   Contree::ContreeBuilder builder;
+//   builder.BuildWithPalette(palette, [=](int x, int y, int z) -> uint16_t {
+//       // Example: terrain with different brick types
+//       int height = 50 + (int)(sin(x * 0.1f) * 10.0f);
+//
+//       if (y > height) return UINT16_MAX; // Empty (air)
+//       if (y == height) return sphereIdx;  // Surface layer
+//       if ((x + y + z) % 8 == 0) return checkerIdx; // Scattered pattern
+//       return cubeIdx; // Default underground
+//   });
+//
+class BrickPalette {
+private:
+    std::vector<BrickData> brickPatterns;
+
+public:
+    BrickPalette();
+
+    // Register a custom brick pattern, returns its index
+    uint16_t RegisterBrick(const BrickData& brick);
+
+    // Helper: Create common brick patterns (6x6x6 voxels)
+    static BrickData CreateSphere(float radius, uint16_t material);
+    static BrickData CreateCube(int minX, int maxX, int minY, int maxY, int minZ, int maxZ, uint16_t material);
+    static BrickData CreateCheckerboard(uint16_t mat1, uint16_t mat2);
+    static BrickData CreateSolid(uint16_t material);
+    static BrickData CreateEmpty();
+
+    // Custom generator: provide a function that returns material ID for each voxel position (0-5 in each axis)
+    static BrickData CreateCustom(std::function<uint16_t(int x, int y, int z)> generator);
+
+    // Access registered bricks
+    const BrickData& GetBrick(uint16_t index) const;
+    size_t GetBrickCount() const;
+    void Clear();
+};
+
 // Custom allocator that builds tree directly into flat array
 class ContreeBuilder {
 private:
@@ -241,6 +299,14 @@ public:
     // Grid dimensions should be at least 256x256x256 for full tree coverage
     // Grid is indexed as: grid[x + y * sizeX + z * sizeX * sizeY]
     void BuildFromGrid(const uint16_t* grid, int sizeX, int sizeY, int sizeZ);
+
+    // Build tree with custom brick palette
+    // brickSelector(x, y, z) returns brick index from palette for each leaf position
+    // Returns UINT16_MAX for empty leaves
+    void BuildWithPalette(
+        const BrickPalette& palette,
+        const std::function<uint16_t(int x, int y, int z)>& brickSelector
+    );
 
     // Get flat node array for GPU upload
     const std::vector<ContreeNode>& GetNodes() const { return nodes; }

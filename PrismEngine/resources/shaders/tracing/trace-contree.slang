@@ -366,6 +366,9 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
             // Get brick pointer from leaf node
             uint brickPtr = node.BrickPtr;
 
+            // Track current t value for hit position
+            float currentT = tEnter;
+
             // Traverse the 6×6×6 brick
             for (int step_i = 0; step_i < 18; step_i++) {
                 // Check bounds
@@ -380,38 +383,47 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
                 if (materialId != 0) {
                     // Hit! Found a solid voxel
                     result.hit = true;
-                    result.position = brickMin + (float3(voxelPos) + 0.5) * voxelSize;
-                    result.distance = length(result.position - ray.origin);
 
-                    // Encode voxel position for visualization (keeping the color display)
-                    result.materialId = 1 + voxelPos.x + voxelPos.y * 10 + voxelPos.z * 100;
+                    // Use actual ray hit position (not voxel center!)
+                    result.position = ray.origin + ray.direction * currentT;
+                    result.distance = currentT;
+
+                    // Use actual material ID from brick data
+                    result.materialId = materialId;
                     result.iterations = i;
 
-                    // Calculate normal based on entry
+                    // Calculate normal based on which face we entered the voxel from
                     if (step_i == 0) {
-                        // First voxel - use brick entry normal
-                        if (abs(tNear.x - tEnter) < 0.0001) result.normal = float3(-sign(ray.direction.x), 0, 0);
-                        else if (abs(tNear.y - tEnter) < 0.0001) result.normal = float3(0, -sign(ray.direction.y), 0);
-                        else result.normal = float3(0, 0, -sign(ray.direction.z));
+                        // First voxel - use brick entry normal (face we entered the brick from)
+                        if (abs(tNear.x - tEnter) < 0.0001) {
+                            result.normal = float3(-sign(ray.direction.x), 0, 0);
+                        } else if (abs(tNear.y - tEnter) < 0.0001) {
+                            result.normal = float3(0, -sign(ray.direction.y), 0);
+                        } else {
+                            result.normal = float3(0, 0, -sign(ray.direction.z));
+                        }
                     } else {
-                        // Subsequent voxels - use last step axis
+                        // Subsequent voxels - normal points opposite to the step direction
                         result.normal = -float3(lastStepAxis);
                     }
 
                     return result; // EARLY RETURN - we hit a voxel!
                 }
 
-                // Step to next voxel along the ray
+                // Step to next voxel along the ray and update currentT
                 if (tSide.x <= tSide.y && tSide.x <= tSide.z) {
                     lastStepAxis = int3(stepBrick.x, 0, 0);
+                    currentT = tEnter + tSide.x;  // Update t for next voxel
                     tSide.x += tDelta.x;
                     voxelPos.x += stepBrick.x;
                 } else if (tSide.y <= tSide.z) {
                     lastStepAxis = int3(0, stepBrick.y, 0);
+                    currentT = tEnter + tSide.y;  // Update t for next voxel
                     tSide.y += tDelta.y;
                     voxelPos.y += stepBrick.y;
                 } else {
                     lastStepAxis = int3(0, 0, stepBrick.z);
+                    currentT = tEnter + tSide.z;  // Update t for next voxel
                     tSide.z += tDelta.z;
                     voxelPos.z += stepBrick.z;
                 }

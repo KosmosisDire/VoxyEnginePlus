@@ -8,6 +8,138 @@
 namespace Contree {
 
 //=============================================================================
+// BrickPalette Implementation
+//=============================================================================
+
+BrickPalette::BrickPalette() {
+    brickPatterns.reserve(16); // Reserve space for typical use
+}
+
+uint16_t BrickPalette::RegisterBrick(const BrickData& brick) {
+    if (brickPatterns.size() >= 65535) {
+        std::printf("[BrickPalette ERROR] Cannot register more than 65535 bricks\n");
+        return 0;
+    }
+    brickPatterns.push_back(brick);
+    return static_cast<uint16_t>(brickPatterns.size() - 1);
+}
+
+BrickData BrickPalette::CreateSphere(float radius, uint16_t material) {
+    BrickData brick;
+    float center = 2.5f; // Center of 6x6x6 brick
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int idx = bx + bz * 6 + by * 36; // XZY ordering
+
+                float dx = bx + 0.5f - center;
+                float dy = by + 0.5f - center;
+                float dz = bz + 0.5f - center;
+                float distSq = dx*dx + dy*dy + dz*dz;
+
+                if (distSq <= radius * radius) {
+                    brick.materials[idx] = material;
+                } else {
+                    brick.materials[idx] = 0;
+                }
+            }
+        }
+    }
+
+    return brick;
+}
+
+BrickData BrickPalette::CreateCube(int minX, int maxX, int minY, int maxY, int minZ, int maxZ, uint16_t material) {
+    BrickData brick;
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int idx = bx + bz * 6 + by * 36; // XZY ordering
+
+                bool inCube = (bx >= minX && bx <= maxX) &&
+                              (by >= minY && by <= maxY) &&
+                              (bz >= minZ && bz <= maxZ);
+
+                if (inCube) {
+                    brick.materials[idx] = material;
+                } else {
+                    brick.materials[idx] = 0;
+                }
+            }
+        }
+    }
+
+    return brick;
+}
+
+BrickData BrickPalette::CreateCheckerboard(uint16_t mat1, uint16_t mat2) {
+    BrickData brick;
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int idx = bx + bz * 6 + by * 36; // XZY ordering
+
+                // 3D checkerboard pattern
+                bool isEven = ((bx + by + bz) % 2) == 0;
+                brick.materials[idx] = isEven ? mat1 : mat2;
+            }
+        }
+    }
+
+    return brick;
+}
+
+BrickData BrickPalette::CreateSolid(uint16_t material) {
+    BrickData brick;
+
+    for (int i = 0; i < 216; i++) {
+        brick.materials[i] = material;
+    }
+
+    return brick;
+}
+
+BrickData BrickPalette::CreateEmpty() {
+    BrickData brick; // Already initialized to zeros in constructor
+    return brick;
+}
+
+BrickData BrickPalette::CreateCustom(std::function<uint16_t(int x, int y, int z)> generator) {
+    BrickData brick;
+
+    for (int bz = 0; bz < 6; bz++) {
+        for (int by = 0; by < 6; by++) {
+            for (int bx = 0; bx < 6; bx++) {
+                int idx = bx + bz * 6 + by * 36; // XZY ordering
+                brick.materials[idx] = generator(bx, by, bz);
+            }
+        }
+    }
+
+    return brick;
+}
+
+const BrickData& BrickPalette::GetBrick(uint16_t index) const {
+    if (index >= brickPatterns.size()) {
+        std::printf("[BrickPalette ERROR] Invalid brick index %u (max %zu)\n", index, brickPatterns.size());
+        static BrickData emptyBrick;
+        return emptyBrick;
+    }
+    return brickPatterns[index];
+}
+
+size_t BrickPalette::GetBrickCount() const {
+    return brickPatterns.size();
+}
+
+void BrickPalette::Clear() {
+    brickPatterns.clear();
+}
+
+//=============================================================================
 // Brick Builder Implementation
 //=============================================================================
 
@@ -126,6 +258,17 @@ static ContreeNode BuildChunkTree(
     const std::function<uint16_t(int, int, int)>& densityFunc,
     int scale,  // log4 of size (6=4096, 4=256, 2=16, 0=1)
     int3 pos);  // Position in world
+
+// BuildChunkTree variant that uses a brick palette
+static ContreeNode BuildChunkTreeWithPalette(
+    std::vector<ContreeNode>& nodePool,
+    std::vector<BrickHeader>& brickPool,
+    std::vector<uint16_t>& paletteData,
+    std::vector<uint8_t>& indexData,
+    const BrickPalette& palette,
+    const std::function<uint16_t(int, int, int)>& brickSelector,
+    int scale,
+    int3 pos);
 
 ContreeBuilder::ContreeBuilder() {
     // Pre-allocate for typical sparse tree
@@ -330,6 +473,88 @@ void ContreeBuilder::BuildFromGrid(const uint16_t* grid, int sizeX, int sizeY, i
     Build(gridSampler);
 }
 
+void ContreeBuilder::BuildWithPalette(
+    const BrickPalette& palette,
+    const std::function<uint16_t(int x, int y, int z)>& brickSelector)
+{
+    nodes.clear();
+    bricks.clear();
+    brickPaletteData.clear();
+    brickIndexData.clear();
+
+    std::printf("[Contree] Building with palette (%zu bricks)\n", palette.GetBrickCount());
+
+    // Convert all bricks from the palette to BrickHeaders
+    for (size_t i = 0; i < palette.GetBrickCount(); i++) {
+        const BrickData& brickData = palette.GetBrick(static_cast<uint16_t>(i));
+        BrickHeader header = BrickBuilder::BuildBrick(brickData, brickPaletteData, brickIndexData);
+        bricks.push_back(header);
+
+        // Count solid voxels for debug
+        int solidCount = 0;
+        for (int j = 0; j < 216; j++) {
+            if (brickData.materials[j] != 0) solidCount++;
+        }
+        std::printf("[Contree] Registered brick %zu: %d/216 voxels solid, encoding=%d\n",
+                   i, solidCount, header.GetEncodingType());
+    }
+
+    // Build tree
+    int3 origin(0, 0, 0);
+    int scale = 8; // 2^8 = 256
+
+    std::printf("[Contree] Building tree with scale=%d (size=2^%d=%d)\n",
+               scale, scale, 1 << scale);
+
+    ContreeNode root = BuildChunkTreeWithPalette(nodes, bricks, brickPaletteData, brickIndexData,
+                                                  palette, brickSelector, scale, origin);
+
+    // Patch all child pointers (same as Build())
+    for (auto& node : nodes) {
+        if (!node.IsLeaf() && node.GetPopMask() != 0) {
+            node.SetChildPtr(node.GetChildPtr() + 1);
+        }
+    }
+
+    if (!root.IsLeaf() && root.GetPopMask() != 0) {
+        root.SetChildPtr(root.GetChildPtr() + 1);
+    }
+
+    nodes.insert(nodes.begin(), root);
+    nodes.shrink_to_fit();
+
+    // Validation
+    int errorCount = 0;
+    for (size_t i = 0; i < nodes.size(); i++) {
+        const auto& node = nodes[i];
+
+        if (node.IsLeaf() && node.GetChildPtr() != 0) {
+            std::printf("[Contree ERROR] Node %zu is a leaf but has ChildPtr=%u (should be 0)\n",
+                       i, node.GetChildPtr());
+            errorCount++;
+        }
+
+        if (!node.IsLeaf() && node.GetPopMask() != 0) {
+            uint32_t childPtr = node.GetChildPtr();
+            if (childPtr >= nodes.size()) {
+                std::printf("[Contree ERROR] Node %zu has invalid ChildPtr=%u (out of bounds, size=%zu)\n",
+                           i, childPtr, nodes.size());
+                errorCount++;
+            }
+        }
+    }
+
+    if (errorCount > 0) {
+        std::printf("[Contree] Validation found %d errors!\n", errorCount);
+    } else {
+        std::printf("[Contree] Validation passed - no errors found\n");
+    }
+
+    std::printf("[Contree] Built %u nodes, %u bricks\n", GetNodeCount(), GetBrickCount());
+    std::printf("[Contree] Total memory: %zu bytes\n",
+               GetSizeBytes() + GetBricksSizeBytes() + GetBrickPaletteDataSizeBytes() + GetBrickIndexDataSizeBytes());
+}
+
 // Reference implementation pattern from VoxelRT/src/VoxelRT/Render/RendererTree64.cpp:66
 static ContreeNode BuildChunkTree(
     std::vector<ContreeNode>& nodePool,
@@ -453,6 +678,103 @@ static ContreeNode BuildChunkTree(
                        children.size());
             nonLeafCount++;
         }
+    }
+
+    return node;
+}
+
+// BuildChunkTree variant using brick palette
+static ContreeNode BuildChunkTreeWithPalette(
+    std::vector<ContreeNode>& nodePool,
+    std::vector<BrickHeader>& brickPool,
+    std::vector<uint16_t>& paletteData,
+    std::vector<uint8_t>& indexData,
+    const BrickPalette& palette,
+    const std::function<uint16_t(int, int, int)>& brickSelector,
+    int scale,
+    int3 pos)
+{
+    ContreeNode node;
+    node.SetLeaf(false);
+    node.SetChildPtr(0);
+    node.SetPopMask(0);
+
+    // Create leaf
+    if (scale == 2) {
+        node.SetLeaf(true);
+
+        // Ask the selector which brick to use at this position
+        int centerX = pos.x + 2;
+        int centerY = pos.y + 2;
+        int centerZ = pos.z + 2;
+
+        uint16_t brickIndex = UINT16_MAX; // Default to empty
+        if (centerX >= 0 && centerX < 256 && centerY >= 0 && centerY < 256 && centerZ >= 0 && centerZ < 256) {
+            brickIndex = brickSelector(centerX, centerY, centerZ);
+        }
+
+        // Check if valid brick selected (not UINT16_MAX = empty)
+        if (brickIndex != UINT16_MAX && brickIndex < palette.GetBrickCount()) {
+            // Use the selected brick
+            node.SetBrickPtr(brickIndex);
+
+            // Get default material from the brick
+            const BrickData& brick = palette.GetBrick(brickIndex);
+            uint16_t defaultMaterial = 0;
+            for (int i = 0; i < 216; i++) {
+                if (brick.materials[i] != 0) {
+                    defaultMaterial = brick.materials[i];
+                    break;
+                }
+            }
+
+            node.SetDefaultMaterial(defaultMaterial);
+            node.SetPopMask(0xFFFFFFFFFFFFFFFFULL); // Mark all 64 children as occupied
+        } else {
+            // Empty leaf
+            node.SetBrickPtr(0);
+            node.SetDefaultMaterial(0);
+            node.SetPopMask(0);
+        }
+
+        node.SetChildPtr(0);
+        return node;
+    }
+
+    // Descend
+    scale -= 2;
+    int childStep = 1 << scale;
+
+    // Build 64 children
+    std::vector<ContreeNode> children;
+    children.reserve(64);
+
+    for (int i = 0; i < 64; i++) {
+        int cx = (i >> 0) & 3;
+        int cy = (i >> 4) & 3;
+        int cz = (i >> 2) & 3;
+
+        int3 childPos(
+            pos.x + cx * childStep,
+            pos.y + cy * childStep,
+            pos.z + cz * childStep
+        );
+
+        // Recurse
+        ContreeNode child = BuildChunkTreeWithPalette(nodePool, brickPool, paletteData, indexData,
+                                                       palette, brickSelector, scale, childPos);
+
+        // Only store non-empty children
+        if (child.GetPopMask() != 0) {
+            node.SetPopMask(node.GetPopMask() | (1ULL << i));
+            children.push_back(child);
+        }
+    }
+
+    // Store children contiguously
+    if (!children.empty()) {
+        node.SetChildPtr(static_cast<uint32_t>(nodePool.size()));
+        nodePool.insert(nodePool.end(), children.begin(), children.end());
     }
 
     return node;

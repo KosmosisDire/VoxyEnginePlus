@@ -10,46 +10,6 @@ float3 inverseDirection(float3 dir)
     return (1.0 / max(abs(dir), float3(EPSILON))) * sign(dir);
 }
 
-void setBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
-{
-    InterlockedOr(occupancy.data[brickIndex].data[voxelIndex >> 5], (1u << (voxelIndex & 31)));
-}
-
-void clearBit(Ptr<Bricks> occupancy, int brickIndex, int voxelIndex)
-{
-    InterlockedAnd(occupancy.data[brickIndex].data[voxelIndex >> 5], ~(1u << (voxelIndex & 31)));
-}
-
-void setBit(inout BrickBitmask mask, int index)
-{
-    mask.data[index >> 5] |= (1u << (index & 31));
-}
-
-void clearBit(inout BrickBitmask mask, int index)
-{
-    mask.data[index >> 5] &= ~(1u << (index & 31));
-}
-
-bool getBit(BrickBitmask mask, int index)
-{
-    return (mask.data[index >> 5] & (1u << (index & 31))) != 0;
-}
-
-bool getBit(daxa_u32vec2 value, int index)
-{
-    return (bool)(value[index >> 5] & (1u << (index & 31)));
-}
-
-void setBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
-{
-    InterlockedOr(occupancy.data[chunkIndex][brickIndex >> 5], (1u << (brickIndex & 31)));
-}
-
-void clearBit(Ptr<Chunks> occupancy, int chunkIndex, int brickIndex)
-{
-    InterlockedAnd(occupancy.data[chunkIndex][brickIndex >> 5], ~(1u << (brickIndex & 31)));
-}
-
 Material getMaterial(uint materialID)
 {
     if (materialID < 0 || materialID >= TOTAL_MATERIALS)
@@ -114,27 +74,6 @@ uint countLeadingZeros(uint x)
     return firstbithigh(x) ^ 31;
 }
 
-// Fast bit test for chunk mask
-bool getBitFast(daxa_u32vec2 mask, int index)
-{
-    return (mask[index >> 5] & (1u << (index & 31))) != 0;
-}
-
-// Fast bit test for brick mask
-bool getBitFast(BrickBitmask mask, int index)
-{
-    return (mask.data[index >> 5] & (1u << (index & 31))) != 0;
-}
-
-// Check if a brick mask is empty (all bits are 0)
-bool brickBitmaskEmpty(BrickBitmask mask)
-{
-    // Manual unroll with vectorization for maximum performance
-    return (mask.data[0] | mask.data[1] | mask.data[2] | mask.data[3] |
-            mask.data[4] | mask.data[5] | mask.data[6]) == 0;
-}
-
-
 bool isInBounds(int3 pos, int3 max)
 {
     return all(pos >= float3(0.0)) && all(pos < max);
@@ -189,73 +128,6 @@ bool intersectBoxNormal(float3 origin, float3 invDir, float3 boxMin, float3 boxM
     }
 
     return false;
-}
-
-// Get chunk index from world position
-int chunkIndex(int3 pos)
-{
-    return pos.x + pos.y * GRID_SIZE + pos.z * GRID_SIZE * GRID_SIZE;
-}
-
-// Convert 3D position to linear index
-inline int voxelLocalIndex(int3 localVoxelPos)
-{
-    return localVoxelPos.x + localVoxelPos.y * BRICK_SIZE + localVoxelPos.z * BRICK_SIZE_SQUARE;
-}
-
-inline int voxelGlobalIndex(int globalBrickIndex, int localVoxelIndex)
-{
-    return globalBrickIndex * BRICK_SIZE_CUBE + localVoxelIndex;
-}
-
-inline int brickLocalIndex(int3 localBrickPos)
-{
-    return localBrickPos.x + localBrickPos.y * CHUNK_SIZE + localBrickPos.z * CHUNK_SIZE_SQUARE;
-}
-
-inline int brickGlobalIndex(int chunkIndex, int localBrickIndex)
-{
-    return chunkIndex * CHUNK_SIZE_CUBE + localBrickIndex;
-}
-
-// Get adjacent brick index in normal direction
-uint getAdjacentBrickIndex(uint brickIndex, int3 normal)
-{
-    // Extract chunk and local brick indices
-    uint chunkIdx = brickIndex / CHUNK_SIZE_CUBE;
-    uint localBrickIdx = brickIndex % CHUNK_SIZE_CUBE;
-    
-    // Convert to 3D positions
-    int3 chunkPos;
-    chunkPos.x = int(chunkIdx % GRID_SIZE);
-    chunkPos.y = int((chunkIdx / GRID_SIZE) % GRID_SIZE);
-    chunkPos.z = int(chunkIdx / (GRID_SIZE * GRID_SIZE));
-    
-    int3 localPos;
-    localPos.x = int(localBrickIdx % CHUNK_SIZE);
-    localPos.y = int((localBrickIdx / CHUNK_SIZE) % CHUNK_SIZE);
-    localPos.z = int(localBrickIdx / CHUNK_SIZE_SQUARE);
-    
-    // Calculate global position and add offset
-    int3 globalPos = chunkPos * CHUNK_SIZE + localPos + normal;
-    
-    // Calculate new chunk position using floor division
-    int3 newChunkPos = int3(floor(float3(globalPos) / float(CHUNK_SIZE)));
-    
-    // Check bounds
-    if (any(newChunkPos < 0) || any(newChunkPos >= GRID_SIZE))
-    {
-        return 0xFFFFFFFF; // Invalid index
-    }
-    
-    // Calculate new local position (this will always be positive now)
-    int3 newLocalPos = globalPos - newChunkPos * CHUNK_SIZE;
-    
-    // Calculate new indices
-    int newChunkIdx = chunkIndex(newChunkPos);
-    int newLocalIdx = brickLocalIndex(newLocalPos);
-    
-    return brickGlobalIndex(newChunkIdx, newLocalIdx);
 }
 
 // Get intersection point UVs within current cell

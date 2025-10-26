@@ -1,4 +1,4 @@
-#include "lygia/color/tonemap/unreal.hlsl"
+#include "lygia/color/tonemap/aces.hlsl"
 #include "common.slang"
 
 [numthreads(8, 8, 1)]
@@ -20,11 +20,11 @@ void main(uint3 pixel_i: SV_DispatchThreadID)
     if (depth < 0)
     {
         float3 sky = float3(0.5f, 0.7f, 1.0f);
-        screenTex[pixel] = tonemapUnreal(float4(sky, 1.0));
+        screenTex[pixel] = tonemapACES(float4(sky, 1.0));
         return;
     }
 
     // Apply tonemapping
-    color = tonemapUnreal(color);
+    color = tonemapACES(color);
     screenTex[pixel] = float4(color, 1.0);
 }

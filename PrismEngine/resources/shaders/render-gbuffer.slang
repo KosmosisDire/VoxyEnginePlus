@@ -4,14 +4,14 @@
 //------------------------------------------------------------------------------
 // GTAO Configuration
 //------------------------------------------------------------------------------
-static const int GTAO_SLICES = 3;
-static const int GTAO_STEPS = 3;
-static const float GTAO_RADIUS = 3.5f;
-static const float GTAO_FALLOFF_RANGE = 0.6f;
-static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 2.0f;
-static const float GTAO_THIN_OCCLUDER_COMPENSATION = 0.0f;
-static const float GTAO_FINAL_VALUE_POWER = 1.5f;
-static const float GTAO_PIXEL_TOO_CLOSE_THRESHOLD = 1.9f;
+static const int GTAO_SLICES = 9;
+static const int GTAO_STEPS = 9;
+static const float GTAO_RADIUS = 10.0f;
+static const float GTAO_FALLOFF_RANGE = 0.8f;
+static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 1.0f;
+static const float GTAO_THIN_OCCLUDER_COMPENSATION = 1.5f;
+static const float GTAO_FINAL_VALUE_POWER = 1.0f;
+static const float GTAO_PIXEL_TOO_CLOSE_THRESHOLD = 0.5f;
 
 float FastACos(float inX)
 {
@@ -203,27 +203,35 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         positionTex[pixel] = worldPos;
         depthTex[pixel] = hit.distance;
 
-        // Decode voxel position from materialId for visualization
-        uint matId = hit.materialId - 1;
-        uint vx = matId % 10;
-        uint vy = (matId / 10) % 10;
-        uint vz = (matId / 100) % 10;
-        float3 albedoColor = float3(vx, vy, vz) / 5.0;
+        // Get material properties from material ID
+        uint materialId = hit.materialId;
+
+        // Simple material color lookup
+        float3 albedoColor;
+        if (materialId == 0) {
+            albedoColor = float3(0.5, 0.5, 0.5); // Default gray
+        } else if (materialId == 1) {
+            albedoColor = float3(0.3, 0.7, 0.2); // Grass green
+        } else if (materialId == 2) {
+            albedoColor = float3(0.6, 0.5, 0.4); // Stone gray-brown
+        } else if (materialId == 3) {
+            albedoColor = float3(0.5, 0.3, 0.2); // Dirt brown
+        }
 
         float3 lightDir = normalize(p.stateBuffer.sunDir);
 
         Ray shadowRay;
-        shadowRay.origin = worldPos + worldNormal * 0.1f;
+        shadowRay.origin = worldPos + worldNormal * 0.001f;
         shadowRay.direction = lightDir;
         shadowRay.maxDist = 1000.0f;
-        shadowRay.maxIterations = 100;
+        shadowRay.maxIterations = 200;
 
-        var shadowHit = traceContree(shadowRay, threadIndex, true);
+        var shadowHit = traceContree(shadowRay, threadIndex);
 
         // Shadows affect direct lighting differently:
         // - Diffuse: partial occlusion (ambient bounce light still reaches surface)
         // - Specular: full occlusion (no direct light = no specular highlight)
-        float diffuseShadow = shadowHit.hit ? 0.3f : 1.0f;  // Soft shadow for diffuse
+        float diffuseShadow = shadowHit.hit ? 0.0f : 1.0f;  // Soft shadow for diffuse
         float specularShadow = shadowHit.hit ? 0.0f : 1.0f; // Hard shadow for specular
 
         float ndotl = max(dot(worldNormal, lightDir), 0.0f);
@@ -232,12 +240,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 viewDir = normalize(p.stateBuffer.camera.position - worldPos);
         float3 halfDir = normalize(lightDir + viewDir);
         float spec = pow(max(dot(worldNormal, halfDir), 0.0f), 32.0f);
-        float3 specular = float3(0.3f, 0.3f, 0.3f) * spec * specularShadow;
+        float3 specular = float3(1.0f, 1.0f, 1.0f) * 0.2f * spec * specularShadow;
 
-        float3 ambient = albedoColor * 0.15f;
+        float3 ambient = albedoColor * 0.2f;
 
         float skyFactor = worldNormal.y * 0.5f + 0.5f;
-        float3 skyColor = float3(0.5f, 0.7f, 1.0f) * 0.2f;
+        float3 skyColor = float3(0.5f, 0.7f, 1.0f) * 0.0f;
         float3 skyLight = albedoColor * skyColor * skyFactor;
 
         float3 finalColor = diffuse + specular + ambient + skyLight;
@@ -246,9 +254,6 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
     // Pass 1: Calculate GTAO from complete GBuffer
     else if (p.passNum == 1)
     {
-        if (!all((pixel % 2) == 0))
-            return;
-
         float depth = depthTex[pixel];
         if (depth < 0)
             return;
@@ -258,7 +263,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
 
         float4 noiseVec = blueNoise[pixel % 128];
         float ao = calculateGTAO(pixel, worldPos, worldNormal, depth, positionTex, depthTex, noiseVec, p.screenSize);
-        aoTex[pixel / 2] = ao;
+        aoTex[pixel] = ao;
     }
     // Pass 2: Apply AO to all pixels with specular occlusion
     else if (p.passNum == 2)
@@ -271,23 +276,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 worldPos = positionTex[pixel];
         float3 worldNormal = normalTex[pixel];
 
-        // Bilinear interpolation of half-res AO
-        float2 halfResCoord = float2(pixel) * 0.5f;
-        uint2 coord00 = uint2(floor(halfResCoord));
-        uint2 coord10 = coord00 + uint2(1, 0);
-        uint2 coord01 = coord00 + uint2(0, 1);
-        uint2 coord11 = coord00 + uint2(1, 1);
-
-        float2 frac = halfResCoord - floor(halfResCoord);
-
-        float ao00 = aoTex[coord00];
-        float ao10 = aoTex[coord10];
-        float ao01 = aoTex[coord01];
-        float ao11 = aoTex[coord11];
-
-        float ao0 = lerp(ao00, ao10, frac.x);
-        float ao1 = lerp(ao01, ao11, frac.x);
-        float ao = lerp(ao0, ao1, frac.y);
+        // Read full-resolution AO directly
+        float ao = aoTex[pixel];
 
         // Calculate specular occlusion with view-dependent falloff
         // Based on the horizon-based specular occlusion technique
