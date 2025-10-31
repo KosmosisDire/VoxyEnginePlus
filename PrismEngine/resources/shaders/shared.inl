@@ -174,32 +174,56 @@ struct RenderData
 static const daxa_u32 CONTREE_LEVELS = 4;
 static const daxa_u32 CONTREE_BRANCHING = 4;
 static const daxa_u32 CONTREE_CHILDREN = 64; // 4x4x4
+static const daxa_u32 BRICK_SIZE = 4;        // 4x4x4 brick
+static const daxa_u32 BRICK_VOXELS = 64;     // 4x4x4 = 64 voxels
 static const daxa_u32 CONTREE_INVALID_PTR = 0xFFFFFFFF;
 
-// Contree node - 16 bytes
-// Bytes 0-3:   PackedData[0] = IsLeaf(1) | IsAbsolutePtr(1) | ChildPtr(30)
-// Bytes 4-7:   PackedData[1] = PopMask low 32 bits
-// Bytes 8-11:  PackedData[2] = PopMask high 32 bits
-// Bytes 12-15: PackedData[3] = BrickPtr(16) | DefaultMaterial(16) [for leaves only]
+// Contree node - 16 bytes (4 x uint32, with padding for GPU alignment)
+// INTERNAL nodes:
+//   PackedData[0] = IsLeaf(0) | IsAbsolutePtr(1) | ChildPtr(30)
+//   PackedData[1] = PopMask low 32 bits
+//   PackedData[2] = PopMask high 32 bits
+//   PackedData[3] = padding (unused)
+//
+// LEAF nodes:
+//   PackedData[0] = IsLeaf(1) | flags(1) | OccupancyPtr(30)
+//   PackedData[1] = PalettePtr(32)
+//   PackedData[2] = MaterialIndicesPtr(32)
+//   PackedData[3] = padding (unused)
 struct ContreeNode
 {
-    daxa_u32 PackedData[4];  // 16 bytes total
+    daxa_u32 PackedData[4];  // 16 bytes total (power of 2 for GPU alignment)
 
 #ifndef __cplusplus
+    // Common accessors
     property bool IsLeaf {
         get { return (PackedData[0] & 1) != 0; }
     }
+
+    property bool IsAbsolutePtr {
+        get { return (PackedData[0] & 2) != 0; }
+    }
+
+    // Internal node accessors
     property uint ChildPtr {
         get { return PackedData[0] >> 2; }
     }
+
     property uint64_t PopMask {
         get { return PackedData[1] | uint64_t(PackedData[2]) << 32; }
     }
-    property uint BrickPtr {
-        get { return PackedData[3] & 0xFFFF; }
+
+    // Leaf node accessors (reuse same PackedData fields)
+    property uint OccupancyPtr {
+        get { return PackedData[0] >> 2; }
     }
-    property uint DefaultMaterial {
-        get { return (PackedData[3] >> 16) & 0xFFFF; }
+
+    property uint PalettePtr {
+        get { return PackedData[1]; }
+    }
+
+    property uint MaterialIndicesPtr {
+        get { return PackedData[2]; }
     }
 #endif
 };
@@ -212,83 +236,59 @@ struct ContreeBuffer
 DAXA_DECL_BUFFER_PTR(ContreeBuffer);
 
 //=============================================================================
-// Brick Structures (6x6x6 voxel bricks with palette compression)
+// Brick Structures (4x4x4 voxel bricks with material palette)
 //=============================================================================
 
-// Brick encoding types
-static const daxa_u32 BRICK_SINGLE_MATERIAL = 0;
-static const daxa_u32 BRICK_PALETTE_1BIT = 1;
-static const daxa_u32 BRICK_PALETTE_2BIT = 2;
-static const daxa_u32 BRICK_PALETTE_4BIT = 3;
-static const daxa_u32 BRICK_PALETTE_8BIT = 4;
-
-// BrickHeader: 32 bytes (8 x uint32)
-// Word 0-6: occupancy (216 bits) + materialCount (8 bits)
-//   - Bits [0-215]: occupancy data
-//   - Bits [216-223]: materialCount (8 bits)
-// Word 7: packed metadata
-//   - Bits [0-7]: encodingType
-//   - Bits [8-15]: flags
-//   - Bits [16-31]: palettePtr
-struct BrickHeader
+// Brick: Occupancy-only data (8 bytes)
+// Stores which voxels are occupied in a 4x4x4 brick (64 voxels)
+struct Brick
 {
-    daxa_u32 data[8];  // 32 bytes total
+    daxa_u64 occupancy;  // 64 bits, 1 bit per voxel
 
 #ifndef __cplusplus
-    // Test occupancy bit [0-215]
+    // Test if voxel at index [0-63] is occupied
+    // Index = x + y*4 + z*16 (XYZ ordering)
     bool TestOccupancy(uint idx) {
-        if (idx >= 216) return false;
-        uint wordIdx = idx / 32;
-        uint bitIdx = idx % 32;
-        return (data[wordIdx] & (1u << bitIdx)) != 0;
+        return (occupancy & (1ull << idx)) != 0;
     }
 
-    // Get materialCount from bits [216-223] (high byte of data[6])
-    property uint MaterialCount {
-        get { return (data[6] >> 24) & 0xFF; }
-    }
-
-    // Get encodingType from low byte of data[7]
-    property uint EncodingType {
-        get { return data[7] & 0xFF; }
-    }
-
-    // Get flags from second byte of data[7]
-    property uint Flags {
-        get { return (data[7] >> 8) & 0xFF; }
-    }
-
-    // Get palettePtr from high 16 bits of data[7]
-    property uint PalettePtr {
-        get { return data[7] >> 16; }
+    // Test occupancy by 3D position
+    bool TestOccupancyXYZ(uint3 pos) {
+        uint idx = pos.x + pos.y * 4 + pos.z * 16;
+        return TestOccupancy(idx);
     }
 #endif
 };
 
 struct BrickBuffer
 {
-    BrickHeader bricks[1]; // Variable length array
+    Brick bricks[1]; // Variable length array
 };
 
 DAXA_DECL_BUFFER_PTR(BrickBuffer);
 
-// BrickPaletteData: Material IDs packed as uint16s into uint32s
-// Each uint32 contains 2 material IDs: [low 16 bits][high 16 bits]
-struct BrickPaletteData
+// Palette Buffer: Material IDs as uint32s
+// Format: [material_count, material[0], material[1], ...]
+// Each palette starts with a count, followed by N material IDs
+// Note: Using uint32 instead of uint16 for GPU compatibility (shaderInt16 not universally supported)
+struct PaletteBuffer
 {
-    daxa_u32 data[1]; // Variable length array (2 uint16s per uint32)
+    daxa_u32 data[1]; // Variable length array of uint32s
 };
 
-DAXA_DECL_BUFFER_PTR(BrickPaletteData);
+DAXA_DECL_BUFFER_PTR(PaletteBuffer);
 
-// BrickIndexData: Per-voxel material indices packed into uint32s
-// Packing depends on encoding (1/2/4/8 bits per voxel)
-struct BrickIndexData
+// Material Indices Buffer: Per-voxel material indices as uint32s
+// Each leaf has 64 uint32 indices (one per voxel in 4x4x4)
+// Index = x + y*4 + z*16 (XYZ ordering)
+// Each uint32 is an index into the palette for that voxel
+// Note: Using uint32 instead of uint16 for GPU compatibility (shaderInt16 not universally supported)
+struct MaterialIndicesBuffer
 {
-    daxa_u32 data[1]; // Variable length array of packed indices
+    daxa_u32 data[1]; // Variable length array of uint32s
 };
 
-DAXA_DECL_BUFFER_PTR(BrickIndexData);
+DAXA_DECL_BUFFER_PTR(MaterialIndicesBuffer);
 
 // Material definition
 struct Material
@@ -335,8 +335,8 @@ struct ComputePush
     daxa_BufferPtr(RenderData) stateBuffer;
     daxa_BufferPtr(ContreeBuffer) contreeBuffer;
     daxa_BufferPtr(BrickBuffer) brickBuffer;
-    daxa_BufferPtr(BrickPaletteData) brickPaletteData;
-    daxa_BufferPtr(BrickIndexData) brickIndexData;
+    daxa_BufferPtr(PaletteBuffer) paletteBuffer;
+    daxa_BufferPtr(MaterialIndicesBuffer) materialIndicesBuffer;
     daxa_ImageViewId screen;
     daxa_ImageViewId blueNoise;
     daxa_u32vec2 screenSize;

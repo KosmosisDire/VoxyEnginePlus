@@ -4,11 +4,11 @@
 //------------------------------------------------------------------------------
 // GTAO Configuration
 //------------------------------------------------------------------------------
-static const int GTAO_SLICES = 9;
-static const int GTAO_STEPS = 9;
-static const float GTAO_RADIUS = 10.0f;
-static const float GTAO_FALLOFF_RANGE = 0.8f;
-static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 1.0f;
+static const int GTAO_SLICES = 3;
+static const int GTAO_STEPS = 3;
+static const float GTAO_RADIUS = 8.0f;
+static const float GTAO_FALLOFF_RANGE = 0.3f;
+static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 1.2f;
 static const float GTAO_THIN_OCCLUDER_COMPENSATION = 1.5f;
 static const float GTAO_FINAL_VALUE_POWER = 1.0f;
 static const float GTAO_PIXEL_TOO_CLOSE_THRESHOLD = 0.5f;
@@ -180,6 +180,8 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
     // Pass 0: Trace rays and write GBuffer + lighting
     if (p.passNum == 0)
     {
+        colorTex[pixel] = float3(0.0f, 0.0f, 0.0f);
+        // return;
         uint threadIndex = group_thread_id.x + group_thread_id.y * 8;
 
         var ray = Ray.FromPixel(pixel, p.screenSize, p.stateBuffer.camera);
@@ -211,11 +213,21 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         if (materialId == 0) {
             albedoColor = float3(0.5, 0.5, 0.5); // Default gray
         } else if (materialId == 1) {
-            albedoColor = float3(0.3, 0.7, 0.2); // Grass green
+            albedoColor = float3(0,0,0); // Grass green
         } else if (materialId == 2) {
-            albedoColor = float3(0.6, 0.5, 0.4); // Stone gray-brown
+            albedoColor = float3(1.0, 1.0, 1.0); // Stone gray-brown
         } else if (materialId == 3) {
             albedoColor = float3(0.5, 0.3, 0.2); // Dirt brown
+        } else if (materialId == 4) {
+            albedoColor = float3(0.08, 0.17, 0.03); // Leaves (dark green)
+        } else if (materialId == 5) {
+            albedoColor = float3(0.17, 0.09, 0.03); // Wood (brown)
+        } else {
+            // generate random color based on material ID
+            float r = frac(sin(dot(float2(materialId, 12.9898), float2(78.233, 37.719))) * 43758.5453);
+            float g = frac(sin(dot(float2(materialId, 78.233), float2(12.9898, 37.719))) * 43758.5453);
+            float b = frac(sin(dot(float2(materialId, 37.719), float2(12.9898, 78.233))) * 43758.5453);
+            albedoColor = float3(r, g, b);
         }
 
         float3 lightDir = normalize(p.stateBuffer.sunDir);

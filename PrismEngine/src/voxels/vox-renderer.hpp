@@ -20,6 +20,7 @@
 #include <engine/objects/Camera.hpp>
 #include <chrono>
 #include "contree.hpp"
+#include "FastNoise.hpp"
 
 using namespace daxa::types;
 
@@ -117,11 +118,11 @@ class VoxelRenderer
         daxa::TaskBuffer task_brickBuffer;
         uint32_t brickCount = 0;
 
-        daxa::BufferId brickPaletteBuffer;
-        daxa::TaskBuffer task_brickPaletteBuffer;
+        daxa::BufferId paletteBuffer;
+        daxa::TaskBuffer task_paletteBuffer;
 
-        daxa::BufferId brickIndexBuffer;
-        daxa::TaskBuffer task_brickIndexBuffer;
+        daxa::BufferId materialIndicesBuffer;
+        daxa::TaskBuffer task_materialIndicesBuffer;
 
         std::unique_ptr<Image> blue_noise_images_data[64];
         daxa::ImageId blue_noise_images[64];
@@ -185,127 +186,38 @@ class VoxelRenderer
             // Initialize materials
             InitializeMaterials();
 
-            // Build contree using BrickPalette API
-            Contree::BrickPalette palette;
+            // Build contree with simple heightmap generation
             Contree::ContreeBuilder builder;
-            // Register brick patterns
-            uint16_t sphereBrickIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSphere(2.5f, 1));
-            uint16_t cubeBrickIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSolid(2));
-            uint16_t solidGrassIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSolid(1));
-            uint16_t solidDirtIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSolid(3));
-            uint16_t solidStoneIdx = palette.RegisterBrick(Contree::BrickPalette::CreateSolid(2));
 
-            // Simple gradient noise function for heightmap
-            auto gradientNoise = [](float x, float z, int seed) -> float {
-                int ix = (int)std::floor(x);
-                int iz = (int)std::floor(z);
-                float fx = x - ix;
-                float fz = z - iz;
+            // Setup FastNoise for simple heightmap terrain
+            FastNoise terrainNoise(42);
+            terrainNoise.SetNoiseType(FastNoise::SimplexFractal);
+            terrainNoise.SetFrequency(0.01f);
+            terrainNoise.SetFractalOctaves(4);
+            terrainNoise.SetFractalLacunarity(2.0f);
+            terrainNoise.SetFractalGain(0.5f);
+            terrainNoise.SetFractalType(FastNoise::FBM);
 
-                // Smooth interpolation
-                fx = fx * fx * (3.0f - 2.0f * fx);
-                fz = fz * fz * (3.0f - 2.0f * fz);
+            std::printf("[VoxelRenderer] Building contree with simple heightmap...\n");
 
-                // Hash function with seed
-                auto hash2D = [seed](int x, int z) -> float {
-                    int n = x + z * 57 + seed * 131;
-                    n = (n << 13) ^ n;
-                    return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f) * 0.5f + 0.5f;
-                };
+            // Build tree with simple density function (covers [0, 256)^3)
+            builder.Build([&](int x, int y, int z) -> uint16_t {
+                // Simple heightmap terrain
+                float noiseValue = terrainNoise.GetNoise(x, z);
+                float height = 100.0f + noiseValue * 50.0f;
 
-                float c00 = hash2D(ix, iz);
-                float c10 = hash2D(ix + 1, iz);
-                float c01 = hash2D(ix, iz + 1);
-                float c11 = hash2D(ix + 1, iz + 1);
-
-                float c0 = c00 * (1 - fx) + c10 * fx;
-                float c1 = c01 * (1 - fx) + c11 * fx;
-
-                return c0 * (1 - fz) + c1 * fz;
-            };
-
-            // Create 10 moss/grass variations with different seeds
-            std::vector<uint16_t> grassVariations;
-            for (int seed = 0; seed < 10; seed++) {
-                grassVariations.push_back(palette.RegisterBrick(Contree::BrickPalette::CreateCustom([seed, gradientNoise](int x, int y, int z) -> uint16_t {
-                    if (y <= 2) return 1; // Solid base
-
-                    // Sample heightmap at high frequency (small scale)
-                    float height = gradientNoise(x * 0.7f, z * 0.7f, seed);
-
-                    // Map height to voxel layers (3-5)
-                    // height ranges from 0.0 to 1.0
-                    float scaledHeight = 3.0f + height * 2.0f; // Range: 3.0 to 5.0
-
-                    // Fill voxel if below the heightmap
-                    return (y < scaledHeight) ? 1 : 0;
-                })));
-            }
-
-            // Simple 3D noise function for terrain
-            auto hash = [](int x, int y, int z) -> float {
-                int n = x + y * 57 + z * 113;
-                n = (n << 13) ^ n;
-                return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
-            };
-
-            auto noise3D = [&hash](float x, float y, float z) -> float {
-                int ix = (int)std::floor(x);
-                int iy = (int)std::floor(y);
-                int iz = (int)std::floor(z);
-                float fx = x - ix;
-                float fy = y - iy;
-                float fz = z - iz;
-
-                fx = fx * fx * (3.0f - 2.0f * fx);
-                fy = fy * fy * (3.0f - 2.0f * fy);
-                fz = fz * fz * (3.0f - 2.0f * fz);
-
-                float c000 = hash(ix, iy, iz);
-                float c100 = hash(ix+1, iy, iz);
-                float c010 = hash(ix, iy+1, iz);
-                float c110 = hash(ix+1, iy+1, iz);
-                float c001 = hash(ix, iy, iz+1);
-                float c101 = hash(ix+1, iy, iz+1);
-                float c011 = hash(ix, iy+1, iz+1);
-                float c111 = hash(ix+1, iy+1, iz+1);
-
-                float c00 = c000 * (1-fx) + c100 * fx;
-                float c01 = c001 * (1-fx) + c101 * fx;
-                float c10 = c010 * (1-fx) + c110 * fx;
-                float c11 = c011 * (1-fx) + c111 * fx;
-
-                float c0 = c00 * (1-fy) + c10 * fy;
-                float c1 = c01 * (1-fy) + c11 * fy;
-
-                return c0 * (1-fz) + c1 * fz;
-            };
-
-            // Build terrain using BrickPalette selector
-            builder.BuildWithPalette(palette, [&](int x, int y, int z) -> uint16_t {
-                // Multi-octave noise terrain
-                float height = 100.0f;
-                height += noise3D(x * 0.01f, z * 0.01f, 0.0f) * 50.0f;  // Large features
-                height += noise3D(x * 0.05f, z * 0.05f, 0.0f) * 10.0f;  // Medium details
-                height += noise3D(x * 0.1f, z * 0.1f, 0.0f) * 3.0f;     // Fine details
-
-                if (y > height) {
-                    return UINT16_MAX; // Air
+                if (y < height) {
+                    // Determine material based on depth
+                    if (y > height - 4) {
+                        return 1; // Grass (top layer)
+                    } else if (y > height - 10) {
+                        return 3; // Dirt
+                    } else {
+                        return 2; // Stone
+                    }
                 }
 
-                // Layer materials by depth with interesting brick variations
-                if (y > height - 4) {
-                    // Surface layer: randomly select grass variation for natural diversity
-                    // Use position-based hash to deterministically choose variation
-                    int grassHash = (x * 127 + z * 311) % 10;
-                    return grassVariations[grassHash];
-                } else if (y > height - 10) {
-                    // Dirt layer: mix cube and solid bricks
-                    return ((x + y + z) % 3 == 0) ? cubeBrickIdx : solidDirtIdx;
-                } else {
-                    // Stone layer: mostly solid
-                    return solidStoneIdx;
-                }
+                return 0; // Empty
             });
 
             // Upload to GPU
@@ -321,8 +233,8 @@ class VoxelRenderer
             renderer->DestroyBuffer(gbufferGPU);
             renderer->DestroyBuffer(contreeBuffer);
             renderer->DestroyBuffer(brickBuffer);
-            renderer->DestroyBuffer(brickPaletteBuffer);
-            renderer->DestroyBuffer(brickIndexBuffer);
+            renderer->DestroyBuffer(paletteBuffer);
+            renderer->DestroyBuffer(materialIndicesBuffer);
 
             for (int i = 0; i < 64; i++)
             {
@@ -350,8 +262,8 @@ class VoxelRenderer
             task_graph.use_persistent_buffer(task_stateBuffer);
             task_graph.use_persistent_buffer(task_contreeBuffer);
             task_graph.use_persistent_buffer(task_brickBuffer);
-            task_graph.use_persistent_buffer(task_brickPaletteBuffer);
-            task_graph.use_persistent_buffer(task_brickIndexBuffer);
+            task_graph.use_persistent_buffer(task_paletteBuffer);
+            task_graph.use_persistent_buffer(task_materialIndicesBuffer);
             task_graph.use_persistent_image(task_blue_noise_image);
             task_graph.use_persistent_buffer(task_gbufferGPU);
             gbufferCPU.UseImages(task_graph);
@@ -373,7 +285,7 @@ class VoxelRenderer
 
 
             renderer->AddTask(InlineTask("main_render_gbuffer")
-                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, {task_materialsBuffer, task_contreeBuffer, task_brickBuffer, task_brickPaletteBuffer, task_brickIndexBuffer})
+                              .AddAllAttachments(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, {task_materialsBuffer, task_contreeBuffer, task_brickBuffer, task_paletteBuffer, task_materialIndicesBuffer})
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ_WRITE, task_stateBuffer)
                               .AddAttachment(daxa::TaskImageAccess::COMPUTE_SHADER_STORAGE_READ_ONLY, task_blue_noise_image)
                               .AddAttachment(daxa::TaskBufferAccess::COMPUTE_SHADER_READ, task_gbufferGPU)
@@ -387,8 +299,8 @@ class VoxelRenderer
                     .stateBuffer = renderer->GetDeviceAddress(ti, task_stateBuffer),
                     .contreeBuffer = renderer->GetDeviceAddress(ti, task_contreeBuffer),
                     .brickBuffer = renderer->GetDeviceAddress(ti, task_brickBuffer),
-                    .brickPaletteData = renderer->GetDeviceAddress(ti, task_brickPaletteBuffer),
-                    .brickIndexData = renderer->GetDeviceAddress(ti, task_brickIndexBuffer),
+                    .paletteBuffer = renderer->GetDeviceAddress(ti, task_paletteBuffer),
+                    .materialIndicesBuffer = renderer->GetDeviceAddress(ti, task_materialIndicesBuffer),
                     .blueNoise = blue_noise_images[stateData.frame % 64].default_view(),
                     .screenSize = {renderer->surface_width, renderer->surface_height},
                     .contreeNodeCount = contreeNodeCount,
@@ -549,25 +461,23 @@ class VoxelRenderer
             // Debug output
             std::printf("=== Contree Generated ===\n");
             std::printf("Contree nodes: %u (%.2f KB)\n",
-                       contreeNodeCount, builder.GetSizeBytes() / 1024.0f);
-            std::printf("Bricks: %u (%.2f KB)\n",
+                       contreeNodeCount, builder.GetNodesSizeBytes() / 1024.0f);
+            std::printf("Bricks (occupancy): %u (%.2f KB)\n",
                        brickCount, builder.GetBricksSizeBytes() / 1024.0f);
-            std::printf("Palette data: %.2f KB\n", builder.GetBrickPaletteDataSizeBytes() / 1024.0f);
-            std::printf("Index data: %.2f KB\n", builder.GetBrickIndexDataSizeBytes() / 1024.0f);
-            std::printf("Total memory: %.2f KB\n",
-                       (builder.GetSizeBytes() + builder.GetBricksSizeBytes() +
-                        builder.GetBrickPaletteDataSizeBytes() + builder.GetBrickIndexDataSizeBytes()) / 1024.0f);
+            std::printf("Palette buffer: %.2f KB\n", builder.GetPaletteBufferSizeBytes() / 1024.0f);
+            std::printf("Material indices: %.2f KB\n", builder.GetMaterialIndicesSizeBytes() / 1024.0f);
+            std::printf("Total memory: %.2f KB\n", builder.GetTotalSizeBytes() / 1024.0f);
 
             // Create node buffer
             renderer->CreateBuffer(
                 "ContreeBuffer",
-                builder.GetSizeBytes(),
+                builder.GetNodesSizeBytes(),
                 contreeBuffer,
                 task_contreeBuffer,
                 daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
             );
 
-            // Create brick buffer
+            // Create brick buffer (occupancy only)
             renderer->CreateBuffer(
                 "BrickBuffer",
                 builder.GetBricksSizeBytes(),
@@ -576,63 +486,52 @@ class VoxelRenderer
                 daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
             );
 
-            // Pack palette data: uint16s -> uint32s (2 per uint32)
-            size_t paletteU16Count = builder.GetBrickPaletteData().size();
-            size_t paletteU32Count = (paletteU16Count + 1) / 2;
-            size_t paletteBufferSize = std::max(paletteU32Count * sizeof(uint32_t), size_t(4));
-
-            // Pack index data: uint8s -> uint32s (4 per uint32)
-            size_t indexU8Count = builder.GetBrickIndexData().size();
-            size_t indexU32Count = (indexU8Count + 3) / 4;
-            size_t indexBufferSize = std::max(indexU32Count * sizeof(uint32_t), size_t(4));
-
+            // Create palette buffer (uint32 for GPU, converted from uint16 CPU data)
+            size_t paletteCount = builder.GetPaletteBuffer().size();
+            size_t paletteBufferSize = std::max(paletteCount * sizeof(uint32_t), size_t(4));
             renderer->CreateBuffer(
-                "BrickPaletteBuffer",
+                "PaletteBuffer",
                 paletteBufferSize,
-                brickPaletteBuffer,
-                task_brickPaletteBuffer,
+                paletteBuffer,
+                task_paletteBuffer,
                 daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
             );
 
+            // Create material indices buffer (uint32 for GPU, converted from uint16 CPU data)
+            size_t indicesCount = builder.GetMaterialIndices().size();
+            size_t materialIndicesSize = std::max(indicesCount * sizeof(uint32_t), size_t(4));
             renderer->CreateBuffer(
-                "BrickIndexBuffer",
-                indexBufferSize,
-                brickIndexBuffer,
-                task_brickIndexBuffer,
+                "MaterialIndicesBuffer",
+                materialIndicesSize,
+                materialIndicesBuffer,
+                task_materialIndicesBuffer,
                 daxa::MemoryFlagBits::HOST_ACCESS_SEQUENTIAL_WRITE
             );
 
             // Copy node data
             auto contreePtr = renderer->device.get_host_address_as<Contree::ContreeNode>(contreeBuffer).value();
-            std::memcpy(contreePtr, builder.GetNodes().data(), builder.GetSizeBytes());
+            std::memcpy(contreePtr, builder.GetNodes().data(), builder.GetNodesSizeBytes());
 
-            // Copy brick data
-            auto brickPtr = renderer->device.get_host_address_as<Contree::BrickHeader>(brickBuffer).value();
+            // Copy brick data (occupancy only)
+            auto brickPtr = renderer->device.get_host_address_as<Contree::Brick>(brickBuffer).value();
             std::memcpy(brickPtr, builder.GetBricks().data(), builder.GetBricksSizeBytes());
 
-            // Pack and copy palette data
-            auto palettePtr = renderer->device.get_host_address_as<uint32_t>(brickPaletteBuffer).value();
-            const uint16_t* paletteData = builder.GetBrickPaletteData().data();
-            for (size_t i = 0; i < paletteU32Count; i++) {
-                uint32_t packed = 0;
-                if (i * 2 < paletteU16Count) {
-                    packed |= paletteData[i * 2];
+            // Copy palette data (convert uint16 -> uint32 for GPU)
+            if (builder.GetPaletteBuffer().size() > 0) {
+                auto palPtr = renderer->device.get_host_address_as<uint32_t>(paletteBuffer).value();
+                const uint16_t* srcData = builder.GetPaletteBuffer().data();
+                for (size_t i = 0; i < paletteCount; i++) {
+                    palPtr[i] = srcData[i]; // Zero-extend uint16 to uint32
                 }
-                if (i * 2 + 1 < paletteU16Count) {
-                    packed |= (uint32_t(paletteData[i * 2 + 1]) << 16);
-                }
-                palettePtr[i] = packed;
             }
 
-            // Pack and copy index data
-            auto indexPtr = renderer->device.get_host_address_as<uint32_t>(brickIndexBuffer).value();
-            const uint8_t* indexData = builder.GetBrickIndexData().data();
-            for (size_t i = 0; i < indexU32Count; i++) {
-                uint32_t packed = 0;
-                for (int j = 0; j < 4 && (i * 4 + j) < indexU8Count; j++) {
-                    packed |= (uint32_t(indexData[i * 4 + j]) << (j * 8));
+            // Copy material indices data (convert uint16 -> uint32 for GPU)
+            if (builder.GetMaterialIndices().size() > 0) {
+                auto idxPtr = renderer->device.get_host_address_as<uint32_t>(materialIndicesBuffer).value();
+                const uint16_t* srcData = builder.GetMaterialIndices().data();
+                for (size_t i = 0; i < indicesCount; i++) {
+                    idxPtr[i] = srcData[i]; // Zero-extend uint16 to uint32
                 }
-                indexPtr[i] = packed;
             }
         }
 };
