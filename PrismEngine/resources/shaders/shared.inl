@@ -173,9 +173,9 @@ struct RenderData
 // Contree constants
 static const daxa_u32 CONTREE_LEVELS = 4;
 static const daxa_u32 CONTREE_BRANCHING = 4;
-static const daxa_u32 CONTREE_CHILDREN = 64; // 4x4x4
-static const daxa_u32 BRICK_SIZE = 4;        // 4x4x4 brick
-static const daxa_u32 BRICK_VOXELS = 64;     // 4x4x4 = 64 voxels
+static const daxa_u32 CONTREE_CHILDREN = 64;
+static const daxa_u32 BRICK_SIZE = 12;
+static const daxa_u32 BRICK_VOXELS = 1728;
 static const daxa_u32 CONTREE_INVALID_PTR = 0xFFFFFFFF;
 
 // Contree node - 16 bytes (4 x uint32, with padding for GPU alignment)
@@ -236,25 +236,25 @@ struct ContreeBuffer
 DAXA_DECL_BUFFER_PTR(ContreeBuffer);
 
 //=============================================================================
-// Brick Structures (4x4x4 voxel bricks with material palette)
+// Brick Structures (12x12x12 voxel bricks with material palette)
 //=============================================================================
 
-// Brick: Occupancy-only data (8 bytes)
-// Stores which voxels are occupied in a 4x4x4 brick (64 voxels)
+// Brick: Occupancy-only data (216 bytes)
+// Stores which voxels are occupied in a 12x12x12 brick (1728 voxels)
 struct Brick
 {
-    daxa_u64 occupancy;  // 64 bits, 1 bit per voxel
+    daxa_u64 occupancy[27];  // 27 * 64 = 1728 voxels per brick
 
 #ifndef __cplusplus
-    // Test if voxel at index [0-63] is occupied
-    // Index = x + y*4 + z*16 (XYZ ordering)
+    // Test if voxel at index [0-1727] is occupied
+    // Index = x + y*BRICK_SIZE + z*BRICK_SIZE*BRICK_SIZE (XYZ ordering)
     bool TestOccupancy(uint idx) {
-        return (occupancy & (1ull << idx)) != 0;
+        return (occupancy[idx / 64] & (1ull << (idx % 64))) != 0;
     }
 
     // Test occupancy by 3D position
     bool TestOccupancyXYZ(uint3 pos) {
-        uint idx = pos.x + pos.y * 4 + pos.z * 16;
+        uint idx = pos.x + pos.y * BRICK_SIZE + pos.z * (BRICK_SIZE * BRICK_SIZE);
         return TestOccupancy(idx);
     }
 #endif
@@ -279,8 +279,8 @@ struct PaletteBuffer
 DAXA_DECL_BUFFER_PTR(PaletteBuffer);
 
 // Material Indices Buffer: Per-voxel material indices as uint32s
-// Each leaf has 64 uint32 indices (one per voxel in 4x4x4)
-// Index = x + y*4 + z*16 (XYZ ordering)
+// Each leaf has 1728 uint32 indices (one per voxel in 12x12x12)
+// Index = x + y*BRICK_SIZE + z*BRICK_SIZE*BRICK_SIZE (XYZ ordering)
 // Each uint32 is an index into the palette for that voxel
 // Note: Using uint32 instead of uint16 for GPU compatibility (shaderInt16 not universally supported)
 struct MaterialIndicesBuffer

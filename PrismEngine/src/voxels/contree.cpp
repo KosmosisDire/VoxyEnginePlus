@@ -13,38 +13,66 @@ void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& density
     paletteBuffer.clear();
     materialIndices.clear();
 
-    std::printf("[Contree] Building tree with simple checkerboard materials\n");
+    std::printf("[Contree] Building tree with procedural density-based occupancy (%dx%dx%d bricks)\n",
+               BRICK_SIZE, BRICK_SIZE, BRICK_SIZE);
 
-    // ========== Create Single Solid Brick ==========
-    // Brick 0: All voxels occupied (0xFFFFFFFFFFFFFFFF)
-    Brick solidBrick(0xFFFFFFFFFFFFFFFFULL);
-    bricks.push_back(solidBrick);
-    std::printf("[Contree] Created brick 0: fully solid (64/64 voxels)\n");
+    // ========== Create Single Procedural Brick ==========
+    // Brick 0: Build occupancy from density function (BRICK_SIZE^3 = BRICK_VOXELS bits)
+    Brick proceduralBrick;
+    uint32_t occupiedCount = 0;
 
-    // ========== Create Simple Palette ==========
-    // Palette 0: Two materials [0, 1] for black/white checkerboard
+    // Sample density function at origin for this brick pattern
+    float centerX = BRICK_SIZE / 2.0f;
+    float centerY = BRICK_SIZE / 2.0f;
+    float centerZ = BRICK_SIZE / 2.0f;
+    float radius = BRICK_SIZE / 2.0f - 0.5f;  // Slightly smaller than brick
+
+    for (int z = 0; z < BRICK_SIZE; z++) {
+    for (int y = 0; y < BRICK_SIZE; y++) {
+    for (int x = 0; x < BRICK_SIZE; x++) {
+        // Create a sphere in the center of the brick
+        float dx = x + 0.5f - centerX;
+        float dy = y + 0.5f - centerY;
+        float dz = z + 0.5f - centerZ;
+        float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+        bool isOccupied = (dist <= radius) || y <= 5;
+
+        // Set occupancy bit
+        uint32_t voxelIdx = Brick::VoxelIndex(x, y, z);
+        proceduralBrick.SetOccupancy(voxelIdx, isOccupied);
+        if (isOccupied) occupiedCount++;
+    }}}
+
+    bricks.push_back(proceduralBrick);
+    std::printf("[Contree] Created brick 0: procedural (%u/%u voxels occupied, %dx%dx%d)\n",
+               occupiedCount, BRICK_VOXELS, BRICK_SIZE, BRICK_SIZE, BRICK_SIZE);
+
+    // ========== Create Position-Based Palette ==========
+    // Palette 0: Generate unique materials based on 3D position
+    // For a BRICK_SIZE^3 brick, we can encode position directly or use a mapping
+    // Here we'll create materials that map to RGB based on normalized position
     // Format: material_count(1) + materials(N)
-    // For now, uncompressed: just store count=2 followed by [0, 1]
-    // TODO: When implementing compression, this will change
-    paletteBuffer.push_back(2);  // Material count
-    paletteBuffer.push_back(1);  // Material 0 (black)
-    paletteBuffer.push_back(2);  // Material 1 (white)
-    std::printf("[Contree] Created palette 0: 2 materials [0, 1]\n");
+    constexpr int numMaterials = BRICK_SIZE * BRICK_SIZE * BRICK_SIZE;  // One material per coordinate value (0 to BRICK_SIZE-1)
+    paletteBuffer.push_back(numMaterials);  // Material count
+    for (int i = 0; i < numMaterials; i++) {
+        paletteBuffer.push_back(i + 1);  // Materials 1 to BRICK_SIZE
+    }
+    std::printf("[Contree] Created palette 0: %d materials [1-%d]\n", numMaterials, numMaterials);
 
-    // ========== Create Single Shared Material Indices ==========
-    // Material indices 0: 4x4x4 checkerboard pattern (64 indices)
-    // All leaves will share this same pattern
+    // ========== Create BRICK_SIZE^3 Brick Material Indices ==========
+    // Material indices: BRICK_SIZE^3 = BRICK_VOXELS values
+    // Generate material based on 3D position within the brick
     sharedIndicesPtr = static_cast<uint32_t>(materialIndices.size());
-    for (int z = 0; z < 4; z++) {
-        for (int y = 0; y < 4; y++) {
-            for (int x = 0; x < 4; x++) {
-                // Checkerboard: alternate based on 3D position
-                uint16_t materialIdx = ((x + y + z) % 2 == 0) ? 0 : 1;
+    for (int x = 0; x < BRICK_SIZE; x++) {
+        for (int y = 0; y < BRICK_SIZE; y++) {
+            for (int z = 0; z < BRICK_SIZE; z++) {
+                uint16_t materialIdx = x + y * BRICK_SIZE + z * BRICK_SIZE * BRICK_SIZE;
                 materialIndices.push_back(materialIdx);
             }
         }
     }
-    std::printf("[Contree] Created shared material indices: 64 values (checkerboard)\n");
+    std::printf("[Contree] Created shared material indices: %u values (%dx%dx%d position-based)\n",
+               BRICK_VOXELS, BRICK_SIZE, BRICK_SIZE, BRICK_SIZE);
 
     // ========== Build Tree ==========
     // Scale = 8 means 2^8 = 256 voxels per side
@@ -75,28 +103,6 @@ void ContreeBuilder::Build(const std::function<uint16_t(int, int, int)>& density
     // Add root at index 0
     nodes.insert(nodes.begin(), root);
     nodes.shrink_to_fit();
-
-    // ========== Validation ==========
-    int errorCount = 0;
-    for (size_t i = 0; i < nodes.size(); i++) {
-        const auto& node = nodes[i];
-
-        // Check: Internal nodes with children must have valid ChildPtr
-        if (!node.IsLeaf() && node.GetPopMask() != 0) {
-            uint32_t childPtr = node.GetChildPtr();
-            if (childPtr >= nodes.size()) {
-                std::printf("[Contree ERROR] Node %zu has invalid ChildPtr=%u (out of bounds, size=%zu)\n",
-                           i, childPtr, nodes.size());
-                errorCount++;
-            }
-        }
-    }
-
-    if (errorCount > 0) {
-        std::printf("[Contree] Validation found %d errors!\n", errorCount);
-    } else {
-        std::printf("[Contree] Validation passed - no errors found\n");
-    }
 
     // ========== Debug Output ==========
     std::printf("[Contree] Root node: PopMask=0x%llx, childPtr=%u, isLeaf=%d\n",

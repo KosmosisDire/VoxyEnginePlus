@@ -69,11 +69,11 @@ uint GetBrickVoxelMaterial(ContreeNode leafNode, uint3 localVoxelPos)
         return 0; // Not a leaf - shouldn't happen but defend against it
     }
 
-    // Step 1: Calculate voxel index in 4x4x4 brick using XYZ ordering
-    // Index = x + y*4 + z*16
-    uint voxelIdx = localVoxelPos.x + localVoxelPos.y * 4 + localVoxelPos.z * 16;
+    // Step 1: Calculate voxel index in 12x12x12 brick using XYZ ordering
+    // Index = x + y*BRICK_SIZE + z*BRICK_SIZE*BRICK_SIZE
+    uint voxelIdx = localVoxelPos.x + localVoxelPos.y * BRICK_SIZE + localVoxelPos.z * (BRICK_SIZE * BRICK_SIZE);
 
-    if (voxelIdx >= 64) {
+    if (voxelIdx >= BRICK_VOXELS) {
         return 0; // Out of bounds
     }
 
@@ -99,8 +99,8 @@ uint GetBrickVoxelMaterial(ContreeNode leafNode, uint3 localVoxelPos)
     // Step 6: Get material indices pointer (SHARED - all leaves point to same checkerboard)
     uint indicesPtr = leafNode.MaterialIndicesPtr;
 
-    // Step 7: Read material index for this voxel (64 uint32s)
-    uint materialIdx = p.materialIndicesBuffer.data[0 + voxelIdx];
+    // Step 7: Read material index for this voxel (1728 uint32s for 12x12x12)
+    uint materialIdx = p.materialIndicesBuffer.data[indicesPtr + voxelIdx];
 
     // Step 8: Look up actual material ID from palette (skip count at palettePtr)
     uint materialId = p.paletteBuffer.data[palettePtr + 1 + materialIdx];
@@ -206,8 +206,6 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
         skipNextHit = tmin >= tmax;
     }
 
-
-
     // Main traversal loop (reference line 177-219)
     for (i = 0; i < ray.maxIterations; i++) {
         // Coarse early-out for shadow rays (reference line 178)
@@ -236,11 +234,13 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
             float3 posUnmirrored = GetMirroredPos(pos, dir, false);
             float3 worldPos = (posUnmirrored - 1.0 - worldOrigin * scale) * (1 << TreeScale);
 
-            // ========== 4×4×4 Brick Traversal ==========
-            // Calculate leaf base position in world space (4×4×4 leaf cell)
-            float3 leafBase = floor(worldPos / 4.0) * 4.0;
+            // ========== 12×12×12 Brick Traversal ==========
+            // Each leaf covers a 4×4×4 world space region (from contree structure)
+            // We pack 12×12×12 voxels into that 4×4×4 space
+            // So each voxel is 4.0/12.0 = 0.333... world units
+            float3 leafBase = floor(worldPos / float(CONTREE_BRANCHING)) * float(CONTREE_BRANCHING);  // Leaf is 4×4×4 world units
             float3 brickMin = leafBase;
-            float3 brickMax = leafBase + 4.0;
+            float3 brickMax = leafBase + float(CONTREE_BRANCHING);  // Not BRICK_SIZE! The leaf is 4 units, not 12
 
             // Intersect ray with brick to get entry point
             float3 invDirBrick = 1.0 / ray.direction;
@@ -253,17 +253,17 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
             // Entry point in world space
             float3 entryPos = ray.origin + ray.direction * tEnter;
 
-            // Local position within brick [0, 4)
+            // Local position within brick [0, 4) - the leaf covers 4×4×4 world units
             float3 localPos = entryPos - brickMin;
 
-            // Map to 4×4×4 voxel coordinates [0, 4)
-            // Each voxel is exactly 1.0 world unit (4.0 / 4.0 = 1.0)
-            float3 voxelPosFloat = localPos; // No scaling needed for 4x4x4
-            int3 voxelPos = int3(clamp(floor(voxelPosFloat), 0.0, 3.0));
+            // Map to 12×12×12 voxel coordinates [0, BRICK_SIZE)
+            // We pack 12 voxels into 4 world units, so each voxel is 4.0/12.0 world units
+            const float voxelSize = float(CONTREE_BRANCHING) / float(BRICK_SIZE);  // 4.0/12.0 = 0.333...
+            float3 voxelPosFloat = localPos / voxelSize;  // Scale from [0,4) to [0,12)
+            int3 voxelPos = int3(clamp(floor(voxelPosFloat), 0.0, float(BRICK_SIZE - 1)));
 
             // DDA traversal setup
             int3 stepBrick = int3(sign(ray.direction));
-            float voxelSize = 1.0; // Each voxel is 1.0 world unit (4.0 / 4.0)
             float3 tDelta = abs(voxelSize / ray.direction);
 
             // Calculate tSide - distance to next voxel boundary for each axis
@@ -277,10 +277,20 @@ TraceResult traceContree(Ray ray, uint groupThreadIndex, bool coarse = false) {
             // Track current t value for hit position
             float currentT = tEnter;
 
-            // Traverse the 4×4×4 brick
-            for (int step_i = 0; step_i < 12; step_i++) {
+            // var posInt = floor(voxelPos);
+            // result.materialId = (((int)posInt.x) + ((int)(posInt.y * 4)) + ((int)(posInt.z * 4 * 4)));
+            // result.position = ray.origin + ray.direction * currentT;
+            // result.distance = currentT;
+            // result.normal = float3(0, 1, 0);
+            // result.hit = true;
+
+            // return result;
+
+            // Traverse the 12×12×12 brick
+            // Worst case: diagonal traversal = sqrt(3) * BRICK_SIZE ≈ 20.78, round up to 24
+            for (int step_i = 0; step_i < ceil(1.732 * float(BRICK_SIZE)) + 1; step_i++) {
                 // Check bounds
-                if (any(voxelPos < int3(0)) || any(voxelPos >= int3(4))) {
+                if (any(voxelPos < int3(0)) || any(voxelPos >= int3(BRICK_SIZE))) {
                     break; // Exited brick without hit - continue tree traversal
                 }
 

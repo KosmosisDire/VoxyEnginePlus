@@ -192,7 +192,7 @@ class VoxelRenderer
             // Setup FastNoise for simple heightmap terrain
             FastNoise terrainNoise(42);
             terrainNoise.SetNoiseType(FastNoise::SimplexFractal);
-            terrainNoise.SetFrequency(0.01f);
+            terrainNoise.SetFrequency(0.001f);
             terrainNoise.SetFractalOctaves(4);
             terrainNoise.SetFractalLacunarity(2.0f);
             terrainNoise.SetFractalGain(0.5f);
@@ -202,19 +202,17 @@ class VoxelRenderer
 
             // Build tree with simple density function (covers [0, 256)^3)
             builder.Build([&](int x, int y, int z) -> uint16_t {
+                // // round to closest 3
+                // int x3 = (x / 12) * 12;
+                // int y3 = (y / 12) * 12;
+                // int z3 = (z / 12) * 12;
+
                 // Simple heightmap terrain
                 float noiseValue = terrainNoise.GetNoise(x, z);
-                float height = 100.0f + noiseValue * 50.0f;
+                float height = 50.0f + noiseValue * 100.0f;
 
                 if (y < height) {
-                    // Determine material based on depth
-                    if (y > height - 4) {
-                        return 1; // Grass (top layer)
-                    } else if (y > height - 10) {
-                        return 3; // Dirt
-                    } else {
-                        return 2; // Stone
-                    }
+                    return 1; // Solid material
                 }
 
                 return 0; // Empty

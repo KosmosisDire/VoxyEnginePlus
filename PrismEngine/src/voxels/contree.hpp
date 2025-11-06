@@ -13,8 +13,8 @@ namespace Contree {
 constexpr uint32_t CONTREE_LEVELS = 4;
 constexpr uint32_t CONTREE_BRANCHING = 4;
 constexpr uint32_t CONTREE_CHILDREN = 64;  // 4x4x4
-constexpr uint32_t BRICK_SIZE = 4;
-constexpr uint32_t BRICK_VOXELS = 64;  // 4x4x4
+constexpr uint32_t BRICK_SIZE = 12;
+constexpr uint32_t BRICK_VOXELS = 1728;  // 12x12x12
 constexpr uint32_t INVALID_PTR = 0xFFFFFFFF;
 
 //=============================================================================
@@ -96,30 +96,33 @@ static_assert(sizeof(ContreeNode) == 16, "ContreeNode must be 16 bytes (GPU alig
 //=============================================================================
 
 struct Brick {
-    uint64_t occupancy;  // 4x4x4 = 64 bits, 1 bit per voxel
+    uint64_t occupancy[27];  // 12x12x12 = 1728 bits (27 * 64), 1 bit per voxel
 
     inline bool TestOccupancy(uint32_t idx) const {
-        return (occupancy & (1ull << idx)) != 0;
+        return (occupancy[idx / 64] & (1ull << (idx % 64))) != 0;
     }
 
     inline void SetOccupancy(uint32_t idx, bool value) {
         if (value) {
-            occupancy |= (1ull << idx);
+            occupancy[idx / 64] |= (1ull << (idx % 64));
         } else {
-            occupancy &= ~(1ull << idx);
+            occupancy[idx / 64] &= ~(1ull << (idx % 64));
         }
     }
 
-    // Get linear index from 3D position
+    // Get linear index from 3D position (12x12x12)
     static inline uint32_t VoxelIndex(int x, int y, int z) {
-        return x + y * 4 + z * 16;
+        return x + y * BRICK_SIZE + z * (BRICK_SIZE * BRICK_SIZE);
     }
 
-    Brick() : occupancy(0) {}
-    explicit Brick(uint64_t occ) : occupancy(occ) {}
+    Brick() {
+        for (int i = 0; i < 27; i++) {
+            occupancy[i] = 0;
+        }
+    }
 };
 
-static_assert(sizeof(Brick) == 8, "Brick must be 8 bytes");
+static_assert(sizeof(Brick) == 216, "Brick must be 216 bytes");
 
 //=============================================================================
 // Helper Structures
