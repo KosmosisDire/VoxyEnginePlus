@@ -6,7 +6,7 @@
 //------------------------------------------------------------------------------
 static const int GTAO_SLICES = 3;
 static const int GTAO_STEPS = 3;
-static const float GTAO_RADIUS = 8.0f;
+static const float GTAO_RADIUS = 15.0f;
 static const float GTAO_FALLOFF_RANGE = 0.3f;
 static const float GTAO_SAMPLE_DISTRIBUTION_POWER = 1.2f;
 static const float GTAO_THIN_OCCLUDER_COMPENSATION = 1.5f;
@@ -160,6 +160,11 @@ float calculateGTAO(uint2 pixel, float3 worldPos, float3 worldNormal, float dept
     return visibility;
 }
 
+float IGN(int pixelX, int pixelY)
+{
+    return frac(52.9829189f * frac(0.06711056f * float(pixelX) + 0.00583715f * float(pixelY)));
+}
+
 //------------------------------------------------------------------------------
 // Main Shader
 //------------------------------------------------------------------------------
@@ -233,12 +238,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 lightDir = normalize(p.stateBuffer.sunDir);
 
         Ray shadowRay;
-        shadowRay.origin = worldPos + worldNormal * 0.001f;
+        shadowRay.origin = worldPos + worldNormal * 0.0001f;
         shadowRay.direction = lightDir;
         shadowRay.maxDist = 1000.0f;
-        shadowRay.maxIterations = 200;
+        shadowRay.maxIterations = 50;
 
-        var shadowHit = traceContree(shadowRay, threadIndex);
+        var shadowHit = traceContree(shadowRay, threadIndex, true);
 
         // Shadows affect direct lighting differently:
         // - Diffuse: partial occlusion (ambient bounce light still reaches surface)
@@ -263,9 +268,12 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 finalColor = diffuse + specular + ambient + skyLight;
         colorTex[pixel] = finalColor;
     }
-    // Pass 1: Calculate GTAO from complete GBuffer
+    // Pass 1: Calculate GTAO at half resolution
     else if (p.passNum == 1)
     {
+        if (pixel.x % 2 != 0 || pixel.y % 2 != 0)
+            return;
+
         float depth = depthTex[pixel];
         if (depth < 0)
             return;
@@ -273,9 +281,13 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 worldPos = positionTex[pixel];
         float3 worldNormal = normalTex[pixel];
 
-        float4 noiseVec = blueNoise[pixel % 128];
+        float4 noiseVec = float4(IGN(int(pixel.x), int(pixel.y)),
+                                 IGN(int(pixel.x) + 37, int(pixel.y) + 17),
+                                 0.0f, 0.0f);
+        // noiseVec = blueNoise[pixel % 128];
+        
         float ao = calculateGTAO(pixel, worldPos, worldNormal, depth, positionTex, depthTex, noiseVec, p.screenSize);
-        aoTex[pixel] = ao;
+        aoTex[pixel / 2] = ao;
     }
     // Pass 2: Apply AO to all pixels with specular occlusion
     else if (p.passNum == 2)
@@ -289,7 +301,7 @@ void main(uint3 pixel_i: SV_DispatchThreadID, uint3 group_thread_id: SV_GroupThr
         float3 worldNormal = normalTex[pixel];
 
         // Read full-resolution AO directly
-        float ao = aoTex[pixel];
+        float ao = aoTex[pixel / 2];
 
         // Calculate specular occlusion with view-dependent falloff
         // Based on the horizon-based specular occlusion technique
