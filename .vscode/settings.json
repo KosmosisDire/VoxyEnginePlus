@@ -1,45 +1,8 @@
 {
-    // --- General Settings ---
     "files.exclude": {
-        "**/.git": true,
-        "**/.svn": true,
-        "**/.hg": true,
-        "**/CVS": true,
-        "**/.DS_Store": true,
-        "**/Thumbs.db": true,
-        "out": true,
+        "cmake": true,
         "lib": true,
-        "_deps": true
     },
-    "files.watcherExclude": {
-        "**/.git/objects/**": true,
-        "**/.git/subtree-cache/**": true,
-        "**/node_modules/*/**": true,
-        "**/build/**": true, // Exclude build dirs from watcher
-        "**/out/**": true,
-        "**/_deps/**": true,
-        "**/lib/**": true
-    },
-    "editor.formatOnSave": true, // Keep format on save if preferred
-    // --- CMake Tools Configuration ---
-    "cmake.configureOnOpen": true, // Automatically configure when opening the folder
-    "cmake.debugConfig": {
-        "cwd": "${workspaceFolder}/build" // Or adjust CWD if needed for debugging
-        // Add specific args or environment vars for debugging if necessary
-    },
-    // --- Clang-Tidy Integration ---
-    "C_Cpp.codeAnalysis.clangTidy.enabled": true,
-    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": false, // Use .clang-tidy from workspace root
-    "C_Cpp.codeAnalysis.runAutomatically": true, // Run analysis automatically
-    // --- Formatting ---
-    "astyle.astylerc": "${workspaceFolder}/.astylerc",
-    "[cpp]": {
-        "editor.defaultFormatter": "chiehyu.vscode-astyle"
-    },
-    "[c]": {
-        "editor.defaultFormatter": "chiehyu.vscode-astyle"
-    },
-    "[angelscript]": {
-        "editor.defaultFormatter": "chiehyu.vscode-astyle"
-    }
+    "editor.formatOnSave": true,
+    "C_Cpp.autoAddFileAssociations": false,
 }

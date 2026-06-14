@@ -1,0 +1,30 @@
+#pragma once
+
+// Include Windows.h before any other includes to avoid conflicts
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
+
+#include <filesystem>
+#include <string>
+
+// Get executable path helper
+inline std::filesystem::path get_executable_path()
+{
+#ifdef _WIN32
+    wchar_t path[MAX_PATH] = {0};
+    ::GetModuleFileNameW(NULL, path, MAX_PATH);
+    return std::filesystem::path(path).parent_path();
+#else
+    return std::filesystem::current_path();
+#endif
+}
+
+// Helper function to get resource path - always relative to executable
+inline std::string get_resource_path(const std::filesystem::path &relative_path)
+{
+    auto path = get_executable_path() / "resources" / relative_path;
+    return path.string();
+}

@@ -1,47 +1,35 @@
 {
-    // Use CMake Tools commands which respect the selected preset
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "CMake: Configure",
-            "type": "cmake",
-            "command": "configure",
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": "build",
-            "detail": "Run CMake configure using the selected preset."
-        },
-        {
-            "label": "CMake: Build",
-            "type": "cmake",
-            "command": "build",
+            "label": "Build VoxyEngine",
+            "type": "shell",
+            "command": "C:\\Program Files\\CMake\\bin\\cmake.exe",
             "args": [
-                "--parallel", // Use available cores
-                "22" // Keep your parallel setting
-            ],
-            "problemMatcher": [
-                "$gcc"
+                "--build",
+                "${workspaceFolder}/build/Debug",
+                "--config",
+                "Debug",
+                "--parallel",
+                "22",
+                "--target",
+                "VoxyEngine"
             ],
             "group": {
                 "kind": "build",
-                "isDefault": true // Make this the default build task (Ctrl+Shift+B)
+                "isDefault": true
             },
-            "detail": "Build the default target using the selected preset."
-        },
-        {
-            "label": "CMake: Clean Reconfigure",
-            "type": "cmake",
-            "command": "cleanReconfigure",
-            "problemMatcher": [],
-            "detail": "Delete cache and reconfigure using the selected preset."
-        },
-        {
-            "label": "CMake: Clean",
-            "type": "cmake",
-            "command": "clean",
-            "problemMatcher": [],
-            "detail": "Clean the build directory of the selected preset."
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
         }
     ]
 }
